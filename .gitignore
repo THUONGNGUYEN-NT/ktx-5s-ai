@@ -1,0 +1,44 @@
+# =============================================
+# KTX 5S AI — Git Ignore Rules
+# =============================================
+
+# Virtual Environment (Python packages - không bao giờ push lên Git)
+venv/
+backend/venv/
+*/venv/
+.venv/
+env/
+
+# Environment Variables & Secrets (Bảo vệ API Key và Password)
+.env
+backend/.env
+1.env
+*.env
+!*.env.example
+
+# Python Cache & Bytecode
+__pycache__/
+*/__pycache__/
+*/**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local uploads & temporary test files
+static/uploads/
+backend/static/uploads/
+uploads/
+test_ai.py
+
+# Visual Studio & SSMS temporary files
+.vs/
+*.suo
+*.user
+*.ssms_suo
+.idea/
+.vscode/
+
+# OS metadata
+Thumbs.db
+Desktop.ini
+.DS_Store
