@@ -55,14 +55,10 @@ app.include_router(admin.router,       prefix="/api/admin", tags=["Admin — Cá
 # =============================================
 @app.on_event("startup")
 async def startup():
-    Base.metadata.create_all(bind=engine)
     try:
-        from sqlalchemy import text
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE ai_evaluations ALTER COLUMN status NVARCHAR(50) NOT NULL;"))
-            conn.execute(text("ALTER TABLE ai_evaluations ALTER COLUMN final_status NVARCHAR(50) NULL;"))
-    except Exception:
-        pass
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print(f"⚠️ Warning startup: {e}")
     print(f"✅ {settings.APP_NAME} v{settings.APP_VERSION} đang chạy!")
     print(f"📄 Tài liệu API: http://localhost:8000/docs")
 
