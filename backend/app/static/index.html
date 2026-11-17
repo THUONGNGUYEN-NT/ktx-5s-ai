@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KTX 5S AI — Hệ thống Đánh giá Vệ sinh Phòng ở Ký túc xá</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes scan {
+      0% { top: 0%; opacity: 0.8; }
+      50% { top: 95%; opacity: 1; }
+      100% { top: 0%; opacity: 0.8; }
+    }
+    .laser-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #ef4444, #3b82f6, transparent);
+      box-shadow: 0 0 15px #3b82f6;
+      animation: scan 2s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+
+  <!-- TOP NAVBAR -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-xl shadow-md shadow-blue-200">
+          5S
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-slate-900 leading-tight">KTX 5S AI</h1>
+          <p class="text-xs text-slate-500">Đánh giá vệ sinh tự động bằng Gemini Vision</p>
+        </div>
+      </div>
+
+      <!-- TABS SWITCHER -->
+      <div class="flex items-center bg-slate-100 p-1 rounded-xl text-sm font-medium">
+        <button id="tab-student-btn" onclick="switchTab('student')" class="px-4 py-1.5 rounded-lg bg-white text-blue-600 shadow-sm font-semibold transition-all flex items-center gap-2">
+          <i data-lucide="camera" class="w-4 h-4"></i>
+          <span>Sinh viên nộp ảnh</span>
+        </button>
+        <button id="tab-admin-btn" onclick="switchTab('admin')" class="px-4 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition-all flex items-center gap-2">
+          <i data-lucide="shield-check" class="w-4 h-4"></i>
+          <span>Cán bộ KTX</span>
+        </button>
+      </div>
+
+      <!-- DOCS LINK -->
+      <a href="/docs" target="_blank" class="hidden md:flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 transition">
+        <i data-lucide="file-code" class="w-3.5 h-3.5"></i>
+        <span>API Docs</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 max-w-6xl w-full mx-auto px-4 py-6">
+
+    <!-- ================================================= -->
+    <!-- TAB 1: GIAO DIỆN SINH VIÊN (MOBILE WEB) -->
+    <!-- ================================================= -->
+    <div id="tab-student" class="space-y-6">
+      
+      <!-- HERO BANNER -->
+      <div class="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white rounded-2xl p-6 shadow-lg shadow-blue-100">
+        <div class="max-w-2xl">
+          <span class="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur text-xs font-semibold px-2.5 py-1 rounded-full mb-3">
+            <i data-lucide="clock" class="w-3.5 h-3.5"></i> Hạn nộp tuần này: 21:00 Chủ Nhật
+          </span>
+          <h2 class="text-2xl font-bold mb-2">Chấm điểm 5S Phòng Ở Bằng AI</h2>
+          <p class="text-blue-100 text-sm leading-relaxed">
+            Chụp ảnh toàn cảnh phòng để AI Gemini phân tích tiêu chuẩn 5S (Sàng lọc, Sắp xếp, Sạch sẽ, Săn sóc, Sẵn sàng) chỉ trong 3 giây.
+          </p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- CỘT TRÁI: FORM CHỤP ẢNH & UPLOAD -->
+        <div class="lg:col-span-6 bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-5">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+            <h3 class="font-bold text-slate-900 flex items-center gap-2">
+              <i data-lucide="camera" class="w-5 h-5 text-blue-600"></i>
+              <span>Chụp ảnh phòng</span>
+            </h3>
+            <span class="text-xs bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Camera trực tiếp
+            </span>
+          </div>
+
+          <!-- NHẬP MÃ PHÒNG -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1.5">Mã phòng KTX</label>
+            <div class="flex gap-2">
+              <select id="room-code-select" onchange="syncRoomCode(this.value)" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                <option value="A1-101">A1-101 (Tòa A - Tầng 1)</option>
+                <option value="A1-102">A1-102 (Tòa A - Tầng 1)</option>
+                <option value="A2-201">A2-201 (Tòa A - Tầng 2)</option>
+                <option value="B1-101">B1-101 (Tòa B - Tầng 1)</option>
+                <option value="B2-305">B2-305 (Tòa B - Tầng 3)</option>
+                <option value="custom">-- Nhập mã phòng khác --</option>
+              </select>
+              <input id="room-code-input" type="text" placeholder="VD: A3-205" value="A1-101" class="hidden flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+          </div>
+
+          <!-- VÙNG CAMERA & PREVIEW -->
+          <div class="relative bg-slate-900 rounded-xl overflow-hidden aspect-[4/3] flex items-center justify-center border-2 border-dashed border-slate-300 group">
+            
+            <!-- VIDEO CAMERA TRỰC TIẾP -->
+            <video id="camera-stream" autoplay playsinline class="hidden w-full h-full object-cover"></video>
+            
+            <!-- CANVAS WATERMARK (Ẩn) -->
+            <canvas id="watermark-canvas" class="hidden"></canvas>
+
+            <!-- ẢNH PREVIEW ĐÃ CHỤP / CHỌN -->
+            <img id="image-preview" src="" alt="Preview" class="hidden w-full h-full object-contain bg-black">
+
+            <!-- OVERLAY CĂN GÓC 5S (Khi mở camera hoặc chưa có ảnh) -->
+            <div id="camera-overlay" class="absolute inset-0 pointer-events-none p-4 flex flex-col justify-between">
+              <div class="flex justify-between text-[11px] text-white/70 font-mono">
+                <span class="bg-black/40 px-2 py-0.5 rounded backdrop-blur">GÓC GIƯỜNG</span>
+                <span class="bg-black/40 px-2 py-0.5 rounded backdrop-blur">GÓC BÀN HỌC</span>
+              </div>
+              <div class="border border-white/30 rounded-lg flex-1 my-2 flex items-center justify-center">
+                <p id="camera-hint" class="text-xs text-white/80 bg-black/50 px-3 py-1.5 rounded-full backdrop-blur text-center">
+                  Căn góc chụp thấy cả Giường, Bàn học và Lối đi
+                </p>
+              </div>
+              <div class="flex justify-between text-[11px] text-white/70 font-mono">
+                <span id="watermark-tag" class="bg-blue-600/80 text-white px-2 py-0.5 rounded backdrop-blur font-semibold">
+                  A1-101 • 5S LIVE
+                </span>
+                <span class="bg-black/40 px-2 py-0.5 rounded backdrop-blur">SÀN NHÀ & LỐI ĐI</span>
+              </div>
+            </div>
+
+            <!-- HIỆU ỨNG TIA QUÉT LASER KHI AI ĐANG CHẤM -->
+            <div id="ai-scanning-laser" class="hidden">
+              <div class="laser-line"></div>
+              <div class="absolute inset-0 bg-blue-500/10 backdrop-blur-[1px] flex items-center justify-center">
+                <div class="bg-black/80 text-white text-xs px-4 py-2 rounded-xl flex items-center gap-2 shadow-xl border border-blue-400">
+                  <i data-lucide="sparkles" class="w-4 h-4 text-blue-400 animate-spin"></i>
+                  <span>Gemini Vision đang phân tích 5S...</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- PLACEHOLDER KHI CHƯA MỞ CAMERA -->
+            <div id="camera-placeholder" class="text-center p-6 text-slate-400">
+              <i data-lucide="image-plus" class="w-12 h-12 mx-auto mb-2 opacity-60"></i>
+              <p class="text-sm font-medium text-slate-200">Chưa có ảnh chụp</p>
+              <p class="text-xs text-slate-400 mt-1">Bật Camera hoặc chọn ảnh từ máy để thử nghiệm</p>
+            </div>
+          </div>
+
+          <!-- NÚT ĐIỀU KHIỂN CHỤP -->
+          <div class="flex gap-2">
+            <button id="btn-open-camera" onclick="startCamera()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition">
+              <i data-lucide="video" class="w-4 h-4 text-blue-600"></i>
+              <span>Bật Camera</span>
+            </button>
+            <button id="btn-snap" onclick="takeSnapshot()" class="hidden flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition shadow-md shadow-red-200">
+              <i data-lucide="circle-dot" class="w-4 h-4"></i>
+              <span>Chụp ảnh</span>
+            </button>
+            <label class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-xl font-medium text-sm flex items-center justify-center gap-2 cursor-pointer transition">
+              <i data-lucide="upload" class="w-4 h-4 text-emerald-600"></i>
+              <span>Chọn ảnh mẫu</span>
+              <input type="file" id="file-input" accept="image/*" onchange="handleFileSelect(event)" class="hidden">
+            </label>
+          </div>
+
+          <!-- NÚT NỘP ẢNH CHẤM 5S -->
+          <button id="btn-submit" onclick="submitForEvaluation()" disabled class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2 text-base">
+            <i data-lucide="sparkles" class="w-5 h-5"></i>
+            <span>Chấm điểm 5S bằng AI</span>
+          </button>
+        </div>
+
+        <!-- CỘT PHẢI: KẾT QUẢ AI CHẤM 5S -->
+        <div class="lg:col-span-6 space-y-6">
+          
+          <!-- THẺ KẾT QUẢ CHÍNH -->
+          <div id="result-card" class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-5">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+              <h3 class="font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="award" class="w-5 h-5 text-indigo-600"></i>
+                <span>Kết quả đánh giá 5S</span>
+              </h3>
+              <span id="response-time-tag" class="text-xs text-slate-400 font-mono">
+                <!-- Phản hồi 2.1s -->
+              </span>
+            </div>
+
+            <!-- KHI CHƯA CHẤM -->
+            <div id="result-empty" class="text-center py-12 text-slate-400">
+              <div class="w-16 h-16 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center mx-auto mb-3">
+                <i data-lucide="sparkles" class="w-8 h-8 text-slate-300"></i>
+              </div>
+              <p class="font-medium text-slate-600">Chưa có kết quả đánh giá</p>
+              <p class="text-xs text-slate-400 max-w-xs mx-auto mt-1">
+                Hãy chụp ảnh phòng và nhấn nút "Chấm điểm 5S bằng AI" để nhận phân tích chi tiết.
+              </p>
+            </div>
+
+            <!-- NỘI DUNG KẾT QUẢ KHI ĐÃ CÓ -->
+            <div id="result-content" class="hidden space-y-5">
+              
+              <!-- HUY HIỆU ĐIỂM SỐ & XẾP LOẠI -->
+              <div class="flex items-center justify-between p-4 rounded-xl border" id="status-banner">
+                <div class="flex items-center gap-3">
+                  <div id="status-icon" class="w-12 h-12 rounded-xl flex items-center justify-center text-white text-xl font-bold shadow-md">
+                    <!-- Icon -->
+                  </div>
+                  <div>
+                    <span class="text-xs text-slate-500 font-medium">Xếp loại phòng</span>
+                    <h4 id="status-title" class="text-xl font-black leading-tight">--</h4>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <span class="text-xs text-slate-500 font-medium">Điểm 5S</span>
+                  <div class="text-3xl font-black text-slate-900 leading-tight">
+                    <span id="score-val">0.0</span><span class="text-sm font-semibold text-slate-400">/10</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- CHECKLIST 4 TIÊU CHÍ 5S -->
+              <div>
+                <h5 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Checklist 4 Tiêu chuẩn 5S</h5>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                  <div id="check-bed" class="p-2.5 rounded-xl border flex items-center gap-2">
+                    <i data-lucide="bed" class="w-4 h-4"></i>
+                    <span class="font-medium">Giường chiếu gấp gọn</span>
+                  </div>
+                  <div id="check-floor" class="p-2.5 rounded-xl border flex items-center gap-2">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    <span class="font-medium">Sàn nhà sạch rác</span>
+                  </div>
+                  <div id="check-desk" class="p-2.5 rounded-xl border flex items-center gap-2">
+                    <i data-lucide="book-open" class="w-4 h-4"></i>
+                    <span class="font-medium">Bàn học ngăn nắp</span>
+                  </div>
+                  <div id="check-shoes" class="p-2.5 rounded-xl border flex items-center gap-2">
+                    <i data-lucide="footprints" class="w-4 h-4"></i>
+                    <span class="font-medium">Giày dép đúng nơi</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- CÁC LỖI PHÁT HIỆN ĐƯỢC -->
+              <div>
+                <h5 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5 text-rose-600">
+                  <i data-lucide="alert-circle" class="w-4 h-4"></i> Điểm cần dọn dẹp
+                </h5>
+                <ul id="issues-list" class="space-y-1.5 text-xs text-slate-700 bg-rose-50/50 p-3 rounded-xl border border-rose-100">
+                  <!-- Lỗi 1, 2... -->
+                </ul>
+              </div>
+
+              <!-- LỜI KHEN / ĐIỂM TỐT -->
+              <div>
+                <h5 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5 text-emerald-600">
+                  <i data-lucide="check-circle-2" class="w-4 h-4"></i> Điểm làm tốt
+                </h5>
+                <ul id="positive-list" class="space-y-1.5 text-xs text-slate-700 bg-emerald-50/50 p-3 rounded-xl border border-emerald-100">
+                  <!-- Điểm tốt 1... -->
+                </ul>
+              </div>
+
+              <!-- KHUYẾN NGHỊ -->
+              <div class="bg-blue-50 border border-blue-100 p-3.5 rounded-xl text-xs text-blue-900 leading-relaxed">
+                <span class="font-bold flex items-center gap-1 mb-1">
+                  <i data-lucide="lightbulb" class="w-3.5 h-3.5 text-blue-600"></i> Lời khuyên khắc phục:
+                </span>
+                <p id="recommendations-val">--</p>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- LỊCH SỬ NỘP PHÒNG -->
+          <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+              <h4 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                <i data-lucide="history" class="w-4 h-4 text-slate-500"></i>
+                <span>Lịch sử nộp ảnh phòng</span>
+              </h4>
+              <button onclick="loadRoomHistory()" class="text-xs text-blue-600 hover:underline">Làm mới</button>
+            </div>
+            <div id="room-history-list" class="space-y-2 text-xs">
+              <p class="text-slate-400 italic">Chọn phòng và nộp ảnh để xem lịch sử...</p>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+
+    <!-- ================================================= -->
+    <!-- TAB 2: DASHBOARD CÁN BỘ KTX (ADMIN) -->
+    <!-- ================================================= -->
+    <div id="tab-admin" class="hidden space-y-6">
+      
+      <!-- PHẦN ĐĂNG NHẬP NẾU CHƯA CÓ TOKEN -->
+      <div id="admin-login-box" class="max-w-md mx-auto bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
+        <div class="text-center">
+          <div class="w-12 h-12 rounded-xl bg-slate-900 text-white flex items-center justify-center mx-auto mb-2 shadow-md">
+            <i data-lucide="lock" class="w-6 h-6"></i>
+          </div>
+          <h3 class="text-lg font-bold text-slate-900">Đăng nhập Cán bộ KTX</h3>
+          <p class="text-xs text-slate-500">Dành riêng cho Ban Quản lý để duyệt đè & xuất báo cáo</p>
+        </div>
+
+        <div class="bg-blue-50 border border-blue-200 text-blue-900 text-xs p-3 rounded-xl flex items-start gap-2">
+          <i data-lucide="info" class="w-4 h-4 text-blue-600 shrink-0 mt-0.5"></i>
+          <div>Tài khoản mặc định: <b>admin</b> | Mật khẩu: <b>admin123</b></div>
+        </div>
+
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Tên đăng nhập</label>
+            <input id="admin-username" type="text" value="admin" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Mật khẩu</label>
+            <input id="admin-password" type="password" value="admin123" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+          <button onclick="handleAdminLogin()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 rounded-xl text-sm transition">
+            Đăng nhập hệ thống
+          </button>
+        </div>
+      </div>
+
+      <!-- NỘI DUNG DASHBOARD SAU KHI ĐĂNG NHẬP -->
+      <div id="admin-dashboard-view" class="hidden space-y-6">
+        
+        <!-- HEADER CÁN BỘ & NÚT THAO TÁC -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="text-lg font-bold text-slate-900">Dashboard Quản lý Vệ sinh 5S</h3>
+              <span id="current-user-tag" class="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-medium">Cán bộ</span>
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5">Theo dõi thời gian thực tình hình vệ sinh toàn bộ ký túc xá</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="exportReportCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition">
+              <i data-lucide="download" class="w-4 h-4"></i> Xuất Excel / CSV
+            </button>
+            <button onclick="handleAdminLogout()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium px-3 py-2 rounded-xl transition">
+              Đăng xuất
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 THẺ METRIC TỔNG QUAN -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-xs text-slate-500 font-medium">Tổng số phòng</span>
+            <div id="kpi-total-rooms" class="text-2xl font-black text-slate-900 mt-1">--</div>
+            <div class="text-[11px] text-slate-400 mt-1">Toàn bộ KTX</div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-xs text-slate-500 font-medium">Tỷ lệ đã nộp</span>
+            <div id="kpi-rate" class="text-2xl font-black text-blue-600 mt-1">--%</div>
+            <div id="kpi-submitted-count" class="text-[11px] text-slate-400 mt-1">--/-- phòng</div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-xs text-slate-500 font-medium">Phòng bừa bộn (Đỏ)</span>
+            <div id="kpi-messy-count" class="text-2xl font-black text-rose-600 mt-1">--</div>
+            <div class="text-[11px] text-rose-500 mt-1 font-medium">Cần kiểm tra trực tiếp</div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-xs text-slate-500 font-medium">Điểm TB tuần</span>
+            <div id="kpi-avg-score" class="text-2xl font-black text-slate-900 mt-1">--</div>
+            <div class="text-[11px] text-emerald-600 mt-1 font-medium">Thang điểm 10.0</div>
+          </div>
+        </div>
+
+        <!-- BẢNG DANH SÁCH PHÒNG & BỘ LỌC -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+            <h4 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+              <i data-lucide="building" class="w-4 h-4 text-blue-600"></i>
+              <span>Danh sách phòng theo tuần</span>
+            </h4>
+            <div class="flex items-center gap-2">
+              <select id="filter-status" onchange="loadAdminRooms()" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                <option value="">Tất cả trạng thái</option>
+                <option value="messy">Bừa bộn (Ưu tiên)</option>
+                <option value="slightly_messy">Hơi bừa bộn</option>
+                <option value="clean">Sạch sẽ</option>
+                <option value="not_submitted">Chưa nộp ảnh</option>
+              </select>
+              <button onclick="loadAdminDashboard(); loadAdminRooms();" class="p-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200">
+                <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- TABLE -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                <tr>
+                  <th class="py-3 px-4">Mã phòng</th>
+                  <th class="py-3 px-4">Tòa / Tầng</th>
+                  <th class="py-3 px-4">Trạng thái 5S</th>
+                  <th class="py-3 px-4">Điểm</th>
+                  <th class="py-3 px-4">Thời gian nộp</th>
+                  <th class="py-3 px-4">Ảnh</th>
+                  <th class="py-3 px-4 text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="admin-rooms-tbody" class="divide-y divide-slate-100 text-slate-700">
+                <!-- Rows render ở đây -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- MODAL DUYỆT ĐÈ (OVERRIDE MODAL) -->
+  <div id="override-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b pb-3">
+        <h4 class="font-bold text-slate-900 text-base flex items-center gap-2">
+          <i data-lucide="edit-3" class="w-5 h-5 text-blue-600"></i>
+          <span>Cán bộ Duyệt đè Kết quả</span>
+        </h4>
+        <button onclick="closeOverrideModal()" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <input type="hidden" id="override-sub-id">
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Đổi trạng thái xếp loại</label>
+        <select id="override-status-select" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+          <option value="Sạch">Sạch (8.0 - 10.0)</option>
+          <option value="Hơi bừa bộn">Hơi bừa bộn (5.0 - 7.9)</option>
+          <option value="Bừa bộn">Bừa bộn (0.0 - 4.9)</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Điểm mới (0.0 - 10.0)</label>
+        <input id="override-score-input" type="number" step="0.1" min="0" max="10" value="8.0" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Lý do điều chỉnh (Audit Log)</label>
+        <textarea id="override-note-input" rows="3" placeholder="VD: Đã kiểm tra trực tiếp, sinh viên đang dọn dẹp..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button onclick="closeOverrideModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2.5 rounded-xl text-sm transition">
+          Hủy bỏ
+        </button>
+        <button onclick="submitOverride()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl text-sm shadow-md shadow-blue-200 transition">
+          Lưu duyệt đè
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT LOGIC -->
+  <script>
+    // State
+    let selectedImageBlob = null;
+    let cameraStream = null;
+    let adminToken = localStorage.getItem("ktx5s_admin_token") || "";
+
+    // Init Lucide
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+      checkAdminAuth();
+      loadRoomHistory();
+    });
+
+    // Switch Tabs
+    function switchTab(tab) {
+      const studentTab = document.getElementById("tab-student");
+      const adminTab = document.getElementById("tab-admin");
+      const studentBtn = document.getElementById("tab-student-btn");
+      const adminBtn = document.getElementById("tab-admin-btn");
+
+      if (tab === "student") {
+        studentTab.classList.remove("hidden");
+        adminTab.classList.add("hidden");
+        studentBtn.classList.add("bg-white", "text-blue-600", "shadow-sm", "font-semibold");
+        studentBtn.classList.remove("text-slate-600");
+        adminBtn.classList.remove("bg-white", "text-blue-600", "shadow-sm", "font-semibold");
+        adminBtn.classList.add("text-slate-600");
+      } else {
+        studentTab.classList.add("hidden");
+        adminTab.classList.remove("hidden");
+        adminBtn.classList.add("bg-white", "text-blue-600", "shadow-sm", "font-semibold");
+        adminBtn.classList.remove("text-slate-600");
+        studentBtn.classList.remove("bg-white", "text-blue-600", "shadow-sm", "font-semibold");
+        studentBtn.classList.add("text-slate-600");
+        checkAdminAuth();
+      }
+      lucide.createIcons();
+    }
+
+    // Sync room code
+    function syncRoomCode(val) {
+      const input = document.getElementById("room-code-input");
+      const tag = document.getElementById("watermark-tag");
+      if (val === "custom") {
+        input.classList.remove("hidden");
+        input.focus();
+      } else {
+        input.classList.add("hidden");
+        input.value = val;
+      }
+      tag.textContent = `${input.value || val} • 5S LIVE`;
+      loadRoomHistory();
+    }
+
+    document.getElementById("room-code-input").addEventListener("input", (e) => {
+      document.getElementById("watermark-tag").textContent = `${e.target.value} • 5S LIVE`;
+    });
+
+    function getSelectedRoomCode() {
+      const select = document.getElementById("room-code-select");
+      const input = document.getElementById("room-code-input");
+      return (select.value === "custom" ? input.value : select.value).trim();
+    }
+
+    // Start Camera
+    async function startCamera() {
+      const video = document.getElementById("camera-stream");
+      const placeholder = document.getElementById("camera-placeholder");
+      const preview = document.getElementById("image-preview");
+      const btnOpen = document.getElementById("btn-open-camera");
+      const btnSnap = document.getElementById("btn-snap");
+
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 960 } }
+        });
+        video.srcObject = cameraStream;
+        video.classList.remove("hidden");
+        placeholder.classList.add("hidden");
+        preview.classList.add("hidden");
+        btnOpen.classList.add("hidden");
+        btnSnap.classList.remove("hidden");
+        lucide.createIcons();
+      } catch (err) {
+        alert("Không thể mở Camera (" + err.message + "). Bạn có thể dùng nút 'Chọn ảnh mẫu' để test!");
+      }
+    }
+
+    // Take Snapshot & Watermark Canvas
+    function takeSnapshot() {
+      const video = document.getElementById("camera-stream");
+      const canvas = document.getElementById("watermark-canvas");
+      const preview = document.getElementById("image-preview");
+      const btnOpen = document.getElementById("btn-open-camera");
+      const btnSnap = document.getElementById("btn-snap");
+      const btnSubmit = document.getElementById("btn-submit");
+
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 960;
+      const ctx = canvas.getContext("2d");
+
+      // Draw video frame
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Stop camera
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+      video.classList.add("hidden");
+      btnSnap.classList.add("hidden");
+      btnOpen.classList.remove("hidden");
+
+      // Apply Watermark
+      applyWatermarkAndSetBlob(canvas);
+    }
+
+    // Handle File select fallback
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.getElementById("watermark-canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+          applyWatermarkAndSetBlob(canvas);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Apply Watermark overlay to Canvas and update preview
+    function applyWatermarkAndSetBlob(canvas) {
+      const ctx = canvas.getContext("2d");
+      const roomCode = getSelectedRoomCode();
+      const nowStr = new Date().toLocaleString("vi-VN");
+
+      // Watermark strip
+      ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+      ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 16px monospace";
+      ctx.fillText(`KTX 5S AI | PHÒNG: ${roomCode} | CHỤP LÚC: ${nowStr}`, 20, canvas.height - 15);
+
+      canvas.toBlob((blob) => {
+        selectedImageBlob = blob;
+        const preview = document.getElementById("image-preview");
+        preview.src = URL.createObjectURL(blob);
+        preview.classList.remove("hidden");
+        document.getElementById("camera-placeholder").classList.add("hidden");
+        document.getElementById("btn-submit").disabled = false;
+      }, "image/jpeg", 0.9);
+    }
+
+    // Submit for evaluation
+    async function submitForEvaluation() {
+      if (!selectedImageBlob) {
+        alert("Vui lòng chụp ảnh hoặc chọn ảnh mẫu trước khi bấm nộp!");
+        return;
+      }
+
+      const roomCode = getSelectedRoomCode();
+      const capturedAt = new Date().toISOString();
+
+      const formData = new FormData();
+      formData.append("room_code", roomCode);
+      formData.append("captured_at", capturedAt);
+      formData.append("image", selectedImageBlob, `photo_${roomCode}.jpg`);
+
+      // UI Scanning
+      document.getElementById("ai-scanning-laser").classList.remove("hidden");
+      document.getElementById("btn-submit").disabled = true;
+
+      try {
+        const res = await fetch("/api/submissions", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
+
+        document.getElementById("ai-scanning-laser").classList.add("hidden");
+        document.getElementById("btn-submit").disabled = false;
+
+        if (!data.success) {
+          alert(`❌ Lỗi (${data.error_code || "FAIL"}): ${data.message}`);
+          return;
+        }
+
+        renderAiResult(data.data);
+        loadRoomHistory();
+
+      } catch (err) {
+        document.getElementById("ai-scanning-laser").classList.add("hidden");
+        document.getElementById("btn-submit").disabled = false;
+        alert("Lỗi kết nối tới máy chủ API: " + err.message);
+      }
+    }
+
+    // Render AI Result
+    function renderAiResult(data) {
+      document.getElementById("result-empty").classList.add("hidden");
+      document.getElementById("result-content").classList.remove("hidden");
+
+      const ai = data.ai_result;
+      document.getElementById("score-val").textContent = Number(ai.score).toFixed(1);
+      document.getElementById("status-title").textContent = ai.status;
+      document.getElementById("recommendations-val").textContent = ai.recommendations;
+
+      // Banner style
+      const banner = document.getElementById("status-banner");
+      const iconBox = document.getElementById("status-icon");
+      if (ai.status === "Sạch") {
+        banner.className = "flex items-center justify-between p-4 rounded-xl border bg-emerald-50 border-emerald-200 text-emerald-900";
+        iconBox.className = "w-12 h-12 rounded-xl bg-emerald-600 flex items-center justify-center text-white text-xl font-bold shadow-md shadow-emerald-200";
+        iconBox.innerHTML = '<i data-lucide="check" class="w-6 h-6"></i>';
+      } else if (ai.status === "Hơi bừa bộn") {
+        banner.className = "flex items-center justify-between p-4 rounded-xl border bg-amber-50 border-amber-200 text-amber-900";
+        iconBox.className = "w-12 h-12 rounded-xl bg-amber-500 flex items-center justify-center text-white text-xl font-bold shadow-md shadow-amber-200";
+        iconBox.innerHTML = '<i data-lucide="alert-triangle" class="w-6 h-6"></i>';
+      } else {
+        banner.className = "flex items-center justify-between p-4 rounded-xl border bg-rose-50 border-rose-200 text-rose-900";
+        iconBox.className = "w-12 h-12 rounded-xl bg-rose-600 flex items-center justify-center text-white text-xl font-bold shadow-md shadow-rose-200";
+        iconBox.innerHTML = '<i data-lucide="x" class="w-6 h-6"></i>';
+      }
+
+      // Checklist
+      setCheckItem("check-bed", ai.checklist.bed_tidy);
+      setCheckItem("check-floor", ai.checklist.floor_clean);
+      setCheckItem("check-desk", ai.checklist.desk_organized);
+      setCheckItem("check-shoes", ai.checklist.shoes_arranged);
+
+      // Issues
+      const issuesUl = document.getElementById("issues-list");
+      issuesUl.innerHTML = (ai.issues_detected && ai.issues_detected.length)
+        ? ai.issues_detected.map(item => `<li class="flex items-start gap-1.5"><span class="text-rose-500 font-bold">•</span><span>${item}</span></li>`).join("")
+        : '<li class="text-slate-400 italic">Không có lỗi vi phạm</li>';
+
+      // Positives
+      const posUl = document.getElementById("positive-list");
+      posUl.innerHTML = (ai.positive_notes && ai.positive_notes.length)
+        ? ai.positive_notes.map(item => `<li class="flex items-start gap-1.5"><span class="text-emerald-500 font-bold">•</span><span>${item}</span></li>`).join("")
+        : '<li class="text-slate-400 italic">Chưa ghi nhận điểm cộng</li>';
+
+      lucide.createIcons();
+    }
+
+    function setCheckItem(id, passed) {
+      const el = document.getElementById(id);
+      if (passed) {
+        el.className = "p-2.5 rounded-xl border bg-emerald-50/70 border-emerald-200 text-emerald-800 flex items-center gap-2";
+      } else {
+        el.className = "p-2.5 rounded-xl border bg-rose-50/70 border-rose-200 text-rose-800 flex items-center gap-2";
+      }
+    }
+
+    // Load Room History
+    async function loadRoomHistory() {
+      const roomCode = getSelectedRoomCode();
+      const listEl = document.getElementById("room-history-list");
+      try {
+        const res = await fetch(`/api/rooms/${roomCode}/history?limit=5`);
+        const json = await res.json();
+        if (json.success && json.data.history.length > 0) {
+          listEl.innerHTML = json.data.history.map(item => `
+            <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
+              <div class="flex items-center gap-2">
+                <span class="font-semibold text-slate-800">${item.week}</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${
+                  item.status === 'Sạch' ? 'bg-emerald-100 text-emerald-800' :
+                  item.status === 'Hơi bừa bộn' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                }">${item.status} (${item.score}đ)</span>
+                ${item.is_overridden ? '<span class="text-[10px] text-blue-600 font-semibold">[Cán bộ duyệt]</span>' : ''}
+              </div>
+              <span class="text-slate-400">${new Date(item.submitted_at).toLocaleDateString("vi-VN")}</span>
+            </div>
+          `).join("");
+        } else {
+          listEl.innerHTML = `<p class="text-slate-400 italic">Chưa có lượt nộp nào cho phòng ${roomCode}.</p>`;
+        }
+      } catch (e) {
+        listEl.innerHTML = '<p class="text-slate-400 italic">Không thể nạp lịch sử.</p>';
+      }
+    }
+
+    // ===================================================
+    // ADMIN FUNCTIONS
+    // ===================================================
+    function checkAdminAuth() {
+      const loginBox = document.getElementById("admin-login-box");
+      const dashView = document.getElementById("admin-dashboard-view");
+      if (adminToken) {
+        loginBox.classList.add("hidden");
+        dashView.classList.remove("hidden");
+        loadAdminDashboard();
+        loadAdminRooms();
+      } else {
+        loginBox.classList.remove("hidden");
+        dashView.classList.add("hidden");
+      }
+    }
+
+    async function handleAdminLogin() {
+      const u = document.getElementById("admin-username").value.trim();
+      const p = document.getElementById("admin-password").value;
+
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: u, password: p }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          adminToken = data.data.access_token;
+          localStorage.setItem("ktx5s_admin_token", adminToken);
+          checkAdminAuth();
+        } else {
+          alert("❌ " + data.message);
+        }
+      } catch (err) {
+        alert("Lỗi đăng nhập: " + err.message);
+      }
+    }
+
+    function handleAdminLogout() {
+      adminToken = "";
+      localStorage.removeItem("ktx5s_admin_token");
+      checkAdminAuth();
+    }
+
+    async function loadAdminDashboard() {
+      try {
+        const res = await fetch("/api/admin/dashboard", {
+          headers: { "Authorization": `Bearer ${adminToken}` }
+        });
+        if (res.status === 401) { handleAdminLogout(); return; }
+        const json = await res.json();
+        if (json.success) {
+          const d = json.data;
+          document.getElementById("kpi-total-rooms").textContent = d.summary.total_rooms;
+          document.getElementById("kpi-rate").textContent = d.summary.submission_rate_percent + "%";
+          document.getElementById("kpi-submitted-count").textContent = `${d.summary.submitted}/${d.summary.total_rooms} phòng`;
+          document.getElementById("kpi-messy-count").textContent = d.breakdown.messy;
+          document.getElementById("kpi-avg-score").textContent = d.avg_score + "/10";
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function loadAdminRooms() {
+      const status = document.getElementById("filter-status").value;
+      const tbody = document.getElementById("admin-rooms-tbody");
+      tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-400">Đang nạp dữ liệu...</td></tr>';
+
+      try {
+        let url = "/api/admin/rooms?limit=50";
+        if (status) url += `&status=${status}`;
+
+        const res = await fetch(url, {
+          headers: { "Authorization": `Bearer ${adminToken}` }
+        });
+        const json = await res.json();
+        if (json.success && json.data.rooms.length > 0) {
+          tbody.innerHTML = json.data.rooms.map(r => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-3 px-4 font-bold text-slate-900">${r.room_code}</td>
+              <td class="py-3 px-4">Tòa ${r.building} - Tầng ${r.floor}</td>
+              <td class="py-3 px-4">
+                <span class="px-2 py-0.5 rounded-full font-bold text-[11px] ${
+                  r.status === 'Sạch' ? 'bg-emerald-100 text-emerald-800' :
+                  r.status === 'Hơi bừa bộn' ? 'bg-amber-100 text-amber-800' :
+                  r.status === 'Bừa bộn' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-500'
+                }">
+                  ${r.status === 'not_submitted' ? 'Chưa nộp' : r.status}
+                </span>
+                ${r.is_overridden ? '<span class="ml-1 text-[10px] text-blue-600 font-semibold">[Đã duyệt]</span>' : ''}
+              </td>
+              <td class="py-3 px-4 font-bold ${r.score < 5 ? 'text-rose-600' : 'text-slate-900'}">${r.score > 0 ? r.score + 'đ' : '--'}</td>
+              <td class="py-3 px-4 text-slate-500">${r.submitted_at ? new Date(r.submitted_at).toLocaleTimeString("vi-VN", {hour: '2-digit', minute:'2-digit'}) : '--'}</td>
+              <td class="py-3 px-4">
+                ${r.image_url ? `<a href="${r.image_url}" target="_blank" class="text-blue-600 hover:underline flex items-center gap-1"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> Xem</a>` : '--'}
+              </td>
+              <td class="py-3 px-4 text-right">
+                ${r.status !== 'not_submitted' ? `
+                  <button onclick="openOverrideModal('${r.room_code}', '${r.status}', ${r.score})" class="bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-700 px-2.5 py-1 rounded-lg font-medium transition">
+                    Duyệt đè
+                  </button>
+                ` : '--'}
+              </td>
+            </tr>
+          `).join("");
+          lucide.createIcons();
+        } else {
+          tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-400">Không tìm thấy phòng nào phù hợp.</td></tr>';
+        }
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-rose-500">Lỗi nạp danh sách phòng.</td></tr>';
+      }
+    }
+
+    // Modal Override
+    async function openOverrideModal(roomCode, currentStatus, currentScore) {
+      // Find submission_id from room history
+      try {
+        const res = await fetch(`/api/rooms/${roomCode}/history?limit=1`);
+        const json = await res.json();
+        if (json.success && json.data.history.length > 0) {
+          const subId = json.data.history[0].submission_id;
+          document.getElementById("override-sub-id").value = subId;
+          document.getElementById("override-status-select").value = currentStatus !== 'not_submitted' ? currentStatus : 'Sạch';
+          document.getElementById("override-score-input").value = currentScore > 0 ? currentScore : 8.0;
+          document.getElementById("override-modal").classList.remove("hidden");
+        }
+      } catch (e) {
+        alert("Không tìm thấy lượt nộp của phòng này.");
+      }
+    }
+
+    function closeOverrideModal() {
+      document.getElementById("override-modal").classList.add("hidden");
+    }
+
+    async function submitOverride() {
+      const subId = document.getElementById("override-sub-id").value;
+      const status = document.getElementById("override-status-select").value;
+      const score = parseFloat(document.getElementById("override-score-input").value);
+      const note = document.getElementById("override-note-input").value.trim();
+
+      if (!note) {
+        alert("Vui lòng nhập lý do cán bộ điều chỉnh kết quả!");
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/admin/submissions/${subId}/override`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({ status: status, score: score, override_note: note }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert("✅ " + data.message);
+          closeOverrideModal();
+          loadAdminDashboard();
+          loadAdminRooms();
+        } else {
+          alert("❌ " + data.message);
+        }
+      } catch (e) {
+        alert("Lỗi: " + e.message);
+      }
+    }
+
+    // Export CSV
+    function exportReportCSV() {
+      window.open("/api/admin/reports/export", "_blank");
+    }
+  </script>
+
+</body>
+</html>

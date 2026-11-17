@@ -2,6 +2,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from app.config import settings
 from app.database import engine, Base
 
@@ -60,13 +61,21 @@ async def startup():
 
 
 # =============================================
-# Health Check
+# Giao diện Web Trực quan (Sinh viên & Cán bộ KTX)
 # =============================================
-@app.get("/", tags=["Health"])
+@app.get("/", tags=["UI"])
 async def root():
+    html_file = Path(__file__).parent / "static" / "index.html"
+    if html_file.exists():
+        return FileResponse(str(html_file))
     return {
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "status": "running",
         "docs": "/docs",
     }
+
+
+@app.get("/health", tags=["Health"])
+async def health():
+    return {"status": "ok", "app": settings.APP_NAME}
