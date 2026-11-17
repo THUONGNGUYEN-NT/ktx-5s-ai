@@ -687,24 +687,35 @@
       }
     }
 
+    // Helper format status tiếng Việt chuẩn
+    function formatStatus(st) {
+      if (!st) return "Bừa bộn";
+      if (st === "not_submitted") return "Chưa nộp ảnh";
+      const s = String(st).toLowerCase();
+      if (s.includes("sạch") || s.includes("sach") || s.includes("s?ch") || s.includes("clean")) return "Sạch";
+      if (s.includes("hơi") || s.includes("hoi") || s.includes("h?i") || s.includes("slightly")) return "Hơi bừa bộn";
+      return "Bừa bộn";
+    }
+
     // Render AI Result
     function renderAiResult(data) {
       document.getElementById("result-empty").classList.add("hidden");
       document.getElementById("result-content").classList.remove("hidden");
 
       const ai = data.ai_result;
+      const cleanStatus = formatStatus(ai.status);
       document.getElementById("score-val").textContent = Number(ai.score).toFixed(1);
-      document.getElementById("status-title").textContent = ai.status;
+      document.getElementById("status-title").textContent = cleanStatus;
       document.getElementById("recommendations-val").textContent = ai.recommendations;
 
       // Banner style
       const banner = document.getElementById("status-banner");
       const iconBox = document.getElementById("status-icon");
-      if (ai.status === "Sạch") {
+      if (cleanStatus === "Sạch") {
         banner.className = "flex items-center justify-between p-4 rounded-xl border bg-emerald-50 border-emerald-200 text-emerald-900";
         iconBox.className = "w-12 h-12 rounded-xl bg-emerald-600 flex items-center justify-center text-white text-xl font-bold shadow-md shadow-emerald-200";
         iconBox.innerHTML = '<i data-lucide="check" class="w-6 h-6"></i>';
-      } else if (ai.status === "Hơi bừa bộn") {
+      } else if (cleanStatus === "Hơi bừa bộn") {
         banner.className = "flex items-center justify-between p-4 rounded-xl border bg-amber-50 border-amber-200 text-amber-900";
         iconBox.className = "w-12 h-12 rounded-xl bg-amber-500 flex items-center justify-center text-white text-xl font-bold shadow-md shadow-amber-200";
         iconBox.innerHTML = '<i data-lucide="alert-triangle" class="w-6 h-6"></i>';
@@ -752,19 +763,22 @@
         const res = await fetch(`/api/rooms/${roomCode}/history?limit=5`);
         const json = await res.json();
         if (json.success && json.data.history.length > 0) {
-          listEl.innerHTML = json.data.history.map(item => `
+          listEl.innerHTML = json.data.history.map(item => {
+            const st = formatStatus(item.status);
+            return `
             <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
               <div class="flex items-center gap-2">
                 <span class="font-semibold text-slate-800">${item.week}</span>
                 <span class="px-2 py-0.5 rounded text-[10px] font-bold ${
-                  item.status === 'Sạch' ? 'bg-emerald-100 text-emerald-800' :
-                  item.status === 'Hơi bừa bộn' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
-                }">${item.status} (${item.score}đ)</span>
+                  st === 'Sạch' ? 'bg-emerald-100 text-emerald-800' :
+                  st === 'Hơi bừa bộn' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                }">${st} (${item.score}đ)</span>
                 ${item.is_overridden ? '<span class="text-[10px] text-blue-600 font-semibold">[Cán bộ duyệt]</span>' : ''}
               </div>
               <span class="text-slate-400">${new Date(item.submitted_at).toLocaleDateString("vi-VN")}</span>
             </div>
-          `).join("");
+          `;
+          }).join("");
         } else {
           listEl.innerHTML = `<p class="text-slate-400 italic">Chưa có lượt nộp nào cho phòng ${roomCode}.</p>`;
         }
@@ -853,17 +867,19 @@
         });
         const json = await res.json();
         if (json.success && json.data.rooms.length > 0) {
-          tbody.innerHTML = json.data.rooms.map(r => `
+          tbody.innerHTML = json.data.rooms.map(r => {
+            const st = formatStatus(r.status);
+            return `
             <tr class="hover:bg-slate-50 transition">
               <td class="py-3 px-4 font-bold text-slate-900">${r.room_code}</td>
               <td class="py-3 px-4">Tòa ${r.building} - Tầng ${r.floor}</td>
               <td class="py-3 px-4">
                 <span class="px-2 py-0.5 rounded-full font-bold text-[11px] ${
-                  r.status === 'Sạch' ? 'bg-emerald-100 text-emerald-800' :
-                  r.status === 'Hơi bừa bộn' ? 'bg-amber-100 text-amber-800' :
-                  r.status === 'Bừa bộn' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-500'
+                  st === 'Sạch' ? 'bg-emerald-100 text-emerald-800' :
+                  st === 'Hơi bừa bộn' ? 'bg-amber-100 text-amber-800' :
+                  st === 'Bừa bộn' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-500'
                 }">
-                  ${r.status === 'not_submitted' ? 'Chưa nộp' : r.status}
+                  ${st}
                 </span>
                 ${r.is_overridden ? '<span class="ml-1 text-[10px] text-blue-600 font-semibold">[Đã duyệt]</span>' : ''}
               </td>
@@ -874,13 +890,14 @@
               </td>
               <td class="py-3 px-4 text-right">
                 ${r.status !== 'not_submitted' ? `
-                  <button onclick="openOverrideModal('${r.room_code}', '${r.status}', ${r.score})" class="bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-700 px-2.5 py-1 rounded-lg font-medium transition">
+                  <button onclick="openOverrideModal('${r.room_code}', '${st}', ${r.score})" class="bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-700 px-2.5 py-1 rounded-lg font-medium transition">
                     Duyệt đè
                   </button>
                 ` : '--'}
               </td>
             </tr>
-          `).join("");
+          `;
+          }).join("");
           lucide.createIcons();
         } else {
           tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-400">Không tìm thấy phòng nào phù hợp.</td></tr>';

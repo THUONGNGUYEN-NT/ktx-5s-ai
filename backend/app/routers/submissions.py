@@ -10,6 +10,19 @@ from app.services import process_and_compress_image, save_image, evaluate_room_i
 router = APIRouter()
 
 
+def normalize_status(raw: str) -> str:
+    """Chuẩn hóa trạng thái 5S, bảo vệ hiển thị tiếng Việt có dấu chuẩn xác 100%."""
+    if not raw:
+        return "Bừa bộn"
+    s = raw.strip().lower()
+    if "sạch" in s or "sach" in s or "s?ch" in s or "clean" in s:
+        return "Sạch"
+    if "hơi" in s or "hoi" in s or "h?i" in s or "slightly" in s:
+        return "Hơi bừa bộn"
+    return "Bừa bộn"
+
+
+
 @router.post("/submissions", summary="Sinh viên nộp ảnh phòng")
 async def create_submission(
     room_code: str = Form(..., description="Mã phòng, VD: A3-205"),
@@ -150,10 +163,11 @@ async def create_submission(
     issues_list = ai_result.get("issues_detected", [])
     positive_list = ai_result.get("positive_notes", [])
     recommendations_text = ai_result.get("recommendations", "")
+    clean_status = normalize_status(ai_result.get("status", "Bừa bộn"))
 
     ai_eval = AiEvaluation(
         submission_id=submission.id,
-        status=ai_result.get("status", "Bừa bộn"),
+        status=clean_status,
         score=float(ai_result.get("score", 0.0)),
         is_valid_room_photo=True,
         bed_tidy=checklist.get("bed_tidy", False),
@@ -163,7 +177,7 @@ async def create_submission(
         issues_detected=json.dumps(issues_list, ensure_ascii=False),
         positive_notes=json.dumps(positive_list, ensure_ascii=False),
         recommendations=recommendations_text,
-        final_status=ai_result.get("status", "Bừa bộn"),
+        final_status=clean_status,
         final_score=float(ai_result.get("score", 0.0)),
         ai_response_time_ms=ai_result.get("ai_response_time_ms", 0),
     )
@@ -180,7 +194,7 @@ async def create_submission(
             "submitted_at": submission.submitted_at.isoformat(),
             "image_url": image_url,
             "ai_result": {
-                "status": ai_eval.status,
+                "status": clean_status,
                 "score": round(ai_eval.score, 1),
                 "is_valid_room_photo": True,
                 "checklist": {
@@ -237,7 +251,7 @@ async def get_room_history(
     history = []
     for s in submissions:
         eval_record = s.ai_evaluation
-        status = (
+        status = normalize_status(
             eval_record.final_status or eval_record.status
             if eval_record
             else "Chưa chấm"

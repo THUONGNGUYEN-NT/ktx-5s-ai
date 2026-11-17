@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Integer, Float, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy import String, Integer, Float, Boolean, DateTime, Text, ForeignKey, Unicode, UnicodeText
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -18,7 +18,7 @@ class User(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    full_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    full_name: Mapped[str] = mapped_column(Unicode(100), nullable=False)
     role: Mapped[str] = mapped_column(String(20), default="admin")  # "admin" | "student"
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -53,7 +53,7 @@ class Student(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     student_code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)  # Mã sinh viên
-    full_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    full_name: Mapped[str] = mapped_column(Unicode(100), nullable=False)
     room_id: Mapped[str] = mapped_column(String(36), ForeignKey("rooms.id"), nullable=True)
     phone: Mapped[str] = mapped_column(String(15), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -79,8 +79,8 @@ class Submission(Base):
 
     # Duyệt đè bởi cán bộ
     is_overridden: Mapped[bool] = mapped_column(Boolean, default=False)
-    override_note: Mapped[str] = mapped_column(Text, nullable=True)
-    overridden_by: Mapped[str] = mapped_column(String(100), nullable=True)  # Username cán bộ
+    override_note: Mapped[str] = mapped_column(UnicodeText, nullable=True)
+    overridden_by: Mapped[str] = mapped_column(Unicode(100), nullable=True)  # Username cán bộ
     overridden_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
     # Quan hệ
@@ -97,8 +97,8 @@ class AiEvaluation(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     submission_id: Mapped[str] = mapped_column(String(36), ForeignKey("submissions.id"), unique=True, nullable=False)
 
-    # Kết quả chính
-    status: Mapped[str] = mapped_column(String(20), nullable=False)       # "Sạch" / "Hơi bừa bộn" / "Bừa bộn"
+    # Kết quả chính (Dùng Unicode để lưu tiếng Việt không bị lỗi font trên SQL Server)
+    status: Mapped[str] = mapped_column(Unicode(50), nullable=False)       # "Sạch" / "Hơi bừa bộn" / "Bừa bộn"
     score: Mapped[float] = mapped_column(Float, nullable=False)            # 0.0 - 10.0
     is_valid_room_photo: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -108,13 +108,13 @@ class AiEvaluation(Base):
     desk_organized: Mapped[bool] = mapped_column(Boolean, nullable=True)
     shoes_arranged: Mapped[bool] = mapped_column(Boolean, nullable=True)
 
-    # Chi tiết dạng text (lưu JSON string)
-    issues_detected: Mapped[str] = mapped_column(Text, nullable=True)     # JSON array string
-    positive_notes: Mapped[str] = mapped_column(Text, nullable=True)      # JSON array string
-    recommendations: Mapped[str] = mapped_column(Text, nullable=True)
+    # Chi tiết dạng text (lưu JSON string tiếng Việt chuẩn UnicodeText)
+    issues_detected: Mapped[str] = mapped_column(UnicodeText, nullable=True)
+    positive_notes: Mapped[str] = mapped_column(UnicodeText, nullable=True)
+    recommendations: Mapped[str] = mapped_column(UnicodeText, nullable=True)
 
     # Kết quả sau khi cán bộ duyệt đè (nếu có)
-    final_status: Mapped[str] = mapped_column(String(20), nullable=True)  # Dùng cái này để hiển thị
+    final_status: Mapped[str] = mapped_column(Unicode(50), nullable=True)  # Dùng cái này để hiển thị
     final_score: Mapped[float] = mapped_column(Float, nullable=True)
 
     # Meta
