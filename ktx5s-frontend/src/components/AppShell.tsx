@@ -192,7 +192,7 @@ export default function AppShell({
 
         <footer className="h-10 bg-white border-t border-gray-200 px-5 flex items-center justify-between text-xs text-gray-500 shrink-0">
           <span>
-            <b>KTX 5S AI</b> © 2026 — Trung tâm Quản lý Ký túc xá
+            <b>KTX 5S AI</b> © 2026 — Trung tâm Quản lý Ký túc xá và Khu đô thị ĐHQG-HCM
           </span>
           <span>Phiên bản 1.0</span>
         </footer>

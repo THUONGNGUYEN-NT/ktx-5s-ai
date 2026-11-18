@@ -180,16 +180,18 @@ export default function LoginPage() {
           </h1>
           <ul className="mt-8 flex flex-col gap-4 text-white/90">
             <li className="flex items-center gap-3">
-              <Camera size={18} className="text-teal-300" /> Sinh viên chụp đủ 4 góc phòng hằng tuần
+              <Camera size={18} className="text-teal-300 shrink-0" /> Nộp ảnh đánh giá vệ sinh định kỳ hằng tuần
             </li>
             <li className="flex items-center gap-3">
-              <Bot size={18} className="text-teal-300" /> AI chấm điểm 5S tự động trong vài giây
+              <Bot size={18} className="text-teal-300 shrink-0" /> Tự động hóa quy trình chấm điểm 5S bằng AI
             </li>
             <li className="flex items-center gap-3">
-              <BarChart3 size={18} className="text-teal-300" /> Cán bộ theo dõi 10 tầng / 200 phòng trên 1 màn hình
+              <BarChart3 size={18} className="text-teal-300 shrink-0" /> Hỗ trợ ban quản lý giám sát tập trung toàn KTX
             </li>
           </ul>
-          <p className="mt-auto pt-10 text-xs text-white/60">© 2026 Trung tâm Quản lý Ký túc xá</p>
+          <p className="mt-auto pt-10 text-xs text-white/60">
+            © 2026 Trung tâm Quản lý Ký túc xá và Khu đô thị ĐHQG-HCM
+          </p>
         </section>
 
         {/* ===== CỘT PHẢI: FORM ĐĂNG NHẬP (TÊN ĐĂNG NHẬP + MẬT KHẨU) ===== */}
