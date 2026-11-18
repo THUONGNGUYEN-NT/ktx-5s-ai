@@ -7,7 +7,10 @@ node_modules/
 **/node_modules/
 .next/
 **/.next/
+.next-build/
+**/.next-build/
 out/
+ktx5s-frontend/out/
 *.tsbuildinfo
 ktx5s-frontend/ktx5s-frontend/
 ktx5s-frontend.zip

@@ -31,9 +31,12 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:3001",
+        "http://localhost:8000",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
+        "http://127.0.0.1:8000",
         "http://localhost:5173",
+        "https://thuongnguyen-nt.github.io",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -72,7 +75,7 @@ async def startup():
 # =============================================
 # Giao diện Web Trực quan (Sinh viên & Cán bộ KTX)
 # =============================================
-@app.get("/", tags=["UI"])
+@app.get("/legacy-ui", tags=["UI"])
 async def root():
     html_file = Path(__file__).parent / "static" / "index.html"
     if html_file.exists():
@@ -88,3 +91,9 @@ async def root():
 @app.get("/health", tags=["Health"])
 async def health():
     return {"status": "ok", "app": settings.APP_NAME}
+
+
+# Phục vụ giao diện Next.js tĩnh ngay trên cổng 8000 (gộp chung 1 cổng)
+static_site_dir = Path(__file__).parent / "static_site"
+if static_site_dir.exists():
+    app.mount("/", StaticFiles(directory=str(static_site_dir), html=True), name="frontend_site")
