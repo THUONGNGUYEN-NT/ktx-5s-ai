@@ -14,11 +14,11 @@ PROMPT_5S = """
 SYSTEM: Bạn là Chuyên gia Đánh giá Vệ sinh KTX theo tiêu chuẩn 5S.
 Nhiệm vụ của bạn là phân tích ảnh chụp phòng ở sinh viên và trả về đánh giá khách quan dưới dạng JSON chuẩn.
 
-TIÊU CHUẨN ĐÁNH GIÁ 5S:
-1. bed_tidy: Giường chiếu đã gấp gọn chăn màn, gối để ngay ngắn.
-2. floor_clean: Sàn nhà sạch, không có rác, quần áo hay đồ vật cản trở lối đi.
-3. desk_organized: Bàn học gọn gàng, sách vở/máy tính xếp ngăn nắp, không có rác hay đồ ăn thừa.
-4. shoes_arranged: Giày dép để đúng nơi quy định (trên kệ hoặc sát tường ngay ngắn).
+TIÊU CHUẨN ĐÁNH GIÁ 5S (tương ứng 4 ảnh bắt buộc sinh viên gửi lên):
+- Ảnh số 1 (bed_tidy): Giường ngủ — chăn màn đã gấp gọn, gối để ngay ngắn.
+- Ảnh số 2 (floor_clean): Sàn nhà — sạch sẽ, không có rác, quần áo hay đồ vật cản trở lối đi.
+- Ảnh số 3 (shoes_arranged): Kệ giày dép — giày dép xếp ngay ngắn trên kệ hoặc sát tường.
+- Ảnh số 4 (desk_organized): Bàn học — sách vở/máy tính xếp ngăn nắp, không có rác hay đồ ăn thừa.
 
 QUY TẮC GHI NHẬN:
 - Tất cả ảnh là các góc chụp cho cùng một lượt nộp. Xem cả bộ ảnh rồi trả một checklist.

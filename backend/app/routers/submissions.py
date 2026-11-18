@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Q
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import Submission, SubmissionPhoto, AiEvaluation, User
+from app.database import get_db, SessionLocal
+from app.models import Room, Submission, SubmissionPhoto, AiEvaluation, User
 from app.services.auth_service import get_current_user, get_student_room, require_room_access
 from app.services import process_and_compress_image, save_image, evaluate_room_image
 
@@ -350,4 +350,171 @@ async def get_room_history(
             "history": history,
         },
         "message": f"Lấy lịch sử phòng {room_code} thành công",
+    }
+
+
+@router.post("/ai/evaluate", summary="Chấm điểm 4 ảnh phòng bằng AI Gemini Vision (kết nối trực tiếp Frontend)")
+async def evaluate_four_photos(
+    room_code: str = Form(..., description="Mã phòng, VD: A3-301"),
+    captured_at: str = Form(..., description="Thời gian chụp ISO 8601"),
+    image: list[UploadFile] = File(..., description="Bắt buộc 4 ảnh: Giường, Sàn nhà, Kệ giày dép, Bàn học"),
+):
+    """Nhận 4 ảnh từ giao diện Sinh viên B, nén ảnh, gọi AI Gemini Vision của Sinh viên A và trả kết quả chuẩn."""
+    clean_room_code = room_code.strip().upper()
+    if len(image) != 4:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "data": None,
+                "message": f"Bắt buộc chụp đủ 4 ảnh (Giường, Sàn nhà, Kệ giày dép, Bàn học). Hiện mới nhận {len(image)} ảnh.",
+                "error_code": "INVALID_IMAGE",
+            },
+        )
+
+    compressed_images = []
+    size_kb = 0
+    for position, photo in enumerate(image, start=1):
+        raw_bytes = await photo.read(MAX_PHOTO_BYTES + 1)
+        if not raw_bytes:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "data": None, "message": f"Ảnh số {position} không có dữ liệu.", "error_code": "INVALID_IMAGE"},
+            )
+        if len(raw_bytes) > MAX_PHOTO_BYTES:
+            return JSONResponse(
+                status_code=413,
+                content={"success": False, "data": None, "message": f"Ảnh số {position} vượt quá 10 MB.", "error_code": "INVALID_IMAGE"},
+            )
+        try:
+            compressed, photo_size_kb = process_and_compress_image(raw_bytes, max_dimension=1024, quality=80)
+        except Exception:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "data": None, "message": f"Ảnh số {position} không đúng định dạng.", "error_code": "INVALID_IMAGE"},
+            )
+        compressed_images.append(compressed)
+        size_kb += photo_size_kb
+
+    # Gọi AI Gemini Vision của Sinh viên A
+    try:
+        ai_result = evaluate_room_image(compressed_images)
+    except Exception as exc:
+        logger.exception("Lỗi gọi Gemini Vision API cho phòng %s", clean_room_code)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "data": None,
+                "message": f"Lỗi AI: {str(exc)}",
+                "error_code": "AI_ERROR",
+            },
+        )
+
+    if not ai_result.get("is_valid_room_photo", True):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "data": None,
+                "message": ai_result.get(
+                    "recommendations",
+                    "Ảnh quá tối, mờ hoặc không phải phòng KTX. Vui lòng chụp lại rõ nét hơn.",
+                ),
+                "error_code": "INVALID_IMAGE",
+            },
+        )
+
+    # Lưu 4 file ảnh ra ổ đĩa / Cloudinary
+    image_urls = []
+    for compressed in compressed_images:
+        url = await save_image(compressed, room_code=clean_room_code, filename_prefix="5s")
+        image_urls.append(url)
+
+    checklist = ai_result.get("checklist", {})
+    clean_status = normalize_status(ai_result.get("status", "Bừa bộn"))
+    score = round(float(ai_result.get("score", 0.0)), 1)
+    issues_list = ai_result.get("issues_detected", [])
+    positive_list = ai_result.get("positive_notes", [])
+    recommendations_text = ai_result.get("recommendations", "")
+
+    now = datetime.now()
+    week_str = f"{now.year}-W{now.isocalendar()[1]:02d}"
+    submission_id = f"sub_{week_str}_{clean_room_code}"
+
+    # Nếu SQL Server đang bật thì tự động lưu luôn vào CSDL của Sinh viên A
+    try:
+        with SessionLocal() as db:
+            room_obj = db.query(Room).filter(Room.room_code == clean_room_code).first()
+            if room_obj:
+                existing = (
+                    db.query(Submission)
+                    .filter(Submission.room_id == room_obj.id, Submission.week == week_str)
+                    .first()
+                )
+                if existing:
+                    db.query(SubmissionPhoto).filter(SubmissionPhoto.submission_id == existing.id).delete()
+                    db.query(AiEvaluation).filter(AiEvaluation.submission_id == existing.id).delete()
+                    db.delete(existing)
+                    db.flush()
+
+                sub = Submission(
+                    room_id=room_obj.id,
+                    week=week_str,
+                    image_url=image_urls[0],
+                    image_size_kb=size_kb,
+                    captured_at=datetime.utcnow(),
+                )
+                db.add(sub)
+                db.flush()
+                submission_id = sub.id
+
+                ai_eval = AiEvaluation(
+                    submission_id=sub.id,
+                    status=clean_status,
+                    score=score,
+                    is_valid_room_photo=True,
+                    bed_tidy=bool(checklist.get("bed_tidy")),
+                    floor_clean=bool(checklist.get("floor_clean")),
+                    desk_organized=bool(checklist.get("desk_organized")),
+                    shoes_arranged=bool(checklist.get("shoes_arranged")),
+                    issues_detected=json.dumps(issues_list, ensure_ascii=False),
+                    positive_notes=json.dumps(positive_list, ensure_ascii=False),
+                    recommendations=recommendations_text,
+                    deductions=json.dumps(ai_result.get("deductions", []), ensure_ascii=False),
+                    final_status=clean_status,
+                    final_score=score,
+                    ai_response_time_ms=ai_result.get("ai_response_time_ms", 0),
+                )
+                db.add(ai_eval)
+                for pos, u in enumerate(image_urls, start=1):
+                    db.add(SubmissionPhoto(submission_id=sub.id, position=pos, image_url=u))
+                db.commit()
+    except Exception:
+        logger.warning("Bỏ qua lưu DB (SQL Server chưa kết nối), vẫn trả kết quả AI bình thường.")
+
+    return {
+        "success": True,
+        "data": {
+            "submission_id": submission_id,
+            "room_code": clean_room_code,
+            "submitted_at": now.isoformat(),
+            "image_url": image_urls[0],
+            "image_urls": image_urls,
+            "ai_result": {
+                "status": clean_status,
+                "score": score,
+                "is_valid_room_photo": True,
+                "checklist": {
+                    "bed_tidy": bool(checklist.get("bed_tidy")),
+                    "floor_clean": bool(checklist.get("floor_clean")),
+                    "desk_organized": bool(checklist.get("desk_organized")),
+                    "shoes_arranged": bool(checklist.get("shoes_arranged")),
+                },
+                "issues_detected": issues_list,
+                "positive_notes": positive_list,
+                "recommendations": recommendations_text,
+            },
+        },
+        "message": "Nộp 4 ảnh thành công! AI của bạn A đã chấm điểm xong.",
     }
