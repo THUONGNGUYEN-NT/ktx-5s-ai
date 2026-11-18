@@ -67,8 +67,9 @@ export default function AppShell({
     );
   }
 
-  const displayName = session.role === "admin" ? session.name ?? "admin" : session.studentId ?? "Sinh viên";
-  const subtitle = session.role === "admin" ? "Cán bộ KTX" : `Phòng ${session.roomCode}`;
+  const displayName =
+    session.role === "admin" ? session.name ?? "admin" : `Phòng ${session.roomCode ?? ""}`;
+  const subtitle = session.role === "admin" ? "Cán bộ KTX" : "Tài khoản phòng SV";
   const initial = displayName.charAt(0).toUpperCase();
 
   const logout = () => {

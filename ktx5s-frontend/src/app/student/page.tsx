@@ -39,7 +39,7 @@ export default function StudentHome() {
     <AppShell role="student" title="Trang chủ sinh viên" showBack={false}>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
         <div className="bg-[#3c8dbc] text-white rounded-sm p-4 flex items-center justify-between shadow-sm">
-          <div><p className="text-2xl font-bold">{room}</p><p className="text-xs opacity-90">Phòng của bạn · SV {studentId}</p></div>
+          <div><p className="text-2xl font-bold">{room}</p><p className="text-xs opacity-90">Phòng của bạn</p></div>
           <DoorOpen size={40} className="opacity-40" />
         </div>
         <div className="bg-[#f39c12] text-white rounded-sm p-4 flex items-center justify-between shadow-sm">
