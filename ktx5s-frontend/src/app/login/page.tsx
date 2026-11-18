@@ -1,64 +1,34 @@
 "use client";
-// TRANG ĐĂNG NHẬP — Cán bộ (Tên đăng nhập + Mật khẩu) | Sinh viên (Mã phòng + Mật khẩu phòng)
+// TRANG ĐĂNG NHẬP — Cả Cán bộ và Sinh viên đều đăng nhập bằng: Tên đăng nhập + Mật khẩu riêng
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { User, Lock, DoorOpen, ShieldCheck, Bot, Camera, BarChart3, LogIn, X } from "lucide-react";
+import { User, Lock, ShieldCheck, Bot, Camera, BarChart3, LogIn, X } from "lucide-react";
 import { saveSession, type UserRole } from "@/lib/session";
-import { BUILDINGS, FLOORS, ROOMS_PER_FLOOR } from "@/components/status";
 
-// Danh sách tài khoản Cán bộ KTX
+// Danh sách tài khoản Cán bộ KTX (mật khẩu riêng)
 const ADMIN_ACCOUNTS = [
   { username: "admin", password: "admin123", name: "admin" },
   { username: "canbo01", password: "ktx@2026", name: "Nguyễn Văn A" },
   { username: "canbo_demo", password: "bE-pQGCDcpmd3sUlokX3", name: "Cán bộ Demo" },
 ];
 
-// Kiểm tra Mã phòng + Mật khẩu riêng của từng phòng (phòng nào chỉ vào được đúng phòng đó)
-function verifyRoomPassword(roomCode: string, password: string): boolean {
-  const room = roomCode.trim().toUpperCase();
-  const pwd = password.trim();
-
-  // 1. Kiểm tra phòng có nằm trong 200 phòng KTX (4 tòa A-D × 10 tầng × 5 phòng) không
-  const validRooms = new Set<string>();
-  for (const b of BUILDINGS) {
-    for (let f = 1; f <= FLOORS; f++) {
-      for (let r = 1; r <= ROOMS_PER_FLOOR; r++) {
-        validRooms.add(`${b}${f}-${f}${String(r).padStart(2, "0")}`);
-      }
-    }
-  }
-  if (!validRooms.has(room)) return false;
-
-  // 2. Mỗi phòng có mật khẩu riêng gắn với đúng mã phòng đó:
-  //    - Dạng 1: "<SốPhòng>123"   (VD: phòng A3-301 -> "301123", phòng A1-101 -> "101123", phòng B10-1005 -> "1005123")
-  //    - Dạng 2: "<MãPhòng>@ktx"  (VD: phòng A3-301 -> "A3301@ktx" hoặc "a3301@ktx")
-  const roomNum = room.split("-")[1] ?? ""; // VD: "301"
-  const compact = room.replace("-", "");    // VD: "A3301"
-
-  const allowedPasswords = new Set<string>([
-    `${roomNum}123`,
-    `${compact.toLowerCase()}@ktx`,
-    `${compact.toUpperCase()}@ktx`,
-  ]);
-
-  // Mật khẩu demo bổ sung cho một số phòng mẫu
-  if (room === "A3-301") allowedPasswords.add("sv123");
-  if (room === "A1-101") allowedPasswords.add("T8Izn0AWLJETqNqf7SLz");
-  if (room === "A1-102") allowedPasswords.add("OPJf0Ou__BDNaN2N49c-");
-  if (room === "A2-201") allowedPasswords.add("4KsOdu_clRl1ftMisKSK");
-
-  return allowedPasswords.has(pwd);
-}
+// Danh sách tài khoản Sinh viên cố định (mật khẩu ngẫu nhiên riêng, gắn chặt với đúng 1 phòng)
+const STUDENT_ACCOUNTS = [
+  { username: "sinhvien01", password: "Ktx#9482", roomCode: "A3-301", name: "Nguyễn Minh Tuấn" },
+  { username: "sinhvien02", password: "Phong@7159", roomCode: "B2-201", name: "Trần Thị Lan" },
+  { username: "sv_demo_101", password: "T8Izn0AWLJETqNqf7SLz", roomCode: "A1-101", name: "SV Demo 101" },
+  { username: "sv_demo_102", password: "OPJf0Ou__BDNaN2N49c-", roomCode: "A1-102", name: "SV Demo 102" },
+];
 
 // Lưu tài khoản đã đăng nhập thành công trên thiết bị để lần sau gợi ý 1 chạm
 type SavedAccount = {
   role: UserRole;
-  identifier: string; // Tên đăng nhập cán bộ hoặc Mã phòng
+  username: string;
   password: string;
   label: string;
 };
 
-const SAVED_ACCOUNTS_KEY = "ktx5s_remembered_accounts_v2";
+const SAVED_ACCOUNTS_KEY = "ktx5s_remembered_accounts_v3";
 
 function loadSavedAccounts(): SavedAccount[] {
   if (typeof window === "undefined") return [];
@@ -74,7 +44,7 @@ function rememberAccount(acc: SavedAccount) {
   if (typeof window === "undefined") return;
   try {
     const list = loadSavedAccounts().filter(
-      (a) => !(a.role === acc.role && a.identifier.toUpperCase() === acc.identifier.toUpperCase())
+      (a) => !(a.role === acc.role && a.username.toLowerCase() === acc.username.toLowerCase())
     );
     list.unshift(acc);
     localStorage.setItem(SAVED_ACCOUNTS_KEY, JSON.stringify(list.slice(0, 5)));
@@ -98,7 +68,7 @@ function removeSavedAccount(index: number) {
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<UserRole>("admin");
-  const [identifier, setIdentifier] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [savedList, setSavedList] = useState<SavedAccount[]>([]);
@@ -109,7 +79,7 @@ export default function LoginPage() {
     setSavedList(all);
     const lastForRole = all.find((a) => a.role === mode);
     if (lastForRole) {
-      setIdentifier(lastForRole.identifier);
+      setUsername(lastForRole.username);
       setPassword(lastForRole.password);
     }
   }, [mode]);
@@ -119,16 +89,16 @@ export default function LoginPage() {
     setError("");
     const lastForRole = savedList.find((a) => a.role === m);
     if (lastForRole) {
-      setIdentifier(lastForRole.identifier);
+      setUsername(lastForRole.username);
       setPassword(lastForRole.password);
     } else {
-      setIdentifier("");
+      setUsername("");
       setPassword("");
     }
   };
 
   const applySaved = (acc: SavedAccount) => {
-    setIdentifier(acc.identifier);
+    setUsername(acc.username);
     setPassword(acc.password);
     setError("");
   };
@@ -142,40 +112,46 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
 
+    const userClean = username.trim();
+    if (!userClean) return setError("Vui lòng nhập tên đăng nhập.");
+    if (!password) return setError("Vui lòng nhập mật khẩu.");
+
     if (mode === "admin") {
-      const acc = ADMIN_ACCOUNTS.find((a) => a.username === identifier.trim() && a.password === password);
-      if (!acc) return setError("Sai tên đăng nhập hoặc mật khẩu cán bộ.");
+      const acc = ADMIN_ACCOUNTS.find(
+        (a) => a.username.toLowerCase() === userClean.toLowerCase() && a.password === password
+      );
+      if (!acc) return setError("Tên đăng nhập hoặc mật khẩu không chính xác.");
 
       if (remember) {
         rememberAccount({
           role: "admin",
-          identifier: acc.username,
+          username: acc.username,
           password,
-          label: `Cán bộ: ${acc.username}`,
+          label: `${acc.name} (${acc.username})`,
         });
       }
       saveSession({ role: "admin", name: acc.name });
       router.push("/admin");
     } else {
-      const room = identifier.trim().toUpperCase();
-      if (!/^[A-Z]\d{1,2}-\d{3,4}$/.test(room)) {
-        return setError("Mã phòng không đúng định dạng (VD: A3-301 hoặc A1-101).");
-      }
-      if (!password) return setError("Vui lòng nhập mật khẩu của phòng.");
-
-      if (!verifyRoomPassword(room, password)) {
-        return setError("Sai mật khẩu phòng! Mỗi phòng có mật khẩu riêng, bạn không thể truy cập phòng khác.");
-      }
+      const acc = STUDENT_ACCOUNTS.find(
+        (s) => s.username.toLowerCase() === userClean.toLowerCase() && s.password === password
+      );
+      if (!acc) return setError("Tên đăng nhập hoặc mật khẩu không chính xác.");
 
       if (remember) {
         rememberAccount({
           role: "student",
-          identifier: room,
+          username: acc.username,
           password,
-          label: `Phòng ${room}`,
+          label: `${acc.username} (Phòng ${acc.roomCode})`,
         });
       }
-      saveSession({ role: "student", roomCode: room, name: `Phòng ${room}` });
+      saveSession({
+        role: "student",
+        roomCode: acc.roomCode,
+        studentId: acc.username,
+        name: acc.name,
+      });
       sessionStorage.removeItem("ai_result");
       router.push("/student");
     }
@@ -216,7 +192,7 @@ export default function LoginPage() {
           <p className="mt-auto pt-10 text-xs text-white/60">© 2026 Trung tâm Quản lý Ký túc xá</p>
         </section>
 
-        {/* ===== CỘT PHẢI: FORM ĐĂNG NHẬP (2 TRƯỜNG) ===== */}
+        {/* ===== CỘT PHẢI: FORM ĐĂNG NHẬP (TÊN ĐĂNG NHẬP + MẬT KHẨU) ===== */}
         <section className="p-10 flex flex-col justify-center">
           <h2 className="text-xl font-semibold text-gray-800">Đăng nhập hệ thống</h2>
           <p className="text-gray-500 mt-1">Chọn vai trò của bạn để tiếp tục</p>
@@ -278,20 +254,14 @@ export default function LoginPage() {
 
           <form onSubmit={submit} className="flex flex-col gap-4 mt-5" autoComplete="on">
             <div className="relative">
-              {mode === "admin" ? (
-                <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              ) : (
-                <DoorOpen size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              )}
+              <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 name="username"
                 autoComplete="username"
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                placeholder={mode === "admin" ? "Tên đăng nhập cán bộ" : "Mã phòng (VD: A3-301)"}
-                className={`w-full border border-gray-300 rounded-sm pl-9 pr-3 py-2.5 focus:border-[#3c8dbc] focus:outline-none ${
-                  mode === "student" ? "uppercase" : ""
-                }`}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Tên đăng nhập"
+                className="w-full border border-gray-300 rounded-sm pl-9 pr-3 py-2.5 focus:border-[#3c8dbc] focus:outline-none"
               />
             </div>
 
@@ -303,7 +273,7 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={mode === "admin" ? "Mật khẩu" : "Mật khẩu phòng"}
+                placeholder="Mật khẩu"
                 className="w-full border border-gray-300 rounded-sm pl-9 pr-3 py-2.5 focus:border-[#3c8dbc] focus:outline-none"
               />
             </div>
