@@ -8,7 +8,7 @@ type Room = {
   room_code: string;
   building: string;
   floor: number;
-  status: "Sạch" | "Hơi bừa bộn" | "Bừa bộn" | null;
+  status: "Sạch" | "Hơi bừa bộn" | "Bừa bộn" | "Chưa nộp ảnh" | null;
   score: number | null;
   submitted_at: string | null;
   image_url: string | null;

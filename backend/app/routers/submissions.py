@@ -1,13 +1,31 @@
 import json
+import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Room, Submission, AiEvaluation
+from app.models import Submission, SubmissionPhoto, AiEvaluation, User
+from app.services.auth_service import get_current_user, get_student_room, require_room_access
 from app.services import process_and_compress_image, save_image, evaluate_room_image
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+MAX_PHOTOS = 4
+MAX_PHOTO_BYTES = 10 * 1024 * 1024
+
+
+def already_submitted(room_code: str, week: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={
+            "success": False,
+            "data": None,
+            "message": f"Phòng {room_code} đã nộp ảnh tuần {week}. Bạn có thể xem kết quả trong lịch sử.",
+            "error_code": "ALREADY_SUBMITTED",
+        },
+    )
 
 
 def normalize_status(raw: str) -> str:
@@ -26,101 +44,55 @@ def normalize_status(raw: str) -> str:
 async def create_submission(
     room_code: str = Form(..., description="Mã phòng, VD: A3-205"),
     captured_at: str = Form(..., description="Thời gian chụp ISO 8601, VD: 2026-11-17T08:00:00+07:00"),
-    image: UploadFile = File(..., description="Ảnh chụp phòng trực tiếp từ camera"),
+    image: list[UploadFile] = File(..., description="Từ 1 đến 4 ảnh. Gửi lặp lại trường image."),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Luồng xử lý hoàn chỉnh (Tuần 2 - Ngày 8 đến 11):
-    1. Nhận ảnh từ sinh viên tải lên
-    2. Nén và resize ảnh (Pillow) để dung lượng < 500KB và sửa góc xoay EXIF
-    3. Gửi ảnh sang Gemini Vision API phân tích 5S
-    4. Kiểm tra tính hợp lệ của ảnh (tránh ảnh mờ, đen, ảnh không phải phòng)
-    5. Lưu ảnh (Cloudinary hoặc Local Storage)
-    6. Lưu bản ghi Submission và AiEvaluation vào CSDL
-    7. Trả kết quả JSON chuẩn theo API_SPEC_KTX5S.md
-    """
-    # 1. Kiểm tra / Tự động tìm phòng (hoặc tạo mới phòng nếu lần đầu test)
-    clean_room_code = (room_code.strip() if room_code else "A1-101")[:20]
-    room = db.query(Room).filter(Room.room_code == clean_room_code).first()
-    if not room:
-        try:
-            parts = clean_room_code.split("-")
-            building = parts[0][:10] if len(parts) > 0 and parts[0] else "A"
-            room_number = parts[1][:10] if len(parts) > 1 and parts[1] else clean_room_code[:10]
-            floor = int(room_number[0]) if (room_number and room_number[0].isdigit()) else 1
-            room = Room(
-                room_code=clean_room_code,
-                building=building,
-                floor=floor,
-                room_number=room_number,
-            )
-            db.add(room)
-            db.commit()
-            db.refresh(room)
-        except Exception as e:
-            db.rollback()
-            room = db.query(Room).filter(Room.room_code == clean_room_code).first()
-            if not room:
-                return JSONResponse(
-                    status_code=500,
-                    content={
-                        "success": False,
-                        "data": None,
-                        "message": f"Lỗi khởi tạo phòng: {str(e)}",
-                        "error_code": "DB_ERROR",
-                    },
-                )
+    """Chấm các góc chụp cùng phòng và lưu một lượt nộp theo tuần."""
+    room = get_student_room(current_user, db)
+    clean_room_code = room.room_code
+    if room_code.strip().casefold() != clean_room_code.casefold():
+        raise HTTPException(403, "Bạn chỉ được nộp ảnh cho phòng được phân cho mình.")
 
-    # 2. Đọc file ảnh từ request
-    try:
-        raw_bytes = await image.read()
+    # Giữ cùng cách tính tuần với trang quản lý và báo cáo.
+    now = datetime.now()
+    week_str = f"{now.year}-W{now.isocalendar()[1]:02d}"
+    room_id = room.id
+    if db.query(Submission.id).filter(
+        Submission.room_id == room_id, Submission.week == week_str
+    ).first() is not None:
+        return already_submitted(clean_room_code, week_str)
+
+    if not 1 <= len(image) <= MAX_PHOTOS:
+        raise HTTPException(400, f"Mỗi lượt nộp nhận từ 1 đến {MAX_PHOTOS} ảnh.")
+
+    compressed_images = []
+    size_kb = 0
+    for position, photo in enumerate(image, start=1):
+        raw_bytes = await photo.read(MAX_PHOTO_BYTES + 1)
         if not raw_bytes:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "success": False,
-                    "data": None,
-                    "message": "Không nhận được dữ liệu ảnh.",
-                    "error_code": "INVALID_IMAGE",
-                },
+            raise HTTPException(400, f"Ảnh số {position} không có dữ liệu.")
+        if len(raw_bytes) > MAX_PHOTO_BYTES:
+            raise HTTPException(413, f"Ảnh số {position} vượt quá 10 MB.")
+        try:
+            compressed, photo_size_kb = process_and_compress_image(
+                raw_bytes, max_dimension=1024, quality=80
             )
-    except Exception as e:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "success": False,
-                "data": None,
-                "message": f"Lỗi đọc file ảnh: {str(e)}",
-                "error_code": "INVALID_IMAGE",
-            },
-        )
+        except Exception:
+            raise HTTPException(400, f"Ảnh số {position} không đúng định dạng.") from None
+        compressed_images.append(compressed)
+        size_kb += photo_size_kb
 
-    # 3. Nén ảnh với Pillow (giảm dung lượng < 500KB và resize 1024px)
     try:
-        compressed_bytes, size_kb = process_and_compress_image(
-            raw_bytes, max_dimension=1024, quality=80
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "success": False,
-                "data": None,
-                "message": f"Ảnh không đúng định dạng: {str(e)}",
-                "error_code": "INVALID_IMAGE",
-            },
-        )
-
-    # 4. Gửi ảnh sang Gemini Vision API phân tích 5S
-    try:
-        ai_result = evaluate_room_image(compressed_bytes)
-    except Exception as e:
+        ai_result = evaluate_room_image(compressed_images)
+    except Exception:
+        logger.exception("Không thể phân tích bộ ảnh của phòng %s", clean_room_code)
         return JSONResponse(
             status_code=500,
             content={
                 "success": False,
                 "data": None,
-                "message": f"Lỗi xử lý AI: {str(e)}",
+                "message": "Không thể phân tích bộ ảnh. Vui lòng thử lại.",
                 "error_code": "AI_ERROR",
             },
         )
@@ -140,20 +112,6 @@ async def create_submission(
             },
         )
 
-    # 6. Lưu trữ ảnh (Cloudinary hoặc Local Static Storage)
-    try:
-        image_url = await save_image(
-            compressed_bytes,
-            room_code=room.room_code,
-            filename_prefix="5s",
-        )
-    except Exception as e:
-        image_url = ""
-
-    # 7. Tính mã tuần (VD: 2026-W47)
-    now = datetime.now()
-    week_str = f"{now.year}-W{now.isocalendar()[1]:02d}"
-
     # Parse captured_at thành naive datetime (loại bỏ tzinfo để SQL Server không bị lỗi overflow)
     try:
         raw_dt = datetime.fromisoformat(captured_at.replace("Z", "+00:00"))
@@ -164,23 +122,24 @@ async def create_submission(
     except Exception:
         captured_dt = datetime.utcnow()
 
-    # 8 & 9. Lưu Submission và AiEvaluation vào CSDL (bọc try-except rollback an toàn)
+    # Ghi lượt nộp và kết quả AI trong cùng một giao dịch.
     try:
         submission = Submission(
-            room_id=room.id,
+            room_id=room_id,
             week=week_str,
-            image_url=image_url,
+            image_url="",
             image_size_kb=size_kb,
             captured_at=captured_dt,
         )
         db.add(submission)
-        db.commit()
-        db.refresh(submission)
+        # Để ràng buộc SQL Server xử lý trường hợp hai yêu cầu nộp cùng lúc.
+        db.flush()
 
         checklist = ai_result.get("checklist", {})
         issues_list = ai_result.get("issues_detected", [])
         positive_list = ai_result.get("positive_notes", [])
         recommendations_text = ai_result.get("recommendations", "")
+        deductions = ai_result.get("deductions", [])
         clean_status = normalize_status(ai_result.get("status", "Bừa bộn"))
 
         ai_eval = AiEvaluation(
@@ -195,21 +154,34 @@ async def create_submission(
             issues_detected=json.dumps(issues_list, ensure_ascii=False),
             positive_notes=json.dumps(positive_list, ensure_ascii=False),
             recommendations=recommendations_text,
+            deductions=json.dumps(deductions, ensure_ascii=False),
             final_status=clean_status,
             final_score=float(ai_result.get("score", 0.0)),
             ai_response_time_ms=ai_result.get("ai_response_time_ms", 0),
         )
         db.add(ai_eval)
+        db.flush()
+
+        image_urls = []
+        for position, compressed in enumerate(compressed_images, start=1):
+            image_url = await save_image(compressed, room_code=clean_room_code, filename_prefix="5s")
+            if not image_url:
+                raise RuntimeError(f"Không nhận được đường dẫn ảnh số {position}.")
+            image_urls.append(image_url)
+            db.add(SubmissionPhoto(submission_id=submission.id, position=position, image_url=image_url))
+        submission.image_url = image_urls[0]
         db.commit()
-        db.refresh(ai_eval)
-    except Exception as e:
+    except Exception as exc:
         db.rollback()
+        if isinstance(exc, IntegrityError) and "UQ_room_week" in str(exc.orig):
+            return already_submitted(clean_room_code, week_str)
+        logger.exception("Không thể lưu kết quả cho phòng %s, tuần %s", clean_room_code, week_str)
         return JSONResponse(
             status_code=500,
             content={
                 "success": False,
                 "data": None,
-                "message": f"Lỗi lưu trữ CSDL: {str(e)}",
+                "message": "Không thể lưu kết quả. Vui lòng thử lại hoặc liên hệ cán bộ quản lý.",
                 "error_code": "DB_ERROR",
             },
         )
@@ -221,7 +193,8 @@ async def create_submission(
             "submission_id": submission.id,
             "room_code": room.room_code,
             "submitted_at": submission.submitted_at.isoformat(),
-            "image_url": image_url,
+            "image_url": image_urls[0],
+            "image_urls": image_urls,
             "ai_result": {
                 "status": clean_status,
                 "score": round(ai_eval.score, 1),
@@ -241,17 +214,85 @@ async def create_submission(
     }
 
 
-@router.get("/rooms/{room_code}/history", summary="Xem lịch sử đánh giá theo phòng")
+@router.get("/submissions/{submission_id}", summary="Xem chi tiết lượt nộp (Sinh viên)")
+async def get_submission_detail_student(
+    submission_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Sinh viên chỉ xem chi tiết của lượt nộp thuộc phòng mình."""
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Chỉ sinh viên mới xem chi tiết.")
+    room = get_student_room(current_user, db)
+    sub = (
+        db.query(Submission)
+        .filter(Submission.id == submission_id, Submission.room_id == room.id)
+        .first()
+    )
+    if not sub:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "success": False,
+                "data": None,
+                "message": f"Không tìm thấy lượt nộp ID {submission_id} cho phòng của bạn.",
+                "error_code": "NOT_FOUND",
+            },
+        )
+    ai_eval = sub.ai_evaluation
+    issues = json.loads(ai_eval.issues_detected) if (ai_eval and ai_eval.issues_detected) else []
+    positives = json.loads(ai_eval.positive_notes) if (ai_eval and ai_eval.positive_notes) else []
+    deductions = json.loads(ai_eval.deductions) if (ai_eval and ai_eval.deductions) else []
+    return {
+        "success": True,
+        "data": {
+            "submission_id": sub.id,
+            "room_code": sub.room.room_code if sub.room else "N/A",
+            "week": sub.week,
+            "submitted_at": sub.submitted_at.isoformat(),
+            "image_url": sub.image_url,
+            "image_urls": [photo.image_url for photo in sub.photos] or ([sub.image_url] if sub.image_url else []),
+            "ai_result": {
+                "status": ai_eval.status if ai_eval else "Chưa chấm",
+                "score": round(ai_eval.score, 1) if ai_eval else 0.0,
+                "is_valid_room_photo": ai_eval.is_valid_room_photo if ai_eval else True,
+                "checklist": {
+                    "bed_tidy": ai_eval.bed_tidy if ai_eval else False,
+                    "floor_clean": ai_eval.floor_clean if ai_eval else False,
+                    "desk_organized": ai_eval.desk_organized if ai_eval else False,
+                    "shoes_arranged": ai_eval.shoes_arranged if ai_eval else False,
+                },
+                "issues_detected": issues,
+                "positive_notes": positives,
+                "deductions": deductions,
+                "recommendations": ai_eval.recommendations if ai_eval else "",
+                "ai_response_time_ms": ai_eval.ai_response_time_ms if ai_eval else 0,
+            },
+            "override_info": {
+                "is_overridden": sub.is_overridden,
+                "final_status": ai_eval.final_status if ai_eval else None,
+                "final_score": ai_eval.final_score if ai_eval else None,
+                "overridden_by": sub.overridden_by,
+                "overridden_at": sub.overridden_at.isoformat() if sub.overridden_at else None,
+                "override_note": sub.override_note,
+            },
+        },
+        "message": "OK",
+    }
+
+@router.get("/rooms/{room_code}/history", summary="Xem lịch sử theo phòng")
+@router.get("/history/{room_code}", summary="Xem lịch sử theo phòng (alias cũ)")
 async def get_room_history(
     room_code: str,
     limit: int = Query(10, ge=1, le=50),
     page: int = Query(1, ge=1),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Xem lịch sử các tuần đã nộp ảnh của 1 phòng (Ngày 12)
     """
-    room = db.query(Room).filter(Room.room_code == room_code.strip()).first()
+    room = require_room_access(current_user, room_code, db)
     if not room:
         return {
             "success": True,

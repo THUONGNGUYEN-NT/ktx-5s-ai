@@ -131,3 +131,5 @@ INSERT INTO rooms (room_code, building, floor, room_number) VALUES
 GO
 
 PRINT '✅ Database KTX 5S AI đã được tạo thành công!';
+
+

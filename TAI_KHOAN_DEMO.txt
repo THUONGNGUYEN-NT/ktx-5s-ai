@@ -1,0 +1,20 @@
+﻿TÀI KHOẢN DEMO KTX 5S
+
+1. Mở SSMS, chọn đúng database ứng dụng đang dùng trong .env (DB_NAME).
+2. Mở backend/seed_login_accounts.sql rồi Execute trên database đã chọn.
+3. Khởi động lại FastAPI, nhấn Ctrl+F5. Dùng các tài khoản dưới đây nếu vừa tạo mới.
+
+Vai trò | Tên đăng nhập | Mật khẩu demo | Phòng
+admin | canbo_demo | bE-pQGCDcpmd3sUlokX3 | —
+student | sv_demo_101 | T8Izn0AWLJETqNqf7SLz | A1-101
+student | sv_demo_102 | OPJf0Ou__BDNaN2N49c- | A1-102
+student | sv_demo_201 | 4KsOdu_clRl1ftMisKSK | A2-201
+
+Các mật khẩu trên chỉ dùng cho bản demo. Giữ riêng tệp này.
+Script giữ nguyên mật khẩu, trạng thái và phân phòng của các bản ghi đã có.
+Đăng nhập bằng tài khoản admin hiện có nếu dùng mật khẩu riêng, hoặc canbo_demo.
+Đăng nhập cũ bằng admin/admin123 đã bị tắt. Sau khi cập nhật cần đăng nhập lại.
+Tên đăng nhập của sinh viên phải trùng students.student_code. Phòng được lấy từ students.room_id.
+Nếu .env chưa có SECRET_KEY riêng, khóa phiên demo sẽ đổi khi khởi động lại.
+Nếu dùng nhiều tiến trình, đặt một SECRET_KEY riêng giống nhau cho các tiến trình chạy ứng dụng.
+Bản sửa áp dụng cho web FastAPI chạy trên localhost:8000.

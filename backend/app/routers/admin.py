@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Room, Submission, AiEvaluation, User
+from app.models import Room, Submission, SubmissionPhoto, AiEvaluation, User
 from app.services.auth_service import require_admin
 
 router = APIRouter()
@@ -117,7 +117,7 @@ async def get_rooms(
     query = db.query(Room).filter(Room.is_active == True)
     if building:
         query = query.filter(Room.building == building.strip().upper())
-    if floor:
+    if floor is not None:
         query = query.filter(Room.floor == floor)
 
     rooms = query.all()
@@ -154,7 +154,7 @@ async def get_rooms(
                 "clean": "Sạch",
                 "slightly_messy": "Hơi bừa bộn",
                 "messy": "Bừa bộn",
-                "not_submitted": "not_submitted",
+                "not_submitted": "Chưa nộp ảnh",
             }
             target_status = status_map.get(status.lower(), status)
             if r_status != target_status:
@@ -162,6 +162,7 @@ async def get_rooms(
 
         result_list.append({
             "room_code": r.room_code,
+            "submission_id": sub.id if sub and sub.ai_evaluation else None,
             "building": r.building,
             "floor": r.floor,
             "week": week,
@@ -223,6 +224,9 @@ async def get_submission_detail(
             "week": sub.week,
             "submitted_at": sub.submitted_at.isoformat(),
             "image_url": sub.image_url,
+            "image_urls": [photo.image_url for photo in sub.photos] or (
+                [sub.image_url] if sub.image_url else []
+            ),
             "ai_result": {
                 "status": ai_eval.status if ai_eval else "Chưa chấm",
                 "score": round(ai_eval.score, 1) if ai_eval else 0.0,
@@ -322,7 +326,24 @@ async def override_submission(
 # =============================================
 # 5. XUẤT BÁO CÁO TUẦN (CSV / EXCEL)
 # =============================================
-@router.get("/reports/export", summary="Xuất báo cáo danh sách phòng tuần ra CSV")
+@router.delete("/submissions", summary="Xóa toàn bộ lịch sử nộp (Admin)")
+async def delete_all_submissions(
+    current_admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Xóa toàn bộ dữ liệu submissions, submission_photos và ai_evaluations."""
+    try:
+        db.query(SubmissionPhoto).delete()
+    except Exception:
+        pass
+    db.query(AiEvaluation).delete()
+    db.query(Submission).delete()
+    db.commit()
+    return JSONResponse(status_code=200, content={"success": True, "message": "Đã xóa toàn bộ lịch sử nộp ảnh thành công."})
+
+
+@router.get("/export", summary="Xuất báo cáo tuần (CSV)")
+@router.get("/reports/export", summary="Xuất báo cáo tuần (CSV) alias")
 async def export_report(
     week: Optional[str] = Query(None, description="Tuần cần xuất"),
     current_admin: User = Depends(require_admin),

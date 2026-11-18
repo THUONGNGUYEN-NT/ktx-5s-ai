@@ -52,11 +52,17 @@
         </button>
       </div>
 
-      <!-- DOCS LINK -->
-      <a href="/docs" target="_blank" class="hidden md:flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 transition">
-        <i data-lucide="file-code" class="w-3.5 h-3.5"></i>
-        <span>API Docs</span>
-      </a>
+      <!-- ACTIVE SESSION BADGE & DOCS -->
+      <div class="flex items-center gap-3">
+        <div id="nav-session-badge" class="hidden items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1 rounded-xl text-xs">
+          <span id="nav-session-info" class="font-semibold text-slate-700"></span>
+          <button onclick="handleGlobalLogout()" class="text-rose-600 hover:text-rose-700 hover:underline font-semibold ml-1">Đăng xuất</button>
+        </div>
+        <a href="/docs" target="_blank" class="hidden md:flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 transition">
+          <i data-lucide="file-code" class="w-3.5 h-3.5"></i>
+          <span>API Docs</span>
+        </a>
+      </div>
     </div>
   </header>
 
@@ -67,6 +73,40 @@
     <!-- TAB 1: GIAO DIỆN SINH VIÊN (MOBILE WEB) -->
     <!-- ================================================= -->
     <div id="tab-student" class="space-y-6">
+      <form id="student-login-box" onsubmit="handleStudentLogin(event)" class="max-w-md mx-auto bg-white rounded-2xl p-6 border border-slate-200 space-y-4">
+        <h2 class="text-lg font-bold">Đăng nhập sinh viên</h2>
+        <label class="block text-sm font-medium">Mã sinh viên
+          <input id="student-username" required autocomplete="username" class="block w-full mt-1 rounded-xl border border-slate-200 px-3 py-2">
+        </label>
+        <label class="block text-sm font-medium">Mật khẩu
+          <input id="student-password" type="password" required autocomplete="current-password" class="block w-full mt-1 rounded-xl border border-slate-200 px-3 py-2">
+        </label>
+        <p id="student-login-error" role="alert" class="text-sm text-rose-700"></p>
+        <button class="w-full rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white">Đăng nhập</button>
+      </form>
+
+      <!-- THÔNG BÁO KHÓA NẾU ĐANG ĐĂNG NHẬP CÁN BỘ -->
+      <div id="student-blocked-box" class="hidden max-w-md mx-auto bg-amber-50 rounded-2xl p-6 border border-amber-200 shadow-sm text-center space-y-3">
+        <div class="w-12 h-12 rounded-xl bg-amber-500 text-white flex items-center justify-center mx-auto shadow-md shadow-amber-200">
+          <i data-lucide="shield-alert" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-amber-900">Không thể dùng song song</h3>
+          <p class="text-xs text-amber-700 mt-1">
+            Trình duyệt hiện đang đăng nhập tài khoản <span class="font-bold underline" id="student-blocked-user-info">Cán bộ KTX</span>. Mỗi phiên làm việc chỉ được phép đăng nhập một vai trò duy nhất.
+          </p>
+        </div>
+        <div class="pt-2">
+          <button onclick="handleGlobalLogout()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2.5 rounded-xl text-xs transition shadow-sm">
+            Đăng xuất tài khoản Cán bộ để đăng nhập Sinh viên
+          </button>
+        </div>
+      </div>
+      <div id="student-workspace" class="hidden space-y-6">
+        <div class="flex items-center justify-between gap-3 rounded-xl border bg-white px-4 py-3">
+          <p id="student-account" class="text-sm font-semibold"></p>
+          <button type="button" onclick="handleStudentLogout()" class="rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium">Đăng xuất</button>
+        </div>
       
       <!-- HERO BANNER -->
       <div class="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white rounded-2xl p-6 shadow-lg shadow-blue-100">
@@ -76,7 +116,7 @@
           </span>
           <h2 class="text-2xl font-bold mb-2">Chấm điểm 5S Phòng Ở Bằng AI</h2>
           <p class="text-blue-100 text-sm leading-relaxed">
-            Chụp ảnh toàn cảnh phòng để AI Gemini phân tích tiêu chuẩn 5S (Sàng lọc, Sắp xếp, Sạch sẽ, Săn sóc, Sẵn sàng) chỉ trong 3 giây.
+            Chụp hoặc chọn tối đa 4 ảnh của cùng phòng. Nên có các góc thấy rõ giường, bàn học, sàn và khu để giày.
           </p>
         </div>
       </div>
@@ -93,22 +133,6 @@
             <span class="text-xs bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Camera trực tiếp
             </span>
-          </div>
-
-          <!-- NHẬP MÃ PHÒNG -->
-          <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1.5">Mã phòng KTX</label>
-            <div class="flex gap-2">
-              <select id="room-code-select" onchange="syncRoomCode(this.value)" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                <option value="A1-101">A1-101 (Tòa A - Tầng 1)</option>
-                <option value="A1-102">A1-102 (Tòa A - Tầng 1)</option>
-                <option value="A2-201">A2-201 (Tòa A - Tầng 2)</option>
-                <option value="B1-101">B1-101 (Tòa B - Tầng 1)</option>
-                <option value="B2-305">B2-305 (Tòa B - Tầng 3)</option>
-                <option value="custom">-- Nhập mã phòng khác --</option>
-              </select>
-              <input id="room-code-input" type="text" placeholder="VD: A3-205" value="A1-101" class="hidden flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-            </div>
           </div>
 
           <!-- VÙNG CAMERA & PREVIEW -->
@@ -173,9 +197,14 @@
             </button>
             <label class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-xl font-medium text-sm flex items-center justify-center gap-2 cursor-pointer transition">
               <i data-lucide="upload" class="w-4 h-4 text-emerald-600"></i>
-              <span>Chọn ảnh mẫu</span>
-              <input type="file" id="file-input" accept="image/*" onchange="handleFileSelect(event)" class="hidden">
+              <span>Chọn ảnh từ máy</span>
+              <input type="file" id="file-input" accept="image/*" multiple onchange="handleFileSelect(event)" class="hidden">
             </label>
+          </div>
+
+          <div>
+            <p id="photo-count" class="text-sm font-medium text-slate-700" aria-live="polite">0/4 ảnh</p>
+            <div id="pending-photos" class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4"></div>
           </div>
 
           <!-- NÚT NỘP ẢNH CHẤM 5S -->
@@ -259,7 +288,7 @@
               <!-- CÁC LỖI PHÁT HIỆN ĐƯỢC -->
               <div>
                 <h5 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5 text-rose-600">
-                  <i data-lucide="alert-circle" class="w-4 h-4"></i> Điểm cần dọn dẹp
+                  <i data-lucide="alert-circle" class="w-4 h-4"></i> Chi tiết điểm trừ
                 </h5>
                 <ul id="issues-list" class="space-y-1.5 text-xs text-slate-700 bg-rose-50/50 p-3 rounded-xl border border-rose-100">
                   <!-- Lỗi 1, 2... -->
@@ -304,6 +333,7 @@
         </div>
 
       </div>
+      </div>
     </div>
 
 
@@ -322,19 +352,14 @@
           <p class="text-xs text-slate-500">Dành riêng cho Ban Quản lý để duyệt đè & xuất báo cáo</p>
         </div>
 
-        <div class="bg-blue-50 border border-blue-200 text-blue-900 text-xs p-3 rounded-xl flex items-start gap-2">
-          <i data-lucide="info" class="w-4 h-4 text-blue-600 shrink-0 mt-0.5"></i>
-          <div>Tài khoản mặc định: <b>admin</b> | Mật khẩu: <b>admin123</b></div>
-        </div>
-
         <div class="space-y-3">
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Tên đăng nhập</label>
-            <input id="admin-username" type="text" value="admin" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+            <input id="admin-username" type="text" autocomplete="username" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Mật khẩu</label>
-            <input id="admin-password" type="password" value="admin123" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+            <input id="admin-password" type="password" autocomplete="current-password" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
           </div>
           <button onclick="handleAdminLogin()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 rounded-xl text-sm transition">
             Đăng nhập hệ thống
@@ -342,9 +367,28 @@
         </div>
       </div>
 
+      <!-- THÔNG BÁO KHÓA NẾU ĐANG ĐĂNG NHẬP SINH VIÊN -->
+      <div id="admin-blocked-box" class="hidden max-w-md mx-auto bg-amber-50 rounded-2xl p-6 border border-amber-200 shadow-sm text-center space-y-3">
+        <div class="w-12 h-12 rounded-xl bg-amber-500 text-white flex items-center justify-center mx-auto shadow-md shadow-amber-200">
+          <i data-lucide="shield-alert" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-amber-900">Không thể dùng song song</h3>
+          <p class="text-xs text-amber-700 mt-1">
+            Trình duyệt hiện đang đăng nhập tài khoản <span class="font-bold underline" id="admin-blocked-user-info">Sinh viên</span>. Mỗi phiên làm việc chỉ được phép đăng nhập một vai trò duy nhất.
+          </p>
+        </div>
+        <div class="pt-2">
+          <button onclick="handleGlobalLogout()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2.5 rounded-xl text-xs transition shadow-sm">
+            Đăng xuất tài khoản Sinh viên để đăng nhập Cán bộ
+          </button>
+        </div>
+      </div>
+
       <!-- NỘI DUNG DASHBOARD SAU KHI ĐĂNG NHẬP -->
       <div id="admin-dashboard-view" class="hidden space-y-6">
         
+        <p id="admin-dashboard-error" role="alert" class="hidden text-sm text-rose-700"></p>
         <!-- HEADER CÁN BỘ & NÚT THAO TÁC -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <div>
@@ -356,7 +400,10 @@
           </div>
           <div class="flex items-center gap-2">
             <button onclick="exportReportCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition">
-              <i data-lucide="download" class="w-4 h-4"></i> Xuất Excel / CSV
+              <i data-lucide="download" class="w-4 h-4"></i> Xuất CSV
+            </button>
+            <button onclick="handleDeleteAllSubmissions()" class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition">
+              <i data-lucide="trash-2" class="w-4 h-4"></i> Xóa toàn bộ lịch sử
             </button>
             <button onclick="handleAdminLogout()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium px-3 py-2 rounded-xl transition">
               Đăng xuất
@@ -395,7 +442,9 @@
               <i data-lucide="building" class="w-4 h-4 text-blue-600"></i>
               <span>Danh sách phòng theo tuần</span>
             </h4>
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
+              <input id="filter-building" aria-label="Tòa nhà" placeholder="Tòa" maxlength="10" onchange="loadAdminRooms()" class="w-20 rounded-xl border border-slate-200 px-2 py-1.5 text-xs">
+              <input id="filter-floor" aria-label="Tầng" placeholder="Tầng" type="number" min="0" step="1" onchange="loadAdminRooms()" class="w-20 rounded-xl border border-slate-200 px-2 py-1.5 text-xs">
               <select id="filter-status" onchange="loadAdminRooms()" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
                 <option value="">Tất cả trạng thái</option>
                 <option value="messy">Bừa bộn (Ưu tiên)</option>
@@ -438,7 +487,7 @@
 
   <!-- MODAL DUYỆT ĐÈ (OVERRIDE MODAL) -->
   <div id="override-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+    <div class="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-4">
       <div class="flex items-center justify-between border-b pb-3">
         <h4 class="font-bold text-slate-900 text-base flex items-center gap-2">
           <i data-lucide="edit-3" class="w-5 h-5 text-blue-600"></i>
@@ -450,6 +499,13 @@
       </div>
 
       <input type="hidden" id="override-sub-id">
+      <div class="rounded-xl bg-slate-50 p-3 text-sm space-y-2">
+        <p id="override-room-summary" class="font-semibold"></p>
+        <div id="override-photos" class="grid grid-cols-2 gap-2"></div>
+        <ul id="override-checklist" class="grid grid-cols-2 gap-1 text-xs"></ul>
+        <ul id="override-issues" class="space-y-1 text-xs text-slate-700"></ul>
+        <p id="override-previous-note" class="text-xs text-slate-600"></p>
+      </div>
 
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Đổi trạng thái xếp loại</label>
@@ -481,22 +537,137 @@
     </div>
   </div>
 
+  <!-- MODAL XEM LỊCH SỬ PHÒNG CHO CÁN BỘ -->
+  <div id="admin-room-history-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b pb-3">
+        <h4 class="font-bold text-slate-900 text-base flex items-center gap-2">
+          <i data-lucide="history" class="w-5 h-5 text-blue-600"></i>
+          <span id="admin-history-room-title">Lịch sử nộp 5S</span>
+        </h4>
+        <button onclick="closeAdminRoomHistoryModal()" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div id="admin-room-history-content" class="space-y-3">
+        <!-- Render danh sách các tuần đã nộp của phòng -->
+      </div>
+    </div>
+  </div>
+
   <!-- SCRIPT LOGIC -->
   <script>
     // State
-    let selectedImageBlob = null;
+    const maxPhotos = 4;
+    const pendingPhotos = [];
+    let isSubmitting = false;
     let cameraStream = null;
-    let adminToken = localStorage.getItem("ktx5s_admin_token") || "";
+
+    // ===================================================
+    // QUẢN LÝ PHIÊN ĐĂNG NHẬP ĐƠN NHẤT (SINGLE-SESSION RBAC)
+    // ===================================================
+    // Dọn dẹp token cũ nếu có từ phiên bản trước
+    localStorage.removeItem("ktx5s_admin_token");
+    localStorage.removeItem("ktx5s_student_token");
+
+    let appToken = sessionStorage.getItem("ktx5s_token") || "";
+    let appRole = sessionStorage.getItem("ktx5s_role") || ""; // "student" | "admin" | ""
+    let appUser = {
+      username: sessionStorage.getItem("ktx5s_username") || "",
+      fullName: sessionStorage.getItem("ktx5s_fullname") || "",
+      roomCode: sessionStorage.getItem("ktx5s_room") || "",
+    };
+
+    let studentToken = (appRole === "student") ? appToken : "";
+    let adminToken = (appRole === "admin") ? appToken : "";
+    let studentRoom = (appRole === "student") ? appUser.roomCode : "";
+    let currentActiveTab = "student";
+
+    // Đồng bộ toàn bộ trạng thái giao diện theo phiên làm việc duy nhất
+    function syncAuthUI() {
+      studentToken = (appRole === "student") ? appToken : "";
+      adminToken = (appRole === "admin") ? appToken : "";
+      studentRoom = (appRole === "student") ? appUser.roomCode : "";
+
+      // 1. Cập nhật Top Navbar Badge
+      const navBadge = document.getElementById("nav-session-badge");
+      const navInfo = document.getElementById("nav-session-info");
+      if (appRole === "student") {
+        navBadge.classList.remove("hidden");
+        navBadge.classList.add("flex");
+        navInfo.innerHTML = `<span class="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1.5"></span>SV: ${appUser.fullName || appUser.username} (${appUser.roomCode || "Chưa xếp phòng"})`;
+      } else if (appRole === "admin") {
+        navBadge.classList.remove("hidden");
+        navBadge.classList.add("flex");
+        navInfo.innerHTML = `<span class="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5"></span>Cán bộ: ${appUser.fullName || appUser.username}`;
+      } else {
+        navBadge.classList.add("hidden");
+        navBadge.classList.remove("flex");
+      }
+
+      // 2. Tab Sinh viên
+      const sLoginBox = document.getElementById("student-login-box");
+      const sWorkspace = document.getElementById("student-workspace");
+      const sBlockedBox = document.getElementById("student-blocked-box");
+
+      if (appRole === "student") {
+        sLoginBox.classList.add("hidden");
+        sWorkspace.classList.remove("hidden");
+        sBlockedBox.classList.add("hidden");
+        document.getElementById("student-account").textContent = `${appUser.fullName} · Phòng ${appUser.roomCode}`;
+        document.getElementById("watermark-tag").textContent = `${appUser.roomCode} • 5S LIVE`;
+      } else if (appRole === "admin") {
+        sLoginBox.classList.add("hidden");
+        sWorkspace.classList.add("hidden");
+        sBlockedBox.classList.remove("hidden");
+        document.getElementById("student-blocked-user-info").textContent = `Cán bộ KTX (${appUser.fullName || appUser.username})`;
+      } else {
+        sLoginBox.classList.remove("hidden");
+        sWorkspace.classList.add("hidden");
+        sBlockedBox.classList.add("hidden");
+      }
+
+      // 3. Tab Cán bộ KTX
+      const aLoginBox = document.getElementById("admin-login-box");
+      const aDashView = document.getElementById("admin-dashboard-view");
+      const aBlockedBox = document.getElementById("admin-blocked-box");
+
+      if (appRole === "admin") {
+        aLoginBox.classList.add("hidden");
+        aDashView.classList.remove("hidden");
+        aBlockedBox.classList.add("hidden");
+        document.getElementById("current-user-tag").textContent = `Cán bộ: ${appUser.fullName || appUser.username}`;
+      } else if (appRole === "student") {
+        aLoginBox.classList.add("hidden");
+        aDashView.classList.add("hidden");
+        aBlockedBox.classList.remove("hidden");
+        document.getElementById("admin-blocked-user-info").textContent = `Sinh viên (${appUser.fullName || appUser.username} - Phòng ${appUser.roomCode})`;
+      } else {
+        aLoginBox.classList.remove("hidden");
+        aDashView.classList.add("hidden");
+        aBlockedBox.classList.add("hidden");
+      }
+
+      window.lucide?.createIcons();
+    }
 
     // Init Lucide
     document.addEventListener("DOMContentLoaded", () => {
-      lucide.createIcons();
-      checkAdminAuth();
-      loadRoomHistory();
+      syncAuthUI();
+      if (appRole === "admin") {
+        switchTab("admin");
+      } else {
+        switchTab("student");
+        if (appRole === "student") {
+          loadRoomHistory();
+        }
+      }
     });
 
     // Switch Tabs
     function switchTab(tab) {
+      currentActiveTab = tab;
       const studentTab = document.getElementById("tab-student");
       const adminTab = document.getElementById("tab-admin");
       const studentBtn = document.getElementById("tab-student-btn");
@@ -516,38 +687,125 @@
         adminBtn.classList.remove("text-slate-600");
         studentBtn.classList.remove("bg-white", "text-blue-600", "shadow-sm", "font-semibold");
         studentBtn.classList.add("text-slate-600");
-        checkAdminAuth();
+        if (appRole === "admin") {
+          loadAdminDashboard();
+          loadAdminRooms();
+        }
       }
-      lucide.createIcons();
+      syncAuthUI();
     }
 
-    // Sync room code
-    function syncRoomCode(val) {
-      const input = document.getElementById("room-code-input");
-      const tag = document.getElementById("watermark-tag");
-      if (val === "custom") {
-        input.classList.remove("hidden");
-        input.focus();
-      } else {
-        input.classList.add("hidden");
-        input.value = val;
-      }
-      tag.textContent = `${input.value || val} • 5S LIVE`;
-      loadRoomHistory();
+    // Đăng xuất toàn cục
+    function handleGlobalLogout(message = "") {
+      sessionStorage.clear();
+      localStorage.removeItem("ktx5s_admin_token");
+      localStorage.removeItem("ktx5s_student_token");
+      appToken = "";
+      appRole = "";
+      appUser = { username: "", fullName: "", roomCode: "" };
+      studentToken = "";
+      adminToken = "";
+      studentRoom = "";
+
+      if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
+      cameraStream = null;
+      isSubmitting = false;
+      document.getElementById("ai-scanning-laser").classList.add("hidden");
+      pendingPhotos.splice(0).forEach(photo => URL.revokeObjectURL(photo.url));
+      renderPendingPhotos();
+
+      const video = document.getElementById("camera-stream");
+      video.srcObject = null;
+      video.classList.add("hidden");
+      const preview = document.getElementById("image-preview");
+      preview.removeAttribute("src");
+      preview.classList.add("hidden");
+      document.getElementById("camera-placeholder").classList.remove("hidden");
+      document.getElementById("btn-open-camera").classList.remove("hidden");
+      document.getElementById("btn-snap").classList.add("hidden");
+
+      if (message) alert(message);
+      syncAuthUI();
     }
 
-    document.getElementById("room-code-input").addEventListener("input", (e) => {
-      document.getElementById("watermark-tag").textContent = `${e.target.value} • 5S LIVE`;
-    });
+    function handleStudentLogout(message = "") {
+      handleGlobalLogout(message);
+    }
+
+    function handleAdminLogout() {
+      handleGlobalLogout();
+    }
+
+    function checkAdminAuth() {
+      syncAuthUI();
+    }
+
+    async function handleStudentLogin(event) {
+      event.preventDefault();
+      const error = document.getElementById("student-login-error");
+      const password = document.getElementById("student-password");
+      const button = event.currentTarget.querySelector("button");
+      error.textContent = "";
+      button.disabled = true;
+      try {
+        const response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: document.getElementById("student-username").value.trim(),
+            password: password.value,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.message || "Không đăng nhập được.");
+        if (payload.data.user.role !== "student") throw new Error("Tài khoản này không phải sinh viên.");
+
+        // Thiết lập phiên Sinh viên duy nhất
+        sessionStorage.clear();
+        appToken = payload.data.access_token;
+        appRole = "student";
+        appUser.username = payload.data.user.username;
+        appUser.fullName = payload.data.user.full_name;
+
+        sessionStorage.setItem("ktx5s_token", appToken);
+        sessionStorage.setItem("ktx5s_role", appRole);
+        sessionStorage.setItem("ktx5s_username", appUser.username);
+        sessionStorage.setItem("ktx5s_fullname", appUser.fullName);
+
+        password.value = "";
+        await loadStudentProfile();
+        syncAuthUI();
+      } catch (err) {
+        error.textContent = err.message;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    async function loadStudentProfile() {
+      try {
+        const response = await fetch("/api/auth/me", { headers: { Authorization: `Bearer ${appToken}` } });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || "Không tải được thông tin tài khoản.");
+        if (payload.data.role !== "student" || !payload.data.room_code) {
+          throw new Error("Tài khoản sinh viên chưa được phân phòng.");
+        }
+        appUser.roomCode = payload.data.room_code;
+        sessionStorage.setItem("ktx5s_room", appUser.roomCode);
+        syncAuthUI();
+        loadRoomHistory();
+      } catch (err) {
+        handleGlobalLogout(err.message);
+      }
+    }
 
     function getSelectedRoomCode() {
-      const select = document.getElementById("room-code-select");
-      const input = document.getElementById("room-code-input");
-      return (select.value === "custom" ? input.value : select.value).trim();
+      return studentRoom;
     }
 
     // Start Camera
     async function startCamera() {
+      if (!studentToken || isSubmitting || pendingPhotos.length >= maxPhotos) return;
       const video = document.getElementById("camera-stream");
       const placeholder = document.getElementById("camera-placeholder");
       const preview = document.getElementById("image-preview");
@@ -564,14 +822,15 @@
         preview.classList.add("hidden");
         btnOpen.classList.add("hidden");
         btnSnap.classList.remove("hidden");
-        lucide.createIcons();
+        window.lucide?.createIcons();
       } catch (err) {
-        alert("Không thể mở Camera (" + err.message + "). Bạn có thể dùng nút 'Chọn ảnh mẫu' để test!");
+        alert("Không thể mở Camera (" + err.message + "). Bạn có thể dùng nút 'Chọn ảnh từ máy' để test!");
       }
     }
 
     // Take Snapshot & Watermark Canvas
     function takeSnapshot() {
+      if (!studentToken || isSubmitting || pendingPhotos.length >= maxPhotos) return;
       const video = document.getElementById("camera-stream");
       const canvas = document.getElementById("watermark-canvas");
       const preview = document.getElementById("image-preview");
@@ -598,25 +857,59 @@
       applyWatermarkAndSetBlob(canvas);
     }
 
-    // Handle File select fallback
     function handleFileSelect(event) {
-      const file = event.target.files[0];
-      if (!file) return;
+      const files = Array.from(event.target.files);
+      event.target.value = "";
+      if (!studentToken || isSubmitting) return;
+      if (files.length + pendingPhotos.length > maxPhotos) {
+        alert(`Mỗi lượt nộp tối đa ${maxPhotos} ảnh. Hãy bỏ bớt ảnh rồi chọn lại.`);
+        return;
+      }
+      if (files.some(file => file.size > 10 * 1024 * 1024)) {
+        alert("Mỗi ảnh tối đa 10 MB. Hãy chọn ảnh có dung lượng nhỏ hơn.");
+        return;
+      }
+      for (const file of files) addPhoto(file, file.name);
+      renderPendingPhotos();
+    }
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.getElementById("watermark-canvas");
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0);
-          applyWatermarkAndSetBlob(canvas);
+    function addPhoto(blob, name) {
+      if (!blob || pendingPhotos.length >= maxPhotos) return;
+      pendingPhotos.push({ blob, name, url: URL.createObjectURL(blob) });
+    }
+
+    function renderPendingPhotos() {
+      const list = document.getElementById("pending-photos");
+      document.getElementById("photo-count").textContent = `${pendingPhotos.length}/${maxPhotos} ảnh`;
+      list.replaceChildren(...pendingPhotos.map((photo, index) => {
+        const element = document.createElement("div");
+        const thumb = document.createElement("img");
+        thumb.src = photo.url;
+        thumb.alt = `Góc ${index + 1}`;
+        thumb.className = "w-full aspect-square rounded-lg object-cover";
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = `Bỏ ảnh ${index + 1}`;
+        remove.className = "mt-1 text-xs text-rose-700 hover:underline";
+        remove.disabled = isSubmitting;
+        remove.onclick = () => {
+          if (isSubmitting) return;
+          URL.revokeObjectURL(pendingPhotos.splice(index, 1)[0].url);
+          renderPendingPhotos();
         };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
+        element.append(thumb, remove);
+        return element;
+      }));
+      const latest = pendingPhotos.at(-1);
+      const preview = document.getElementById("image-preview");
+      const isTakingPhoto = !document.getElementById("camera-stream").classList.contains("hidden");
+      if (latest) preview.src = latest.url;
+      else preview.removeAttribute("src");
+      preview.classList.toggle("hidden", !latest || isTakingPhoto);
+      document.getElementById("camera-placeholder").classList.toggle("hidden", !!latest || isTakingPhoto);
+      document.getElementById("btn-submit").disabled = isSubmitting || !latest;
+      document.getElementById("file-input").disabled = isSubmitting || pendingPhotos.length >= maxPhotos;
+      document.getElementById("btn-open-camera").disabled = isSubmitting || pendingPhotos.length >= maxPhotos;
     }
 
     // Apply Watermark overlay to Canvas and update preview
@@ -633,19 +926,19 @@
       ctx.font = "bold 16px monospace";
       ctx.fillText(`KTX 5S AI | PHÒNG: ${roomCode} | CHỤP LÚC: ${nowStr}`, 20, canvas.height - 15);
 
+      const requestToken = studentToken;
       canvas.toBlob((blob) => {
-        selectedImageBlob = blob;
-        const preview = document.getElementById("image-preview");
-        preview.src = URL.createObjectURL(blob);
-        preview.classList.remove("hidden");
-        document.getElementById("camera-placeholder").classList.add("hidden");
-        document.getElementById("btn-submit").disabled = false;
+        if (studentToken !== requestToken || isSubmitting) return;
+        addPhoto(blob, "camera.jpg");
+        renderPendingPhotos();
       }, "image/jpeg", 0.9);
     }
 
     // Submit for evaluation
     async function submitForEvaluation() {
-      if (!selectedImageBlob) {
+      if (!studentToken || !studentRoom || isSubmitting) return;
+      const requestToken = studentToken;
+      if (!pendingPhotos.length) {
         alert("Vui lòng chụp ảnh hoặc chọn ảnh mẫu trước khi bấm nộp!");
         return;
       }
@@ -656,21 +949,26 @@
       const formData = new FormData();
       formData.append("room_code", roomCode);
       formData.append("captured_at", capturedAt);
-      formData.append("image", selectedImageBlob, `photo_${roomCode}.jpg`);
+      for (const photo of pendingPhotos) formData.append("image", photo.blob, photo.name);
 
       // UI Scanning
       document.getElementById("ai-scanning-laser").classList.remove("hidden");
-      document.getElementById("btn-submit").disabled = true;
+      isSubmitting = true;
+      renderPendingPhotos();
 
       try {
         const res = await fetch("/api/submissions", {
           method: "POST",
+          headers: { Authorization: `Bearer ${requestToken}` },
           body: formData,
         });
 
-        document.getElementById("ai-scanning-laser").classList.add("hidden");
-        document.getElementById("btn-submit").disabled = false;
-
+        if (studentToken !== requestToken) return;
+        if (res.status === 401 || res.status === 403) {
+          const error = await res.json();
+          handleStudentLogout(error.detail || "Vui lòng đăng nhập lại.");
+          return;
+        }
         const text = await res.text();
         let data;
         try {
@@ -681,17 +979,23 @@
         }
 
         if (!data.success) {
-          alert(`❌ Lỗi (${data.error_code || "FAIL"}): ${data.message}`);
+          alert(`❌ Lỗi (${data.error_code || "FAIL"}): ${data.message || data.detail || "Không nộp được bộ ảnh."}`);
           return;
         }
 
+        if (studentToken !== requestToken) return;
         renderAiResult(data.data);
+        pendingPhotos.splice(0).forEach(photo => URL.revokeObjectURL(photo.url));
         loadRoomHistory();
 
       } catch (err) {
-        document.getElementById("ai-scanning-laser").classList.add("hidden");
-        document.getElementById("btn-submit").disabled = false;
-        alert("Lỗi kết nối tới máy chủ API: " + err.message);
+        if (studentToken === requestToken) alert("Lỗi kết nối tới máy chủ API: " + err.message);
+      } finally {
+        if (studentToken === requestToken) {
+          document.getElementById("ai-scanning-laser").classList.add("hidden");
+          isSubmitting = false;
+          renderPendingPhotos();
+        }
       }
     }
 
@@ -740,10 +1044,7 @@
       setCheckItem("check-shoes", ai.checklist.shoes_arranged);
 
       // Issues
-      const issuesUl = document.getElementById("issues-list");
-      issuesUl.innerHTML = (ai.issues_detected && ai.issues_detected.length)
-        ? ai.issues_detected.map(item => `<li class="flex items-start gap-1.5"><span class="text-rose-500 font-bold">•</span><span>${item}</span></li>`).join("")
-        : '<li class="text-slate-400 italic">Không có lỗi vi phạm</li>';
+      renderDeductions("issues-list", ai);
 
       // Positives
       const posUl = document.getElementById("positive-list");
@@ -751,42 +1052,89 @@
         ? ai.positive_notes.map(item => `<li class="flex items-start gap-1.5"><span class="text-emerald-500 font-bold">•</span><span>${item}</span></li>`).join("")
         : '<li class="text-slate-400 italic">Chưa ghi nhận điểm cộng</li>';
 
-      lucide.createIcons();
+      window.lucide?.createIcons();
+    }
+
+    function renderDeductions(id, ai) {
+      const issues = Array.isArray(ai.issues_detected) ? ai.issues_detected : [];
+      const missing = Math.round((10 - Number(ai.score)) * 10) / 10;
+      const knownAmounts = issues.map(issue => String(issue).match(/^−(\d+,\d) điểm · /));
+      const explained = knownAmounts.every(Boolean)
+        && knownAmounts.reduce((sum, item) => sum + Number(item[1].replace(",", ".")), 0) === missing;
+      const lines = [...issues];
+      if (explained && missing > 0) {
+        lines.push(`Tổng trừ ${missing.toLocaleString("vi-VN")} điểm · Còn ${Number(ai.score).toLocaleString("vi-VN")}/10.`);
+      } else if (missing > 0) {
+        lines.unshift(`Thiếu ${missing.toLocaleString("vi-VN")} điểm so với 10. Kết quả đã lưu chưa ghi rõ khoản trừ.`);
+      } else if (!issues.length) {
+        lines.push("Không ghi nhận khoản trừ điểm.");
+      }
+      document.getElementById(id).replaceChildren(...lines.map(line => {
+        const item = document.createElement("li");
+        item.textContent = line;
+        return item;
+      }));
     }
 
     function setCheckItem(id, passed) {
       const el = document.getElementById(id);
-      if (passed) {
+      let status = el.querySelector("[data-check-status]");
+      if (!status) {
+        status = document.createElement("span");
+        status.dataset.checkStatus = "";
+        el.append(status);
+      }
+      if (passed == null) {
+        el.className = "p-2.5 rounded-xl border bg-slate-50 border-slate-200 text-slate-600 flex items-center gap-2";
+        el.title = "Không quan sát được trong ảnh";
+      } else if (passed) {
+        el.title = "Đạt";
         el.className = "p-2.5 rounded-xl border bg-emerald-50/70 border-emerald-200 text-emerald-800 flex items-center gap-2";
       } else {
+        el.title = "Chưa đạt";
         el.className = "p-2.5 rounded-xl border bg-rose-50/70 border-rose-200 text-rose-800 flex items-center gap-2";
       }
+      status.textContent = el.title;
     }
 
     // Load Room History
     async function loadRoomHistory() {
       const roomCode = getSelectedRoomCode();
+      if (!roomCode || !studentToken) return;
+      const requestToken = studentToken;
       const listEl = document.getElementById("room-history-list");
       try {
-        const res = await fetch(`/api/rooms/${roomCode}/history?limit=5`);
+        const res = await fetch(`/api/rooms/${encodeURIComponent(roomCode)}/history?limit=5`, {
+          headers: { Authorization: `Bearer ${requestToken}` },
+        });
         const json = await res.json();
+        if (studentToken !== requestToken) return;
+        if (res.status === 401 || res.status === 403) {
+          handleStudentLogout(json.detail || "Vui lòng đăng nhập lại.");
+          return;
+        }
+        if (!res.ok) throw new Error();
         if (json.success && json.data.history.length > 0) {
           listEl.innerHTML = json.data.history.map(item => {
             const st = formatStatus(item.status);
             return `
-            <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
+            <div onclick="viewSubmissionDetail('${item.submission_id}')" class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-100 cursor-pointer transition">
               <div class="flex items-center gap-2">
-                <span class="font-semibold text-slate-800">${item.week}</span>
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${
+                <span class="font-bold text-slate-800 text-xs">${item.week}</span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${
                   st === 'Sạch' ? 'bg-emerald-100 text-emerald-800' :
                   st === 'Hơi bừa bộn' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
                 }">${st} (${item.score}đ)</span>
                 ${item.is_overridden ? '<span class="text-[10px] text-blue-600 font-semibold">[Cán bộ duyệt]</span>' : ''}
               </div>
-              <span class="text-slate-400">${new Date(item.submitted_at).toLocaleDateString("vi-VN")}</span>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-400">${new Date(item.submitted_at).toLocaleDateString("vi-VN")}</span>
+                <span class="text-xs text-blue-600 font-semibold flex items-center gap-0.5">Xem <i data-lucide="chevron-right" class="w-3.5 h-3.5 inline"></i></span>
+              </div>
             </div>
           `;
           }).join("");
+          window.lucide?.createIcons();
         } else {
           listEl.innerHTML = `<p class="text-slate-400 italic">Chưa có lượt nộp nào cho phòng ${roomCode}.</p>`;
         }
@@ -795,23 +1143,33 @@
       }
     }
 
-    // ===================================================
-    // ADMIN FUNCTIONS
-    // ===================================================
-    function checkAdminAuth() {
-      const loginBox = document.getElementById("admin-login-box");
-      const dashView = document.getElementById("admin-dashboard-view");
-      if (adminToken) {
-        loginBox.classList.add("hidden");
-        dashView.classList.remove("hidden");
-        loadAdminDashboard();
-        loadAdminRooms();
-      } else {
-        loginBox.classList.remove("hidden");
-        dashView.classList.add("hidden");
+    async function viewSubmissionDetail(subId) {
+      if (!studentToken || !subId) return;
+      try {
+        const res = await fetch(`/api/submissions/${encodeURIComponent(subId)}`, {
+          headers: { Authorization: `Bearer ${studentToken}` },
+        });
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          alert("Không thể tải chi tiết: " + (json.message || "Lỗi nạp dữ liệu"));
+          return;
+        }
+        renderAiResult(json.data);
+        const preview = document.getElementById("image-preview");
+        if (json.data.image_url) {
+          preview.src = json.data.image_url;
+          preview.classList.remove("hidden");
+          document.getElementById("camera-placeholder").classList.add("hidden");
+        }
+        document.getElementById("result-card")?.scrollIntoView({ behavior: "smooth" });
+      } catch (err) {
+        alert("Lỗi tải chi tiết: " + err.message);
       }
     }
 
+    // ===================================================
+    // ADMIN FUNCTIONS
+    // ===================================================
     async function handleAdminLogin() {
       const u = document.getElementById("admin-username").value.trim();
       const p = document.getElementById("admin-password").value;
@@ -824,9 +1182,28 @@
         });
         const data = await res.json();
         if (data.success) {
-          adminToken = data.data.access_token;
-          localStorage.setItem("ktx5s_admin_token", adminToken);
-          checkAdminAuth();
+          if (data.data.user.role !== "admin") {
+            alert("Tài khoản này không có quyền cán bộ.");
+            return;
+          }
+          document.getElementById("admin-password").value = "";
+
+          // Thiết lập phiên Cán bộ duy nhất
+          sessionStorage.clear();
+          appToken = data.data.access_token;
+          appRole = "admin";
+          appUser.username = data.data.user.username;
+          appUser.fullName = data.data.user.full_name;
+          appUser.roomCode = "";
+
+          sessionStorage.setItem("ktx5s_token", appToken);
+          sessionStorage.setItem("ktx5s_role", appRole);
+          sessionStorage.setItem("ktx5s_username", appUser.username);
+          sessionStorage.setItem("ktx5s_fullname", appUser.fullName);
+
+          syncAuthUI();
+          loadAdminDashboard();
+          loadAdminRooms();
         } else {
           alert("❌ " + data.message);
         }
@@ -835,18 +1212,28 @@
       }
     }
 
-    function handleAdminLogout() {
-      adminToken = "";
-      localStorage.removeItem("ktx5s_admin_token");
-      checkAdminAuth();
+    async function adminRequest(url, options = {}) {
+      const res = await fetch(url, {
+        ...options,
+        headers: { ...options.headers, Authorization: `Bearer ${adminToken}` },
+      });
+      if (res.status === 401 || res.status === 403) {
+        handleAdminLogout();
+        throw new Error("Phiên đăng nhập đã hết hạn hoặc tài khoản thiếu quyền cán bộ.");
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const detail = typeof body.detail === "string" ? body.detail : null;
+        throw new Error(body.message || detail || `Máy chủ trả lỗi ${res.status}.`);
+      }
+      return res;
     }
 
     async function loadAdminDashboard() {
+      const error = document.getElementById("admin-dashboard-error");
+      error.classList.add("hidden");
       try {
-        const res = await fetch("/api/admin/dashboard", {
-          headers: { "Authorization": `Bearer ${adminToken}` }
-        });
-        if (res.status === 401) { handleAdminLogout(); return; }
+        const res = await adminRequest("/api/admin/dashboard");
         const json = await res.json();
         if (json.success) {
           const d = json.data;
@@ -857,29 +1244,37 @@
           document.getElementById("kpi-avg-score").textContent = d.avg_score + "/10";
         }
       } catch (e) {
-        console.error(e);
+        error.textContent = "Không tải được thống kê. " + e.message;
+        error.classList.remove("hidden");
       }
     }
 
     async function loadAdminRooms() {
       const status = document.getElementById("filter-status").value;
+      const building = document.getElementById("filter-building").value.trim();
+      const floor = document.getElementById("filter-floor").value;
       const tbody = document.getElementById("admin-rooms-tbody");
       tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-400">Đang nạp dữ liệu...</td></tr>';
 
       try {
-        let url = "/api/admin/rooms?limit=50";
-        if (status) url += `&status=${status}`;
+        const params = new URLSearchParams({ limit: "50" });
+        if (status) params.set("status", status);
+        if (building) params.set("building", building);
+        if (floor !== "") params.set("floor", floor);
 
-        const res = await fetch(url, {
-          headers: { "Authorization": `Bearer ${adminToken}` }
-        });
+        const res = await adminRequest(`/api/admin/rooms?${params}`);
         const json = await res.json();
         if (json.success && json.data.rooms.length > 0) {
           tbody.innerHTML = json.data.rooms.map(r => {
             const st = formatStatus(r.status);
             return `
             <tr class="hover:bg-slate-50 transition">
-              <td class="py-3 px-4 font-bold text-slate-900">${r.room_code}</td>
+              <td class="py-3 px-4 font-bold">
+                <button onclick="openAdminRoomHistory('${r.room_code}')" class="text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1" title="Bấm để xem lịch sử nộp các tuần của phòng này">
+                  <span>${r.room_code}</span>
+                  <i data-lucide="history" class="w-3.5 h-3.5 text-slate-400 hover:text-blue-600"></i>
+                </button>
+              </td>
               <td class="py-3 px-4">Tòa ${r.building} - Tầng ${r.floor}</td>
               <td class="py-3 px-4">
                 <span class="px-2 py-0.5 rounded-full font-bold text-[11px] ${
@@ -891,50 +1286,144 @@
                 </span>
                 ${r.is_overridden ? '<span class="ml-1 text-[10px] text-blue-600 font-semibold">[Đã duyệt]</span>' : ''}
               </td>
-              <td class="py-3 px-4 font-bold ${r.score < 5 ? 'text-rose-600' : 'text-slate-900'}">${r.score > 0 ? r.score + 'đ' : '--'}</td>
+              <td class="py-3 px-4 font-bold ${r.score < 5 ? 'text-rose-600' : 'text-slate-900'}">${r.submission_id ? r.score + 'đ' : '--'}</td>
               <td class="py-3 px-4 text-slate-500">${r.submitted_at ? new Date(r.submitted_at).toLocaleTimeString("vi-VN", {hour: '2-digit', minute:'2-digit'}) : '--'}</td>
               <td class="py-3 px-4">
                 ${r.image_url ? `<a href="${r.image_url}" target="_blank" class="text-blue-600 hover:underline flex items-center gap-1"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> Xem</a>` : '--'}
               </td>
               <td class="py-3 px-4 text-right">
-                ${r.status !== 'not_submitted' ? `
-                  <button onclick="openOverrideModal('${r.room_code}', '${st}', ${r.score})" class="bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-700 px-2.5 py-1 rounded-lg font-medium transition">
-                    Duyệt đè
+                <div class="flex items-center justify-end gap-1.5">
+                  ${r.submission_id ? `
+                    <button data-submission-id="${r.submission_id}" onclick="openOverrideModal(this.dataset.submissionId)" class="bg-blue-50 hover:bg-blue-100 text-blue-700 px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1">
+                      <i data-lucide="edit-3" class="w-3 h-3"></i> Chi tiết / Duyệt
+                    </button>
+                  ` : ''}
+                  <button onclick="openAdminRoomHistory('${r.room_code}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded-lg font-medium transition flex items-center gap-1 text-[11px]" title="Xem toàn bộ lịch sử các tuần">
+                    <i data-lucide="history" class="w-3 h-3"></i> Lịch sử
                   </button>
-                ` : '--'}
+                </div>
               </td>
             </tr>
           `;
           }).join("");
-          lucide.createIcons();
+          window.lucide?.createIcons();
         } else {
           tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-400">Không tìm thấy phòng nào phù hợp.</td></tr>';
         }
       } catch (e) {
         tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-rose-500">Lỗi nạp danh sách phòng.</td></tr>';
+        tbody.rows[0].cells[0].textContent += " " + e.message;
       }
     }
 
     // Modal Override
-    async function openOverrideModal(roomCode, currentStatus, currentScore) {
-      // Find submission_id from room history
+    async function openOverrideModal(submissionId) {
       try {
-        const res = await fetch(`/api/rooms/${roomCode}/history?limit=1`);
-        const json = await res.json();
-        if (json.success && json.data.history.length > 0) {
-          const subId = json.data.history[0].submission_id;
-          document.getElementById("override-sub-id").value = subId;
-          document.getElementById("override-status-select").value = currentStatus !== 'not_submitted' ? currentStatus : 'Sạch';
-          document.getElementById("override-score-input").value = currentScore > 0 ? currentScore : 8.0;
-          document.getElementById("override-modal").classList.remove("hidden");
-        }
+        const res = await adminRequest(`/api/admin/submissions/${encodeURIComponent(submissionId)}`);
+        const { data } = await res.json();
+        const ai = data.ai_result;
+        const override = data.override_info;
+        document.getElementById("override-room-summary").textContent =
+          `${data.room_code} · ${data.week} · AI: ${ai.status} (${ai.score}/10)`;
+        const photos = data.image_urls || (data.image_url ? [data.image_url] : []);
+        const gallery = document.getElementById("override-photos");
+        gallery.replaceChildren(...photos.map((url, index) => {
+          const link = document.createElement("a");
+          link.href = url;
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.className = "text-xs text-blue-600 hover:underline";
+          const image = document.createElement("img");
+          image.src = url;
+          image.alt = `Ảnh góc ${index + 1}`;
+          image.className = "w-full aspect-video rounded-lg object-cover";
+          link.append(image, `Mở ảnh ${index + 1}`);
+          return link;
+        }));
+        const checklist = document.getElementById("override-checklist");
+        const labels = {
+          bed_tidy: "Giường gọn",
+          floor_clean: "Sàn sạch",
+          desk_organized: "Bàn ngăn nắp",
+          shoes_arranged: "Giày dép đúng chỗ",
+        };
+        checklist.replaceChildren(...Object.entries(labels).map(([key, label]) => {
+          const item = document.createElement("li");
+          item.textContent = `${label}: ${ai.checklist[key] == null ? "Không quan sát được" : ai.checklist[key] ? "Đạt" : "Chưa đạt"}`;
+          return item;
+        }));
+        renderDeductions("override-issues", ai);
+        document.getElementById("override-previous-note").textContent = override.is_overridden
+          ? `Lần duyệt trước (${override.overridden_by || "Cán bộ"}): ${override.override_note || ""}`
+          : "";
+        document.getElementById("override-sub-id").value = data.submission_id;
+        document.getElementById("override-status-select").value = override.final_status ?? ai.status;
+        document.getElementById("override-score-input").value = override.final_score ?? ai.score;
+        document.getElementById("override-note-input").value = "";
+        document.getElementById("override-modal").classList.remove("hidden");
       } catch (e) {
-        alert("Không tìm thấy lượt nộp của phòng này.");
+        alert("Không mở được lượt nộp. " + e.message);
       }
     }
 
     function closeOverrideModal() {
       document.getElementById("override-modal").classList.add("hidden");
+    }
+
+    async function openAdminRoomHistory(roomCode) {
+      try {
+        document.getElementById("admin-history-room-title").textContent = `Lịch sử nộp 5S · Phòng ${roomCode}`;
+        const content = document.getElementById("admin-room-history-content");
+        content.innerHTML = '<p class="text-center text-slate-400 py-6">Đang tải lịch sử...</p>';
+        document.getElementById("admin-room-history-modal").classList.remove("hidden");
+
+        const res = await adminRequest(`/api/rooms/${encodeURIComponent(roomCode)}/history?limit=20`);
+        const json = await res.json();
+        if (!json.success || !json.data.history.length) {
+          content.innerHTML = `<div class="text-center py-8 text-slate-400">
+            <i data-lucide="calendar-x" class="w-10 h-10 mx-auto mb-2 text-slate-300"></i>
+            <p class="font-medium text-slate-600">Chưa có lịch sử nộp ảnh</p>
+            <p class="text-xs text-slate-400 mt-1">Phòng ${roomCode} chưa nộp ảnh đợt nào.</p>
+          </div>`;
+          window.lucide?.createIcons();
+          return;
+        }
+
+        content.innerHTML = json.data.history.map(item => {
+          const st = formatStatus(item.status);
+          return `
+            <div class="p-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-blue-50/50 transition space-y-2">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-sm text-slate-900">${item.week}</span>
+                  <span class="px-2 py-0.5 rounded-full text-xs font-bold ${
+                    st === 'Sạch' ? 'bg-emerald-100 text-emerald-800' :
+                    st === 'Hơi bừa bộn' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                  }">${st} (${item.score}đ)</span>
+                  ${item.is_overridden ? '<span class="text-[10px] text-blue-600 font-semibold">[Cán bộ duyệt]</span>' : ''}
+                </div>
+                <span class="text-xs text-slate-400">${new Date(item.submitted_at).toLocaleDateString("vi-VN")} ${new Date(item.submitted_at).toLocaleTimeString("vi-VN", {hour: '2-digit', minute:'2-digit'})}</span>
+              </div>
+              ${item.override_note ? `<p class="text-xs text-slate-600 bg-white p-2 rounded-lg border border-slate-100"><strong>Ghi chú duyệt:</strong> ${item.override_note}</p>` : ''}
+              <div class="flex items-center justify-between pt-1">
+                ${item.image_url ? `<a href="${item.image_url}" target="_blank" class="text-xs text-blue-600 hover:underline flex items-center gap-1 font-medium"><i data-lucide="image" class="w-3.5 h-3.5"></i> Xem ảnh</a>` : '<span></span>'}
+                ${item.submission_id ? `
+                  <button onclick="closeAdminRoomHistoryModal(); openOverrideModal('${item.submission_id}')" class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1">
+                    <i data-lucide="eye" class="w-3.5 h-3.5"></i> Chi tiết / Duyệt lại
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+          `;
+        }).join("");
+        window.lucide?.createIcons();
+      } catch (err) {
+        alert("Không tải được lịch sử: " + err.message);
+      }
+    }
+
+    function closeAdminRoomHistoryModal() {
+      document.getElementById("admin-room-history-modal").classList.add("hidden");
     }
 
     async function submitOverride() {
@@ -943,17 +1432,20 @@
       const score = parseFloat(document.getElementById("override-score-input").value);
       const note = document.getElementById("override-note-input").value.trim();
 
+      if (!Number.isFinite(score) || score < 0 || score > 10) {
+        alert("Điểm phải nằm trong khoảng 0 đến 10.");
+        return;
+      }
       if (!note) {
         alert("Vui lòng nhập lý do cán bộ điều chỉnh kết quả!");
         return;
       }
 
       try {
-        const res = await fetch(`/api/admin/submissions/${subId}/override`, {
+        const res = await adminRequest(`/api/admin/submissions/${encodeURIComponent(subId)}/override`, {
           method: "PATCH",
           headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${adminToken}`
+            "Content-Type": "application/json"
           },
           body: JSON.stringify({ status: status, score: score, override_note: note }),
         });
@@ -972,8 +1464,37 @@
     }
 
     // Export CSV
-    function exportReportCSV() {
-      window.open("/api/admin/reports/export", "_blank");
+    async function exportReportCSV() {
+      try {
+        const res = await adminRequest("/api/admin/reports/export");
+        const filename = res.headers.get("Content-Disposition")?.match(/filename="?([^";]+)"?/i)?.[1];
+        const url = URL.createObjectURL(await res.blob());
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename || "bao-cao-ktx.csv";
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (e) {
+        alert("Không xuất được báo cáo. " + e.message);
+      }
+    }
+
+    // Delete All Submissions
+    async function handleDeleteAllSubmissions() {
+      if (!confirm("⚠️ CẢNH BÁO: Thao tác này sẽ xóa toàn bộ lịch sử nộp ảnh và điểm chấm AI của tất cả các phòng để bắt đầu lượt chấm mới. Bạn có chắc chắn không?")) {
+        return;
+      }
+      try {
+        const res = await adminRequest("/api/admin/submissions", { method: "DELETE" });
+        const data = await res.json();
+        alert("✅ " + (data.message || "Đã xóa toàn bộ lịch sử thành công!"));
+        loadAdminDashboard();
+        loadAdminRooms();
+      } catch (e) {
+        alert("❌ Lỗi xóa lịch sử: " + e.message);
+      }
     }
   </script>
 

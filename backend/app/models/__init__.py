@@ -85,7 +85,20 @@ class Submission(Base):
 
     # Quan hệ
     room: Mapped["Room"] = relationship("Room", back_populates="submissions")
+    photos: Mapped[list["SubmissionPhoto"]] = relationship(
+        order_by="SubmissionPhoto.position", cascade="all, delete-orphan"
+    )
     ai_evaluation: Mapped["AiEvaluation"] = relationship("AiEvaluation", back_populates="submission", uselist=False)
+
+
+class SubmissionPhoto(Base):
+    __tablename__ = "submission_photos"
+
+    submission_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("submissions.id", ondelete="CASCADE"), primary_key=True
+    )
+    position: Mapped[int] = mapped_column(Integer, primary_key=True)
+    image_url: Mapped[str] = mapped_column(String(500), nullable=False)
 
 
 # =============================================
@@ -112,6 +125,7 @@ class AiEvaluation(Base):
     issues_detected: Mapped[str] = mapped_column(UnicodeText, nullable=True)
     positive_notes: Mapped[str] = mapped_column(UnicodeText, nullable=True)
     recommendations: Mapped[str] = mapped_column(UnicodeText, nullable=True)
+    deductions: Mapped[str] = mapped_column(UnicodeText, nullable=True)  # JSON string của các khoản trừ
 
     # Kết quả sau khi cán bộ duyệt đè (nếu có)
     final_status: Mapped[str] = mapped_column(Unicode(50), nullable=True)  # Dùng cái này để hiển thị

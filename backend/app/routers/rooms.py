@@ -1,14 +1,19 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Room
+from app.models import User
+from app.services.auth_service import get_current_user, require_room_access
 
 router = APIRouter()
 
 
 @router.get("/rooms/{room_code}", summary="Xem thông tin 1 phòng")
-async def get_room(room_code: str, db: Session = Depends(get_db)):
-    room = db.query(Room).filter(Room.room_code == room_code.strip()).first()
+async def get_room(
+    room_code: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    room = require_room_access(current_user, room_code, db)
     if not room:
         return {
             "success": False,

@@ -1,4 +1,3 @@
-import os
 import hmac
 import hashlib
 import base64
@@ -11,12 +10,21 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
-from app.models import User
+from app.models import Room, Student, User
 
-# Sử dụng SECRET_KEY từ config hoặc tạo một key mặc định an toàn
-JWT_SECRET = settings.SECRET_KEY or "ktx5s_super_secret_jwt_key_2026_xyz"
+# Với một tiến trình demo, dùng khóa ngẫu nhiên nếu chưa cấu hình khóa riêng.
+configured_secret = settings.SECRET_KEY.strip()
+insecure_demo_secrets = {
+    "",
+    "change_this_to_a_random_secret_key",
+    "ktx5s_super_secret_jwt_key_2026_xyz",
+}
+JWT_SECRET = (
+    secrets.token_urlsafe(48) if configured_secret in insecure_demo_secrets else configured_secret
+)
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # Token có hiệu lực 7 ngày
+TOKEN_VERSION = 2
 
 security = HTTPBearer(auto_error=False)
 
@@ -69,7 +77,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    to_encode.update({"exp": int(expire.timestamp())})
+    to_encode.update({"exp": int(expire.timestamp()), "v": TOKEN_VERSION})
 
     header = {"alg": JWT_ALGORITHM, "typ": "JWT"}
     header_bytes = json.dumps(header, separators=(",", ":")).encode("utf-8")
@@ -106,7 +114,7 @@ def decode_access_token(token: str) -> dict:
 
         # Kiểm tra hạn dùng
         exp = payload.get("exp")
-        if exp and datetime.now(timezone.utc).timestamp() > exp:
+        if payload.get("v") != TOKEN_VERSION or not isinstance(exp, int) or datetime.now(timezone.utc).timestamp() >= exp:
             raise ValueError("Token đã hết hạn sử dụng")
 
         return payload
@@ -158,3 +166,33 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
             detail="Bạn không có quyền Cán bộ KTX để thực hiện hành động này.",
         )
     return current_user
+
+
+def get_student_room(user: User, db: Session) -> Room:
+    """Ánh xạ tài khoản sinh viên theo mã sinh viên trong danh sách phân phòng."""
+    if user.role != "student":
+        raise HTTPException(403, "Tài khoản này không có quyền nộp ảnh sinh viên.")
+
+    room = (
+        db.query(Room)
+        .join(Student, Student.room_id == Room.id)
+        .filter(
+            Student.student_code == user.username,
+            Student.is_active == True,
+            Room.is_active == True,
+        )
+        .first()
+    )
+    if room is None:
+        raise HTTPException(403, "Tài khoản chưa được phân vào phòng đang hoạt động.")
+    return room
+
+
+def require_room_access(user: User, room_code: str, db: Session) -> Room | None:
+    if user.role == "admin":
+        return db.query(Room).filter(Room.room_code == room_code.strip()).first()
+
+    room = get_student_room(user, db)
+    if room.room_code.casefold() != room_code.strip().casefold():
+        raise HTTPException(403, "Bạn chỉ được truy cập phòng được phân cho mình.")
+    return room

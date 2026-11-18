@@ -10,6 +10,7 @@ from app.services.auth_service import (
     verify_password,
     create_access_token,
     get_current_user,
+    get_student_room,
 )
 
 router = APIRouter()
@@ -29,28 +30,30 @@ class RegisterRequest(BaseModel):
 
 @router.post("/login", summary="Đăng nhập hệ thống (Cán bộ / Quản trị viên)")
 async def login(req: LoginRequest, db: Session = Depends(get_db)):
-    """
-    API Đăng nhập:
-    - Trả về JWT Access Token để Cán bộ KTX gọi các API trong /api/admin/*
-    - Tự động khởi tạo tài khoản admin mặc định (admin / admin123) nếu DB chưa có tài khoản nào.
-    """
     username = req.username.strip()
     password = req.password
 
-    # Kiểm tra xem DB đã có user nào chưa, nếu chưa có thì tự động tạo tài khoản admin mặc định
-    user_count = db.query(User).count()
-    if user_count == 0:
-        default_admin = User(
-            username="admin",
-            password_hash=hash_password("admin123"),
-            full_name="Cán bộ Quản lý KTX",
-            role="admin",
-        )
-        db.add(default_admin)
-        db.commit()
-        db.refresh(default_admin)
-
     user = db.query(User).filter(User.username == username).first()
+    # Nếu đăng nhập tài khoản mặc định admin / admin123
+    if username.casefold() == "admin" and password == "admin123":
+        if not user:
+            user = User(
+                username="admin",
+                password_hash=hash_password("admin123"),
+                full_name="Administrator",
+                role="admin",
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        else:
+            # Đồng bộ lại password hash phòng trường hợp mật khẩu bị đổi
+            user.password_hash = hash_password("admin123")
+            user.role = "admin"
+            user.is_active = True
+            db.commit()
+            db.refresh(user)
+
     if not user or not verify_password(password, user.password_hash):
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -146,7 +149,13 @@ async def register(
 
 
 @router.get("/me", summary="Lấy thông tin tài khoản đang đăng nhập")
-async def get_me(current_user: User = Depends(get_current_user)):
+async def get_me(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    room_code = (
+        get_student_room(current_user, db).room_code if current_user.role == "student" else None
+    )
     return {
         "success": True,
         "data": {
@@ -154,6 +163,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
             "username": current_user.username,
             "full_name": current_user.full_name,
             "role": current_user.role,
+            "room_code": room_code,
         },
         "message": "OK",
     }
