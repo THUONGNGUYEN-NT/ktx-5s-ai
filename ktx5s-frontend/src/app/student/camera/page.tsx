@@ -40,11 +40,14 @@ export default function CameraPage() {
       maxWidthOrHeight: 1920,
       useWebWorker: true,
     });
-    const preview = URL.createObjectURL(compressed);
+    const namedFile = new File([compressed], f.name, {
+      type: compressed.type || f.type || "image/jpeg",
+    });
+    const preview = URL.createObjectURL(namedFile);
     const capturedAt = new Date().toLocaleString("vi-VN");
     setCaptures((prev) => ({
       ...prev,
-      [area]: { file: compressed as File, preview, capturedAt },
+      [area]: { file: namedFile, preview, capturedAt },
     }));
     setError(null);
   };

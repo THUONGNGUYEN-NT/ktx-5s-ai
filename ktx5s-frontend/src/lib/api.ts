@@ -1,13 +1,13 @@
 import axios, { AxiosError } from "axios";
 import { BASE_URL, USE_MOCK } from "./config";
 import {
-  mockSubmissionResult,
   mockHistory,
   generateRooms,
   buildMockAiResult,
   mockAreaImages,
   type AIResult,
 } from "./mock-api";
+import { analyzeFourRoomPhotos } from "./vision-analyzer";
 import { CURRENT_WEEK, type AreaKey, type Room, type RoomStatus } from "@/components/status";
 
 const api = axios.create({ baseURL: BASE_URL });
@@ -134,9 +134,16 @@ export async function submitPhotos(roomCode: string, files: Record<AreaKey, File
       throw new Error(msg);
     }
 
-    // Nếu Backend (:8000) chưa bật trên máy hiện tại và cho phép chạy Mock dự phòng
+    // Nếu chạy trên GitHub Pages hoặc khi cổng 8000 chưa bật -> Chạy bộ phân tích điểm ảnh 5S trực tiếp trên 4 ảnh
     if (USE_MOCK) {
-      await wait(2000);
+      await wait(1200);
+      const analysis = await analyzeFourRoomPhotos(files);
+      if (!analysis.isValid) {
+        throw new Error(
+          analysis.invalidMessage || "Ảnh quá tối hoặc không hợp lệ. Vui lòng chụp lại!"
+        );
+      }
+
       const areaImages: Record<AreaKey, string> = {
         bed: await fileToDataUrl(files.bed),
         floor: await fileToDataUrl(files.floor),
@@ -151,18 +158,20 @@ export async function submitPhotos(roomCode: string, files: Record<AreaKey, File
         week,
         submitted_at: submittedAt,
         area_images: areaImages,
-        ai_result: mockSubmissionResult.data.ai_result,
+        ai_result: analysis.aiResult,
         is_overridden: false,
         override_note: null,
       });
       return {
-        ...mockSubmissionResult,
+        success: true,
         data: {
-          ...mockSubmissionResult.data,
           submission_id: subId,
           room_code: cleanCode,
           submitted_at: submittedAt,
+          image_url: areaImages.bed,
+          ai_result: analysis.aiResult,
         },
+        message: "Nộp 4 ảnh thành công! AI đã phân tích xong.",
       };
     }
 
