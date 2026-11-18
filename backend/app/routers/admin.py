@@ -104,8 +104,9 @@ async def get_rooms(
     status: Optional[str] = Query(None, description="clean / slightly_messy / messy / not_submitted"),
     building: Optional[str] = Query(None, description="Tòa nhà (VD: A, B)"),
     floor: Optional[int] = Query(None, description="Tầng"),
+    room_code: Optional[str] = Query(None, description="Mã phòng hoặc tìm kiếm"),
     page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=200),
     current_admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -119,6 +120,8 @@ async def get_rooms(
         query = query.filter(Room.building == building.strip().upper())
     if floor is not None:
         query = query.filter(Room.floor == floor)
+    if room_code:
+        query = query.filter(Room.room_code.ilike(f"%{room_code.strip()}%"))
 
     rooms = query.all()
     result_list = []
@@ -186,6 +189,49 @@ async def get_rooms(
             "limit": limit,
             "rooms": paginated_rooms,
         },
+        "message": "OK",
+    }
+
+
+@router.get("/rooms/hierarchy", summary="Lấy danh mục phân cấp Tòa -> Tầng -> Phòng")
+async def get_rooms_hierarchy(
+    current_admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Trả về cấu trúc cây phân cấp toàn bộ KTX phục vụ bộ lọc hàng nghìn phòng."""
+    rooms = (
+        db.query(Room)
+        .filter(Room.is_active == True)
+        .order_by(Room.building, Room.floor, Room.room_code)
+        .all()
+    )
+
+    hierarchy = {}
+    for r in rooms:
+        b = r.building.strip().upper() if r.building else "N/A"
+        f = r.floor
+        if b not in hierarchy:
+            hierarchy[b] = {}
+        if f not in hierarchy[b]:
+            hierarchy[b][f] = []
+        hierarchy[b][f].append(r.room_code)
+
+    formatted = []
+    for b_name in sorted(hierarchy.keys()):
+        floors = []
+        for f_num in sorted(hierarchy[b_name].keys()):
+            floors.append({
+                "floor": f_num,
+                "rooms": hierarchy[b_name][f_num],
+            })
+        formatted.append({
+            "building": b_name,
+            "floors": floors,
+        })
+
+    return {
+        "success": True,
+        "data": formatted,
         "message": "OK",
     }
 

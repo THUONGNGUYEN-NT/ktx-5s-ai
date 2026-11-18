@@ -443,16 +443,34 @@
               <span>Danh sách phòng theo tuần</span>
             </h4>
             <div class="flex flex-wrap items-center gap-2">
-              <input id="filter-building" aria-label="Tòa nhà" placeholder="Tòa" maxlength="10" onchange="loadAdminRooms()" class="w-20 rounded-xl border border-slate-200 px-2 py-1.5 text-xs">
-              <input id="filter-floor" aria-label="Tầng" placeholder="Tầng" type="number" min="0" step="1" onchange="loadAdminRooms()" class="w-20 rounded-xl border border-slate-200 px-2 py-1.5 text-xs">
-              <select id="filter-status" onchange="loadAdminRooms()" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
-                <option value="">Tất cả trạng thái</option>
-                <option value="messy">Bừa bộn (Ưu tiên)</option>
-                <option value="slightly_messy">Hơi bừa bộn</option>
-                <option value="clean">Sạch sẽ</option>
-                <option value="not_submitted">Chưa nộp ảnh</option>
+              <!-- CHỌN TÒA -->
+              <select id="filter-building" onchange="onBuildingChange()" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                <option value="">🏢 Tất cả tòa</option>
               </select>
-              <button onclick="loadAdminDashboard(); loadAdminRooms();" class="p-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200">
+
+              <!-- CHỌN TẦNG -->
+              <select id="filter-floor" onchange="onFloorChange()" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                <option value="">🪜 Tất cả tầng</option>
+              </select>
+
+              <!-- CHỌN PHÒNG -->
+              <select id="filter-room-select" onchange="onRoomSelectChange()" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                <option value="">🚪 Tất cả phòng</option>
+              </select>
+
+              <!-- TÌM MÃ PHÒNG -->
+              <input id="filter-room-code" type="text" placeholder="Gõ tìm phòng..." oninput="debounceSearchRooms()" class="w-28 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+
+              <!-- CHỌN TRẠNG THÁI -->
+              <select id="filter-status" onchange="loadAdminRooms()" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                <option value="">Tất cả trạng thái</option>
+                <option value="messy">❌ Bừa bộn</option>
+                <option value="slightly_messy">⚠️ Hơi bừa</option>
+                <option value="clean">✅ Sạch sẽ</option>
+                <option value="not_submitted">⚪ Chưa nộp</option>
+              </select>
+
+              <button onclick="resetFiltersAndReload()" class="p-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200" title="Đặt lại bộ lọc và làm mới">
                 <i data-lucide="rotate-cw" class="w-4 h-4"></i>
               </button>
             </div>
@@ -688,6 +706,7 @@
         studentBtn.classList.remove("bg-white", "text-blue-600", "shadow-sm", "font-semibold");
         studentBtn.classList.add("text-slate-600");
         if (appRole === "admin") {
+          loadRoomHierarchy();
           loadAdminDashboard();
           loadAdminRooms();
         }
@@ -1202,6 +1221,7 @@
           sessionStorage.setItem("ktx5s_fullname", appUser.fullName);
 
           syncAuthUI();
+          loadRoomHierarchy();
           loadAdminDashboard();
           loadAdminRooms();
         } else {
@@ -1249,18 +1269,128 @@
       }
     }
 
+    // ===================================================
+    // QUẢN LÝ PHÂN CẤP PHÒNG (TÒA -> TẦNG -> PHÒNG)
+    // ===================================================
+    let roomHierarchyData = [];
+    let searchDebounceTimer = null;
+
+    async function loadRoomHierarchy() {
+      try {
+        const res = await adminRequest("/api/admin/rooms/hierarchy");
+        const json = await res.json();
+        if (json.success && json.data) {
+          roomHierarchyData = json.data;
+          renderBuildingOptions();
+        }
+      } catch (e) {
+        console.error("Không tải được phân cấp phòng:", e);
+      }
+    }
+
+    function renderBuildingOptions() {
+      const bSelect = document.getElementById("filter-building");
+      if (!bSelect) return;
+      const current = bSelect.value;
+      bSelect.innerHTML = '<option value="">🏢 Tất cả tòa</option>' +
+        roomHierarchyData.map(b => `<option value="${b.building}">Tòa ${b.building} (${b.floors.reduce((sum, f) => sum + f.rooms.length, 0)} phòng)</option>`).join("");
+      bSelect.value = current;
+      renderFloorOptions();
+    }
+
+    function onBuildingChange() {
+      renderFloorOptions();
+      loadAdminRooms();
+    }
+
+    function renderFloorOptions() {
+      const bSelect = document.getElementById("filter-building");
+      const fSelect = document.getElementById("filter-floor");
+      if (!bSelect || !fSelect) return;
+      const bVal = bSelect.value;
+      fSelect.innerHTML = '<option value="">🪜 Tất cả tầng</option>';
+
+      if (bVal) {
+        const bObj = roomHierarchyData.find(b => b.building === bVal);
+        if (bObj) {
+          fSelect.innerHTML += bObj.floors.map(f => `<option value="${f.floor}">Tầng ${f.floor} (${f.rooms.length} phòng)</option>`).join("");
+        }
+      } else {
+        const allFloors = new Set();
+        roomHierarchyData.forEach(b => b.floors.forEach(f => allFloors.add(f.floor)));
+        Array.from(allFloors).sort((a,b)=>a-b).forEach(f => {
+          fSelect.innerHTML += `<option value="${f}">Tầng ${f}</option>`;
+        });
+      }
+      renderRoomSelectOptions();
+    }
+
+    function onFloorChange() {
+      renderRoomSelectOptions();
+      loadAdminRooms();
+    }
+
+    function renderRoomSelectOptions() {
+      const bSelect = document.getElementById("filter-building");
+      const fSelect = document.getElementById("filter-floor");
+      const rSelect = document.getElementById("filter-room-select");
+      if (!bSelect || !fSelect || !rSelect) return;
+      const bVal = bSelect.value;
+      const fVal = fSelect.value;
+      rSelect.innerHTML = '<option value="">🚪 Tất cả phòng</option>';
+
+      let rooms = [];
+      roomHierarchyData.forEach(b => {
+        if (!bVal || b.building === bVal) {
+          b.floors.forEach(f => {
+            if (fVal === "" || String(f.floor) === String(fVal)) {
+              rooms.push(...f.rooms);
+            }
+          });
+        }
+      });
+
+      rSelect.innerHTML += rooms.map(r => `<option value="${r}">${r}</option>`).join("");
+    }
+
+    function onRoomSelectChange() {
+      const rVal = document.getElementById("filter-room-select").value;
+      document.getElementById("filter-room-code").value = rVal;
+      loadAdminRooms();
+    }
+
+    function debounceSearchRooms() {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        loadAdminRooms();
+      }, 300);
+    }
+
+    function resetFiltersAndReload() {
+      document.getElementById("filter-building").value = "";
+      document.getElementById("filter-floor").value = "";
+      document.getElementById("filter-room-select").value = "";
+      document.getElementById("filter-room-code").value = "";
+      document.getElementById("filter-status").value = "";
+      renderFloorOptions();
+      loadAdminDashboard();
+      loadAdminRooms();
+    }
+
     async function loadAdminRooms() {
       const status = document.getElementById("filter-status").value;
       const building = document.getElementById("filter-building").value.trim();
       const floor = document.getElementById("filter-floor").value;
+      const roomCode = document.getElementById("filter-room-code").value.trim();
       const tbody = document.getElementById("admin-rooms-tbody");
       tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-400">Đang nạp dữ liệu...</td></tr>';
 
       try {
-        const params = new URLSearchParams({ limit: "50" });
+        const params = new URLSearchParams({ limit: "100" });
         if (status) params.set("status", status);
         if (building) params.set("building", building);
         if (floor !== "") params.set("floor", floor);
+        if (roomCode) params.set("room_code", roomCode);
 
         const res = await adminRequest(`/api/admin/rooms?${params}`);
         const json = await res.json();
