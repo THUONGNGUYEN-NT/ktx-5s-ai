@@ -1,0 +1,222 @@
+# KẾ HOẠCH TRIỂN KHAI CHI TIẾT ĐỒ ÁN THỰC TẬP
+# DỰ ÁN: HỆ THỐNG ĐÁNH GIÁ VỆ SINH PHÒNG Ở KÝ TÚC XÁ TỰ ĐỘNG (KTX 5S AI)
+
+* **Thời gian thực hiện:** 4 tuần (28 ngày liên tục).
+* **Quy mô nhân sự:** 02 Sinh viên thực tập.
+  * **Sinh viên A (Dev Backend & AI Core):** Chịu trách nhiệm kiến trúc CSDL, API, AI Vision Pipeline và bảo mật.
+  * **Sinh viên B (Dev Frontend & UI/UX):** Chịu trách nhiệm giao diện Mobile Web (Sinh viên), Dashboard (Cán bộ) và tích hợp API.
+* **Người hướng dẫn / Đóng vai:** Cán bộ Quản lý Ký túc xá.
+
+---
+
+## 1. MỤC TIÊU VÀ CHỈ SỐ ĐO LƯỜNG (KPIs & OKRs)
+
+### 1.1. Mục tiêu nghiệp vụ (Business Goal)
+* Cắt giảm **80% thời gian** kiểm tra phòng thủ công hàng tuần của cán bộ KTX.
+* Nâng cao tính tự giác của sinh viên thông qua việc nộp ảnh định kỳ trước **21h00 Chủ Nhật hàng tuần**.
+* Tự động phân loại 100% phòng nộp ảnh thành 3 mức: **Sạch**, **Hơi bừa bộn**, **Bừa bộn**.
+
+### 1.2. Mục tiêu kỹ thuật (Technical KPIs)
+* **Thời gian phản hồi AI:** Dưới **5 giây** cho mỗi lượt phân tích và chấm điểm ảnh.
+* **Độ chính xác phân loại:** Khớp ít nhất **85%** so với đánh giá thực tế của cán bộ KTX (đo lường trên tập mẫu thử nghiệm).
+* **Chống gian lận:** 100% ảnh chụp phải được chụp trực tiếp tại thời điểm nộp (không cho phép chọn ảnh cũ từ thư viện).
+
+---
+
+## 2. KIẾN TRÚC HỆ THỐNG VÀ CÔNG NGHỆ (TECH STACK)
+
+```mermaid
+flowchart TD
+    subgraph Client ["Client (Sinh viên & Cán bộ)"]
+        SV["Sinh viên (Mobile Web / PWA)\nQuét QR - Chụp ảnh camera trực tiếp"]
+        CB["Cán bộ KTX (Web Dashboard)\nXem thống kê, lọc phòng vi phạm, duyệt đè"]
+    end
+
+    subgraph Backend ["Backend API Service"]
+        API["FastAPI / Express Server\n(Xử lý nghiệp vụ, Auth, Validation)"]
+        Storage["Cloud Storage (Cloudinary / Supabase / S3)\n(Lưu trữ ảnh đã nén)"]
+    end
+
+    subgraph AI_Engine ["AI Vision Service"]
+        LLM["Multimodal Vision API\n(Gemini 2.0 Flash / 1.5 Flash)\nPhân tích 5S & Xuất JSON có cấu trúc"]
+    end
+
+    subgraph Database ["Cơ sở dữ liệu"]
+        DB[(PostgreSQL / Supabase DB\nPhòng, Sinh viên, Lượt nộp, Kết quả AI)]
+    end
+
+    SV -->|Gửi ảnh phòng + Mã phòng| API
+    CB -->|Tra cứu, duyệt phòng vi phạm| API
+    API -->|Lưu ảnh gốc| Storage
+    API -->|Gửi ảnh + Prompt 5S| LLM
+    LLM -->|Trả về JSON chấm điểm & lỗi| API
+    API -->|Ghi nhận kết quả| DB
+    API -->|Phản hồi trạng thái tức thì| SV
+```
+
+### Lựa chọn công nghệ chi tiết:
+* **Frontend:** React hoặc Next.js (Tailwind CSS, Lucide Icons, HTML5 Media Capture API). Thiết kế chuẩn Mobile-first cho sinh viên và Desktop cho cán bộ.
+* **Backend:** Python FastAPI (tối ưu xử lý I/O bất đồng bộ và xử lý hình ảnh) hoặc Node.js (NestJS/Express).
+* **AI Vision:** Google Gemini 1.5/2.0 Flash API (tốc độ cao, chi phí cực thấp/free tier đủ cho đồ án, hỗ trợ Structured JSON Output).
+* **Database & Storage:** Supabase (PostgreSQL + Auth + Storage) hoặc Firebase để tiết kiệm thời gian cấu hình hạ tầng.
+
+---
+
+## 3. BẢNG TIÊU CHUẨN 5S & ĐẶC TẢ PROMPT CHO AI
+
+### 3.1. Rubric Đánh giá Vệ sinh Phòng KTX
+* **Sạch (Điểm 8.0 - 10.0):** 
+  * Giường chiếu: Đã gấp gọn chăn màn, gối đặt ngay ngắn.
+  * Sàn nhà & Lối đi: Không có rác, không có quần áo bẩn hay đồ vật vương vãi cản trở lối đi.
+  * Bàn học: Sách vở, máy tính được xếp gọn gàng.
+  * Giày dép: Đặt ngay ngắn trên kệ hoặc sát tường, không vứt bừa giữa cửa.
+* **Hơi bừa bộn (Điểm 5.0 - 7.9):** 
+  * Có 1 - 2 tiêu chí chưa hoàn thiện (ví dụ: chăn chưa gấp phẳng, hoặc còn 1-2 đôi dép để lộn xộn, trên bàn còn vài vỏ chai nước chưa dọn).
+  * Chưa có dấu hiệu mất vệ sinh nghiêm trọng.
+* **Bừa bộn (Điểm 0.0 - 4.9):** 
+  * Rác thải, thức ăn thừa vứt trên sàn hoặc trên bàn học.
+  * Quần áo bẩn vứt ngổn ngang trên giường, sàn nhà.
+  * Phòng mất trật tự nghiêm trọng, nguy cơ gây mùi hôi, ẩm mốc, côn trùng.
+
+### 3.2. Cấu trúc Prompt Engine (Gửi kèm ảnh)
+```text
+SYSTEM PROMPT:
+Bạn là Chuyên gia Đánh giá Vệ sinh KTX theo tiêu chuẩn 5S. Nhiệm vụ của bạn là phân tích ảnh chụp phòng ở sinh viên và trả về đánh giá khách quan dưới dạng JSON chuẩn.
+
+QUY TẮC PHÂN LOẠI:
+- "Sạch": Giường gọn, sàn sạch, bàn ngăn nắp, giày dép đúng chỗ.
+- "Hơi bừa bộn": Có 1-2 điểm luộm thuộm nhỏ (chăn chưa gấp, vài món đồ chưa cất).
+- "Bừa bộn": Rác trên sàn, quần áo vứt bừa bãi, đồ ăn thừa, cản trở lối đi.
+
+JSON SCHEMA OUTPUT BẮT BUỘC:
+{
+  "status": "Sạch" | "Hơi bừa bộn" | "Bừa bộn",
+  "score": number, // Thang điểm từ 0.0 đến 10.0
+  "is_valid_room_photo": boolean, // False nếu ảnh mờ, tối đen hoặc chụp không phải phòng KTX
+  "checklist": {
+    "bed_tidy": boolean,
+    "floor_clean": boolean,
+    "desk_organized": boolean,
+    "shoes_arranged": boolean
+  },
+  "issues_detected": ["danh sách cụ thể các lỗi phát hiện được"],
+  "positive_notes": ["lời khen các điểm làm tốt"],
+  "recommendations": "lời khuyên cụ thể để sinh viên dọn dẹp"
+}
+```
+
+---
+
+## 4. CƠ CHẾ CHỐNG GIAN LẬN (ANTI-FRAUD MECHANISM)
+
+> [!IMPORTANT]
+> Đây là phần bảo vệ quan trọng nhất trước hội đồng phản biện đồ án:
+1. **Khóa chọn ảnh từ Album:** Thẻ `<input type="file" accept="image/*" capture="environment">` ép thiết bị di động phải mở trực tiếp Camera, ngăn chặn tải ảnh cũ hoặc ảnh trên mạng.
+2. **Watermark & EXIF Kiểm tra:** Kiểm tra metadata ảnh (nếu có) và đóng dấu Watermark hiển thị: `Mã Phòng - Thời gian thực (Timestamp) - Mã phiên chụp` trực tiếp lên canvas trước khi gửi lên máy chủ.
+3. **Mã QR Định danh tại phòng:** Mỗi phòng được dán một mã QR cố định tại cửa/tường. Khi chụp ảnh, sinh viên phải đứng ở góc quy định (hệ thống có hướng dẫn khung chụp để lấy được toàn cảnh và góc dán định danh).
+4. **Cơ chế Human-in-the-loop (Cán bộ duyệt đè):** AI đóng vai trò sàng lọc tự động. Với các phòng bị xếp loại **Bừa bộn**, cán bộ KTX sẽ nhận danh sách nổi bật để bấm xem ảnh và xác nhận trước khi gửi cảnh báo vi phạm. Cán bộ có toàn quyền chỉnh sửa kết quả nếu AI nhận diện nhầm.
+
+---
+
+## 5. BẢNG PHÂN RÃ CÔNG VIỆC THEO NGÀY (WBS - 28 NGÀY)
+
+### TUẦN 1: Nghiên cứu Nghiệp vụ, Thiết kế Hệ thống & Kiểm chứng AI (PoC)
+* **Mục tiêu tuần:** Chốt thiết kế CSDL, tạo dựng xong Prompt AI hoạt động tốt trên 20 ảnh mẫu.
+
+| Ngày | Sinh viên A (Backend & AI) | Sinh viên B (Frontend & UI/UX) | Sản phẩm đầu ra (Deliverable) |
+| :--- | :--- | :--- | :--- |
+| **Ngày 1** | Khảo sát quy trình kiểm tra phòng KTX, lập danh sách thực thể dữ liệu. | Vẽ sơ đồ luồng người dùng (User Flow) cho Sinh viên và Cán bộ KTX. | Tài liệu đặc tả yêu cầu (SRS ngắn gọn). |
+| **Ngày 2** | Thiết kế CSDL (PostgreSQL Schema): `Rooms`, `Students`, `Submissions`, `AI_Evaluations`. | Thiết kế Wireframe/Figma các màn hình: Chụp ảnh (Mobile), Dashboard (Desktop). | File CSDL Schema + Figma Prototype. |
+| **Ngày 3** | Đi thu thập 20 ảnh phòng thực tế (đầy đủ các mức độ: Sạch, Vừa, Bừa). | Xây dựng bộ Design System cơ bản với Tailwind CSS (màu sắc, component thẻ phòng, badge). | Bộ dữ liệu thử nghiệm (20 ảnh có nhãn thực tế). |
+| **Ngày 4** | Thử nghiệm các Prompt khác nhau với Gemini Vision API trên 20 ảnh đã thu thập. | Khởi tạo dự án Frontend (React/Next.js), cấu hình Routing và Layout khung. | Script Python test Prompt + Repo Frontend chuẩn bị sẵn. |
+| **Ngày 5** | Tinh chỉnh Prompt để AI trả về đúng JSON Schema 100%, không bị lỗi parse. | Làm giao diện trang quét mã QR / Nhập mã phòng và trang hướng dẫn quy định chụp 5S. | Endpoint giả lập (Mock API) trả về kết quả AI. |
+| **Ngày 6** | Khởi tạo dự án Backend, thiết lập kết nối Database (Supabase/PostgreSQL). | Làm trang mở Camera HTML5 chụp ảnh có khung căn góc (Overlay visual guide). | Server Backend kết nối DB thành công; Camera Web hoạt động. |
+| **Ngày 7** | **Đánh giá mốc Tuần 1:** Kiểm tra độ khớp của AI trên 20 ảnh mẫu (phải đạt > 80%). Báo cáo tiến độ cho GVHD. |
+
+---
+
+### TUẦN 2: Phát triển Core Backend, Tích hợp AI & Giao diện Sinh viên
+* **Mục tiêu tuần:** Sinh viên có thể mở điện thoại chụp ảnh, ảnh gửi lên server và AI phân tích trả về kết quả ngay lập tức.
+
+| Ngày | Sinh viên A (Backend & AI) | Sinh viên B (Frontend & UI/UX) | Sản phẩm đầu ra (Deliverable) |
+| :--- | :--- | :--- | :--- |
+| **Ngày 8** | Viết module xử lý & nén ảnh (Pillow/Sharp) trước khi lưu trữ để tiết kiệm băng thông. | Xử lý logic chụp ảnh: xem trước ảnh (Preview), nút "Chụp lại", khóa không cho tải file từ máy. | Module nén ảnh + UI chụp ảnh hoàn chỉnh. |
+| **Ngày 9** | Kết nối Cloud Storage (Cloudinary/S3/Supabase Storage) lưu ảnh nộp. | Xử lý đóng dấu thời gian (Watermark canvas) lên ảnh chụp trước khi tạo Blob gửi đi. | Ảnh tải lên kèm Watermark phòng và giờ chụp. |
+| **Ngày 10** | Viết API Endpoint `POST /api/submissions`: Nhận ảnh -> Lưu Cloud -> Gửi AI -> Nhận JSON. | Viết hàm gọi API nộp ảnh từ client, hiển thị hiệu ứng Loading / AI Scanning sinh động. | API nộp ảnh hoạt động hoàn chỉnh với AI. |
+| **Ngày 11** | Lưu toàn bộ kết quả phân tích JSON của AI vào CSDL, liên kết theo `room_id`. | Thiết kế màn hình hiển thị kết quả AI: Badge trạng thái (Xanh/Vàng/Đỏ), danh sách lỗi phát hiện. | Luồng chụp - chấm - xem kết quả chạy thông suốt. |
+| **Ngày 12** | Viết API kiểm tra lịch sử nộp ảnh của từng phòng `GET /api/rooms/{id}/history`. | Thiết kế trang lịch sử đánh giá theo tuần dành cho sinh viên trong phòng cùng theo dõi. | Sinh viên xem lại được các tuần trước. |
+| **Ngày 13** | Viết cơ chế xử lý lỗi: Ảnh mờ/tối/không phải phòng -> trả về mã lỗi đặc thù. | Bắt mã lỗi từ backend: hiển thị cảnh báo *"Ảnh không hợp lệ, vui lòng chụp lại rõ hơn"*. | Hệ thống chống nộp ảnh sai lệch/ảnh đen. |
+| **Ngày 14** | **Đánh giá mốc Tuần 2:** Kiểm thử toàn diện luồng Sinh viên (End-to-End từ mobile). Họp đánh giá tiến độ. |
+
+---
+
+### TUẦN 3: Xây dựng Dashboard Cán bộ Quản lý & Tính năng Kiểm duyệt
+* **Mục tiêu tuần:** Cán bộ KTX có màn hình trực quan để theo dõi toàn bộ ký túc xá và duyệt đè kết quả.
+
+| Ngày | Sinh viên A (Backend & AI) | Sinh viên B (Frontend & UI/UX) | Sản phẩm đầu ra (Deliverable) |
+| :--- | :--- | :--- | :--- |
+| **Ngày 15** | Viết API thống kê Dashboard: Tổng số phòng, Tỷ lệ Sạch / Hơi bừa / Bừa, danh sách phòng trễ hạn. | Dựng giao diện tổng quan Dashboard với các thẻ thống kê (Metric cards) và biểu đồ phân bổ. | Giao diện Dashboard số liệu trực quan. |
+| **Ngày 16** | Viết API lọc danh sách phòng `GET /api/admin/rooms`: Lọc theo Tòa nhà, Tầng, Trạng thái (Đỏ, Vàng, Xanh). | Làm bảng danh sách phòng có bộ lọc (Filter theo Tầng, Tòa, Trạng thái vệ sinh). | Bảng quản lý phòng linh hoạt. |
+| **Ngày 17** | Viết API xem chi tiết lượt nộp của phòng: Ảnh chụp, chi tiết checklist AI chấm, lịch sử cán bộ sửa. | Làm Modal/Trang chi tiết phòng: Xem ảnh phóng to, xem chi tiết các lỗi mà AI chỉ ra. | Màn hình đối chiếu thực tế của cán bộ. |
+| **Ngày 18** | Viết API can thiệp kết quả `PATCH /api/submissions/{id}/override`: Cán bộ sửa điểm, lưu vết (Audit log). | Thiết kế nút "Cán bộ Duyệt / Đổi kết quả" (Human-in-the-loop) kèm ô nhập ghi chú của cán bộ. | Tính năng duyệt đè hoàn thiện. |
+| **Ngày 19** | Viết tính năng xuất báo cáo danh sách phòng vi phạm tuần ra file Excel/CSV. | Làm nút "Xuất báo cáo tuần" để cán bộ có thể in ra hoặc gửi lên ban giám đốc KTX. | File Excel báo cáo tự động được tạo ra. |
+| **Ngày 20** | Tối ưu hóa Database Query (Index các trường thường lọc: `created_at`, `status`, `room_id`). | Tinh chỉnh responsive giao diện Desktop/Tablet cho cán bộ, kiểm tra hiển thị trên màn hình lớn. | Hệ thống chạy mượt mà, không giật lag. |
+| **Ngày 21** | **Đánh giá mốc Tuần 3:** Hoàn tất toàn bộ tính năng phần mềm. Đóng băng mã nguồn (Code Freeze) để chuẩn bị thử nghiệm. |
+
+---
+
+### TUẦN 4: Thử nghiệm Pilot thực tế, Tinh chỉnh, Viết Báo cáo & Demo
+* **Mục tiêu tuần:** Có số liệu thực tế từ 10 phòng KTX, hoàn thành tài liệu báo cáo và slide bảo vệ.
+
+| Ngày | Sinh viên A (Backend & AI) | Sinh viên B (Frontend & UI/UX) | Sản phẩm đầu ra (Deliverable) |
+| :--- | :--- | :--- | :--- |
+| **Ngày 22** | Triển khai hệ thống lên môi trường trực tuyến (Vercel/Render/Railway) có HTTPS (bắt buộc để bật Camera). | In mã QR test dán thử nghiệm tại 10 phòng KTX của các sinh viên tình nguyện. | Link web chạy thực tế trên internet. |
+| **Ngày 23** | Vận hành đợt nộp ảnh thử nghiệm đầu tiên (10 phòng). Theo dõi log server và thời gian phản hồi. | Hướng dẫn sinh viên quét mã nộp ảnh, ghi nhận lại các phản hồi về trải nghiệm giao diện. | 10 bộ dữ liệu chụp thực tế trong CSDL. |
+| **Ngày 24** | Đánh giá độ chuẩn xác của AI: So sánh kết quả AI chấm với biên bản kiểm tra thực tế của cán bộ. | Sửa các lỗi UI nhỏ (nếu nút bấm bị lệch trên iPhone/Android cụ thể). | Bảng đo lường độ chính xác (Accuracy Matrix). |
+| **Ngày 25** | Tinh chỉnh lại câu chữ trong Prompt nếu phát hiện trường hợp ngoại lệ (Edge case) bị chấm sai. | Viết khung báo cáo thực tập: Giới thiệu, Cơ sở lý thuyết, Thiết kế hệ thống, Kết quả đạt được. | Bản nháp báo cáo thực tập (Draft Report). |
+| **Ngày 26** | Tổng hợp số liệu đo lường: Thời gian tiết kiệm được, biểu đồ tỷ lệ chính xác, chi phí API. | Hoàn thiện slide thuyết trình (15-20 slide chuẩn mực) và thiết kế poster tóm tắt dự án. | Slide thuyết trình + Báo cáo hoàn thiện. |
+| **Ngày 27** | Dựng kịch bản Demo: Quay sẵn 1 video dự phòng (phòng trường hợp mất mạng khi bảo vệ) và chuẩn bị thiết bị demo trực tiếp. | Rà soát toàn bộ đồ án, diễn tập thuyết trình (Rehearsal) 2 người ăn khớp với nhau. | Video Demo dự phòng + Kịch bản thuyết trình. |
+| **Ngày 28** | **BẢO VỆ ĐỒ ÁN / NGHIỆM THU THỰC TẬP:** Trình bày trước hội đồng và chuyển giao sản phẩm cho KTX. |
+
+---
+
+## 6. MA TRẬN TRÁCH NHIỆM (RACI MATRIX)
+
+* **R (Responsible):** Người trực tiếp thực hiện công việc.
+* **A (Accountable):** Người chịu trách nhiệm chính về kết quả cuối cùng.
+* **C (Consulted):** Người được tham vấn ý kiến khi thực hiện.
+* **I (Informed):** Người được thông báo khi công việc hoàn thành.
+
+| Hạng mục công việc | Sinh viên A (Backend/AI) | Sinh viên B (Frontend/UI) | Cán bộ KTX (Mentor) |
+| :--- | :---: | :---: | :---: |
+| Đặc tả tiêu chuẩn vệ sinh 5S KTX | C | C | **A / R** |
+| Thiết kế UI/UX & Luồng nộp ảnh | C | **A / R** | I |
+| Xây dựng Prompt Vision AI & JSON Schema | **A / R** | C | I |
+| Xử lý Camera & Watermark Client | C | **A / R** | I |
+| Xây dựng API Backend & Lưu trữ Cloud | **A / R** | I | I |
+| Tính năng Duyệt đè (Human-in-the-loop) | R | **A / R** | C |
+| Chạy thử nghiệm Pilot 10 phòng | R | R | **A** |
+| Đo lường độ chính xác & Báo cáo tổng kết | **A / R** | **A / R** | C |
+
+---
+
+## 7. QUẢN TRỊ RỦI RO VÀ PHƯƠNG ÁN DỰ PHÒNG
+
+| Rủi ro tiềm ẩn | Mức độ | Phương án phòng ngừa & Xử lý |
+| :--- | :---: | :--- |
+| **Sinh viên dùng ảnh mạng hoặc ảnh cũ** | Cao | Bắt buộc bật camera trực tiếp, cấm file upload từ album, đóng dấu timestamp và yêu cầu chụp thấy mã QR phòng. |
+| **AI Vision chấm sai lệch ngữ cảnh KTX** | Trung bình | Luôn có giao diện cho Cán bộ KTX duyệt lại (Human-in-the-loop). Bổ sung ảnh mẫu phòng chuẩn vào Few-shot Prompt. |
+| **Hết hạn mức hoặc chi phí API AI** | Thấp | Dùng Gemini Flash với chi phí miễn phí trong giới hạn thử nghiệm (15 RPM). Tối ưu nén ảnh dưới 500KB trước khi gửi API. |
+| **Không bật được Camera trên điện thoại** | Cao | Triển khai web bắt buộc phải có chứng chỉ bảo mật HTTPS (trên Vercel/Render tự động có sẵn SSL miễn phí). |
+| **Mất mạng khi đang demo bảo vệ** | Trung bình | Luôn chuẩn bị sẵn 1 video quay màn hình chất lượng cao ghi lại trọn vẹn luồng hoạt động từ chụp ảnh đến dashboard. |
+
+---
+
+## 8. CẤU TRÚC BÀI BÁO CÁO THUYẾT TRÌNH (SLIDE DECK)
+
+Khi lên báo cáo trước hội đồng thực tập, cấu trúc bài thuyết trình 15 phút nên chia như sau:
+1. **Đặt vấn đề (2 phút):** Nỗi vất vả thực tế của cán bộ KTX khi đi kiểm tra hàng trăm phòng thủ công.
+2. **Giải pháp KTX 5S AI (3 phút):** Ứng dụng PWA Mobile Web kết hợp AI Vision tự động hóa phân loại 5S.
+3. **Kiến trúc kỹ thuật & Chống gian lận (4 phút):** Trình bày luồng dữ liệu, Prompt Schema, cơ chế Camera trực tiếp và Watermark.
+4. **Live Demo / Video Demo (3 phút):** Sinh viên đóng vai người nộp ảnh -> AI trả kết quả trong 3s -> Màn hình cán bộ cập nhật ngay lập tức.
+5. **Kết quả thử nghiệm thực tế & Hướng phát triển (3 phút):** Bảng số liệu thử nghiệm trên 10 phòng, tỷ lệ khớp 85%+, thời gian tiết kiệm được cho KTX.

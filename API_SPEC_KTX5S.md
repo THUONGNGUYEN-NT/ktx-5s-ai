@@ -56,44 +56,6 @@ Khi có lỗi:
 
 ---
 
-## 0️⃣ XÁC THỰC & PHÂN QUYỀN (AUTH & RBAC)
-
-### `POST /auth/login`
-**Mô tả:** Cán bộ KTX đăng nhập lấy Token JWT. Hệ thống tự động tạo sẵn tài khoản `admin` / `admin123` lần đầu chạy.
-
-**Request Body (JSON):**
-```json
-{
-  "username": "admin",
-  "password": "your_password"
-}
-```
-
-**Response thành công (200):**
-```json
-{
-  "success": true,
-  "data": {
-    "access_token": "eyJhbGciOi...",
-    "token_type": "bearer",
-    "user": {
-      "id": "usr_123",
-      "username": "admin",
-      "full_name": "Cán bộ Quản lý KTX",
-      "role": "admin"
-    }
-  },
-  "message": "Đăng nhập thành công! Chào mừng Cán bộ Quản lý KTX."
-}
-```
-
-**Cách truyền Token cho các API Cán bộ (`/api/admin/*`):**
-```
-Authorization: Bearer <access_token>
-```
-
----
-
 ## 1️⃣ SINH VIÊN — Nộp ảnh phòng
 
 ### `POST /submissions`
