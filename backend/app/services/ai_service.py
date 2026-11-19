@@ -21,7 +21,8 @@ DEFAULT_MODELS = [
 ]
 
 PROMPT_5S = """
-You are a strict dormitory 5S cleanliness inspector. Analyze the 4 room photos submitted by a student.
+You are a strict dormitory 5S cleanliness inspector and anti-fraud investigator.
+Analyze the 4 room photos submitted by a student.
 
 === STEP 1: VALIDATE EACH PHOTO (REQUIRED FIRST) ===
 Check each photo independently against its required subject:
@@ -40,11 +41,16 @@ REJECT if: shows windowsill, window frame, window glass, bare wall corner; shows
 
 ANTI-SPOOFING: Reject if photo appears to be re-photographed from a screen (Moiré patterns, screen bezels visible).
 
-Verdict rules:
-- For each photo set: is_valid (true/false), detected_object (brief Vietnamese description of what is seen), issue (Vietnamese reason if invalid).
-- If ANY photo is invalid: set is_valid_room_photo=false, list ALL violations in invalid_reason, set checklist fields to null, deductions=[].
+=== STEP 2: ROOM CONSISTENCY CHECK (ANTI-FRAUD: SAME ROOM VERIFICATION) ===
+Compare all 4 photos to verify they are taken inside the EXACT SAME DORM ROOM:
+1. Floor consistency: Check floor tile material, color, pattern, grout lines, or texture visible in all photos (under bed, walkway, shoe rack, desk).
+2. Wall & paint consistency: Wall paint color (e.g. white, yellow, blue), wall texture, stains/markings, baseboard trim.
+3. Furniture & architecture: Bed frame type and color (e.g. steel bunk bed vs wooden bed), window/door frame style, lighting tone.
+-> If photos have conflicting room traits (e.g. Photo 1 has cream square tiles and white wall, but Photo 2 has red terra-cotta tiles, or Photo 4 shows a completely different room paint/bed architecture):
+   Mark is_same_room = false, list specific conflicting details in inconsistencies.
+   Set is_valid_room_photo = false.
 
-=== STEP 2: SCORE (ONLY IF ALL 4 PHOTOS VALID) ===
+=== STEP 3: SCORE 5S (ONLY IF ALL PHOTOS VALID & FROM SAME ROOM) ===
 Criteria (all start true, mark false if failing):
 - bed_tidy: blanket folded neatly, pillow straight → false if messy/unfolded
 - floor_clean: no trash/dust, clear walkway → false if dirty/blocked
@@ -63,8 +69,14 @@ Schema:
     "photo_3_shoes": {"is_valid": bool, "detected_object": "string", "issue": "string or empty"},
     "photo_4_desk":  {"is_valid": bool, "detected_object": "string", "issue": "string or empty"}
   },
+  "room_consistency": {
+    "is_same_room": bool,
+    "confidence": "high|medium|low",
+    "details": "Vietnamese explanation of consistency or difference (e.g. Đồng nhất về màu gạch sàn trắng và tường vàng nhạt)",
+    "inconsistencies": ["Vietnamese descriptions of conflicts if is_same_room is false"]
+  },
   "is_valid_room_photo": bool,
-  "invalid_reason": "Vietnamese explanation if invalid, else empty string",
+  "invalid_reason": "Vietnamese explanation if invalid or fraud, else empty string",
   "checklist": {"bed_tidy": bool|null, "floor_clean": bool|null, "shoes_arranged": bool|null, "desk_organized": bool|null},
   "deductions": [{"criterion": "bed_tidy|floor_clean|shoes_arranged|desk_organized", "severity": "minor|moderate|severe", "reason": "Vietnamese reason"}],
   "positive_notes": ["Vietnamese positive observation"],
@@ -98,18 +110,38 @@ def apply_scoring(result: dict[str, Any]) -> None:
                 issue = p_info.get("issue") or p_info.get("detected_object") or "Sai góc chụp quy định"
                 failed_photos.append(f"• {label}: {issue}")
 
-    # Nếu có bất kỳ ảnh nào vi phạm quy định
-    if failed_photos or result.get("is_valid_room_photo") is False:
+    # 2. Kiểm tra tính đồng nhất của cùng 1 phòng (Anti-fraud: same room)
+    room_consistency = result.get("room_consistency")
+    different_rooms_reason = None
+    if isinstance(room_consistency, dict) and room_consistency.get("is_same_room") is False:
+        inconsistencies = room_consistency.get("inconsistencies") or []
+        details = room_consistency.get("details") or ""
+        if inconsistencies:
+            details_str = "\n".join(f"• {inc}" for inc in inconsistencies)
+        elif details:
+            details_str = f"• {details}"
+        else:
+            details_str = "• Nền gạch, màu sơn tường hoặc nội thất không trùng khớp giữa các ảnh."
+        different_rooms_reason = f"Phát hiện dấu hiệu gian lận (ghép ảnh từ nhiều phòng khác nhau):\n{details_str}"
+
+    # Nếu có bất kỳ ảnh nào vi phạm quy định hoặc khác phòng
+    if failed_photos or different_rooms_reason or result.get("is_valid_room_photo") is False:
         result["is_valid_room_photo"] = False
         result["score"] = 0.0
         result["status"] = "Không hợp lệ"
+        
+        reasons_list = []
         if failed_photos:
-            reason = "Phát hiện ảnh chụp không đúng quy định:\n" + "\n".join(failed_photos)
-        else:
-            reason = result.get("invalid_reason") or "Ảnh chụp không đúng góc quy định hoặc bị phát hiện gian lận."
-        result["invalid_reason"] = reason
-        result["issues_detected"] = [reason]
-        result["recommendations"] = "Vui lòng chụp lại các ảnh vi phạm theo đúng góc hướng dẫn."
+            reasons_list.append("Ảnh chụp không đúng góc quy định:\n" + "\n".join(failed_photos))
+        if different_rooms_reason:
+            reasons_list.append(different_rooms_reason)
+        if not reasons_list:
+            reasons_list.append(result.get("invalid_reason") or "Ảnh chụp không đúng quy định hoặc bị phát hiện gian lận.")
+
+        full_reason = "\n\n".join(reasons_list)
+        result["invalid_reason"] = full_reason
+        result["issues_detected"] = [full_reason]
+        result["recommendations"] = "Vui lòng chụp đủ 4 góc trong cùng một phòng KTX của bạn theo đúng hướng dẫn."
         return
 
     checklist = result.get("checklist")
