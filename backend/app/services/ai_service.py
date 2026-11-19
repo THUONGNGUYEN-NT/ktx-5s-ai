@@ -27,35 +27,40 @@ Analyze the 4 room photos submitted by a student.
 === STEP 1: VALIDATE EACH PHOTO (REQUIRED FIRST) ===
 Check each photo independently against its required subject:
 
-Photo 1 — BED AREA: Must clearly show a bed with mattress/blanket/pillow.
-REJECT if: shows cooking pots/pans/food items, random dark clutter unrecognizable as a bed, desk, floor, window, or ceiling instead of bed.
+Photo 1 — BED AREA: Must clearly show a dorm bed (mattress, mat/chiếu, blanket, pillow, bed frame).
+- VALID: If a small foldable bed desk (bàn gấp gọn trên giường) or mini bookshelf is placed ON TOP of the bed, IT IS STILL FULLY VALID (is_valid = true) because students commonly use foldable bed tables on their beds. Do NOT reject the bed just because there is a small foldable study desk or mini shelf on it.
+- REJECT only if: shows cooking pots/pans/food, bathroom/toilet, dark unrecognizable clutter, bare floor, window sill, or a standalone table with chairs away from bed.
 
-Photo 2 — FLOOR/WALKWAY: Must clearly show floor surface (tiles/cement) covering ≥50% of frame with a clear walkway.
-REJECT if: blocked by sheer curtain (màn tuyn), hanging laundry, or fabric in front of camera; extreme close-up of furniture legs hiding floor; blurry/dark/outside balcony shot.
+Photo 2 — FLOOR & WALKWAY: Must clearly show the floor surface (tiles/cement) covering ≥50% of frame with a clear walkway between beds/furniture towards the door.
+- REJECT if: blocked by sheer curtain (màn tuyn), hanging laundry, or fabric in front of camera; extreme close-up of furniture legs hiding floor; blurry/dark/outside balcony shot.
 
 Photo 3 — SHOE RACK AREA: Must clearly show a shoe rack or neatly arranged shoes near the entrance door.
-REJECT if: only shows floor/electrical cords/power strips with NO shoe rack or shoes visible; shows bed corner, desk, or other area.
+- REJECT if: shows bathroom sinks (bồn rửa mặt), toilet, shower, bare electrical cords with NO shoes/rack, bed corner, or other non-shoe areas.
 
-Photo 4 — STUDY DESK: Must clearly show the student's desk surface or bookshelf.
-REJECT if: shows windowsill, window frame, window glass, bare wall corner; shows bed or floor instead of desk.
+Photo 4 — STANDALONE STUDY DESK AREA: Must clearly show a dedicated, standalone study desk/table (with chairs, wooden/metal desk frame separated from bed sleeping surface).
+- REJECT if: photo is taken of a bed sleeping surface (mattress, mat, blanket, pillows, under-bunk sleeping area) even if it has books or a mini shelf. The study desk MUST BE A SEPARATE TABLE/DESK to evaluate the complete room.
+- REJECT if: shows window sill, bare wall, bathroom, or floor instead of a study desk.
 
 ANTI-SPOOFING: Reject if photo appears to be re-photographed from a screen (Moiré patterns, screen bezels visible).
 
-=== STEP 2: ROOM CONSISTENCY CHECK (ANTI-FRAUD: SAME ROOM VERIFICATION) ===
-Compare all 4 photos to verify they are taken inside the EXACT SAME DORM ROOM:
-1. Floor consistency: Check floor tile material, color, pattern, grout lines, or texture visible in all photos (under bed, walkway, shoe rack, desk).
-2. Wall & paint consistency: Wall paint color (e.g. white, yellow, blue), wall texture, stains/markings, baseboard trim.
-3. Furniture & architecture: Bed frame type and color (e.g. steel bunk bed vs wooden bed), window/door frame style, lighting tone.
--> If photos have conflicting room traits (e.g. Photo 1 has cream square tiles and white wall, but Photo 2 has red terra-cotta tiles, or Photo 4 shows a completely different room paint/bed architecture):
-   Mark is_same_room = false, list specific conflicting details in inconsistencies.
-   Set is_valid_room_photo = false.
+=== STEP 2: ROOM CONSISTENCY CHECK (CROSS-PHOTO SAME ROOM VERIFICATION) ===
+Verify whether all 4 photos belong to the EXACT SAME DORM ROOM by cross-referencing visual details:
+1. Cross-matching wide shot (Photo 2) with close-up shots (Photo 1, 4):
+   - Check if bedding sets, bed mats (chiếu trúc/cối), sheets, blankets, pillows, plush toys, mini fans, or decorative posters seen in Photo 1 and Photo 4 correspond to the beds visible in Photo 2.
+   - Matching furniture: Bunk bed steel frame color/design, desk style, window frame style, room door color.
+   - Matching environment: Floor tile color/pattern/grout lines, wall paint color and marks.
+2. If items and architectural details match across the photos (e.g. bed in Photo 1 and 4 match the left/right bunks in Photo 2):
+   -> is_same_room = true.
+3. If there are obvious contradictions (e.g. photos from completely different rooms with conflicting tile colors, wall colors, or unrelated buildings):
+   -> is_same_room = false, list discrepancies in inconsistencies.
+   (Note: Bathroom sinks in Photo 3 is an invalid photo issue for Photo 3, not necessarily a different room if attached to dorm, but Photo 3 must be marked invalid).
 
 === STEP 3: SCORE 5S (ONLY IF ALL PHOTOS VALID & FROM SAME ROOM) ===
 Criteria (all start true, mark false if failing):
-- bed_tidy: blanket folded neatly, pillow straight → false if messy/unfolded
+- bed_tidy: blanket folded neatly, pillow straight, bed neat → false if messy/unfolded
 - floor_clean: no trash/dust, clear walkway → false if dirty/blocked
-- shoes_arranged: shoes lined up on rack → false if scattered
-- desk_organized: books/laptop tidy → false if cluttered/has trash
+- shoes_arranged: shoes lined up on rack → false if scattered/no rack
+- desk_organized: books/laptop tidy on desk → false if cluttered/has trash
 
 Deductions list (per failing criterion):
 - severity: "minor" (-0.5pt) small localized issue | "moderate" (-1.5pt) clearly messy | "severe" (-2.5pt) unsanitary
@@ -72,7 +77,7 @@ Schema:
   "room_consistency": {
     "is_same_room": bool,
     "confidence": "high|medium|low",
-    "details": "Vietnamese explanation of consistency or difference (e.g. Đồng nhất về màu gạch sàn trắng và tường vàng nhạt)",
+    "details": "Vietnamese explanation (e.g. Khớp chi tiết ga gối, chiếu và quạt mini giữa ảnh 1, 4 với ảnh toàn cảnh lối đi 2)",
     "inconsistencies": ["Vietnamese descriptions of conflicts if is_same_room is false"]
   },
   "is_valid_room_photo": bool,
@@ -107,13 +112,13 @@ def apply_scoring(result: dict[str, Any]) -> None:
         for key, label in photo_labels.items():
             p_info = photo_check.get(key)
             if isinstance(p_info, dict) and p_info.get("is_valid") is False:
-                issue = p_info.get("issue") or p_info.get("detected_object") or "Sai góc chụp quy định"
+                issue = p_info.get("issue") or p_info.get("detected_object") or "Chưa đúng góc chụp yêu cầu"
                 failed_photos.append(f"• {label}: {issue}")
 
-    # 2. Kiểm tra tính đồng nhất của cùng 1 phòng (Anti-fraud: same room)
+    # 2. Kiểm tra tính đồng nhất phòng (CHỈ kích hoạt khi các ảnh đều đã chụp đúng chủ đề)
     room_consistency = result.get("room_consistency")
     different_rooms_reason = None
-    if isinstance(room_consistency, dict) and room_consistency.get("is_same_room") is False:
+    if not failed_photos and isinstance(room_consistency, dict) and room_consistency.get("is_same_room") is False:
         inconsistencies = room_consistency.get("inconsistencies") or []
         details = room_consistency.get("details") or ""
         if inconsistencies:
@@ -121,27 +126,25 @@ def apply_scoring(result: dict[str, Any]) -> None:
         elif details:
             details_str = f"• {details}"
         else:
-            details_str = "• Nền gạch, màu sơn tường hoặc nội thất không trùng khớp giữa các ảnh."
-        different_rooms_reason = f"Phát hiện dấu hiệu gian lận (ghép ảnh từ nhiều phòng khác nhau):\n{details_str}"
+            details_str = "• Nền gạch sàn hoặc màu sơn tường không trùng khớp giữa các ảnh."
+        different_rooms_reason = f"Phát hiện ảnh chụp từ nhiều phòng khác nhau (không cùng một phòng):\n{details_str}"
 
-    # Nếu có bất kỳ ảnh nào vi phạm quy định hoặc khác phòng
+    # Nếu có ảnh chụp sai hoặc không cùng phòng
     if failed_photos or different_rooms_reason or result.get("is_valid_room_photo") is False:
         result["is_valid_room_photo"] = False
         result["score"] = 0.0
         result["status"] = "Không hợp lệ"
         
-        reasons_list = []
         if failed_photos:
-            reasons_list.append("Ảnh chụp không đúng góc quy định:\n" + "\n".join(failed_photos))
-        if different_rooms_reason:
-            reasons_list.append(different_rooms_reason)
-        if not reasons_list:
-            reasons_list.append(result.get("invalid_reason") or "Ảnh chụp không đúng quy định hoặc bị phát hiện gian lận.")
+            full_reason = "Vui lòng chụp lại các góc sau:\n" + "\n".join(failed_photos)
+        elif different_rooms_reason:
+            full_reason = different_rooms_reason
+        else:
+            full_reason = result.get("invalid_reason") or "Ảnh chụp không đúng quy định. Vui lòng chụp lại."
 
-        full_reason = "\n\n".join(reasons_list)
         result["invalid_reason"] = full_reason
         result["issues_detected"] = [full_reason]
-        result["recommendations"] = "Vui lòng chụp đủ 4 góc trong cùng một phòng KTX của bạn theo đúng hướng dẫn."
+        result["recommendations"] = "Vui lòng chụp đầy đủ 4 góc trong cùng một phòng KTX theo đúng hướng dẫn."
         return
 
     checklist = result.get("checklist")
@@ -221,11 +224,11 @@ def evaluate_room_image(image_bytes: bytes | list[bytes]) -> dict[str, Any]:
                 if img.mode != "RGB":
                     img = img.convert("RGB")
                 max_side = max(img.size)
-                if max_side > 512:
-                    scale = 512 / max_side
+                if max_side > 384:
+                    scale = 384 / max_side
                     img = img.resize((int(img.width * scale), int(img.height * scale)), Image.Resampling.LANCZOS)
                 buf = io.BytesIO()
-                img.save(buf, format="JPEG", quality=75, optimize=True)
+                img.save(buf, format="JPEG", quality=70, optimize=True)
                 b = buf.getvalue()
                 processed_buffers.append(b)
                 processed_images.append(Image.open(io.BytesIO(b)))
@@ -263,7 +266,8 @@ def evaluate_room_image(image_bytes: bytes | list[bytes]) -> dict[str, Any]:
                 model="nvidia/nemotron-3.5-super-vl-120b-a12b",
                 messages=[{"role": "user", "content": content}],
                 temperature=0.1,
-                max_tokens=2048,
+                max_tokens=1024,
+                extra_body={"chat_template_kwargs": {"thinking": False}},
             )
             duration_ms = int((time.time() - start_time) * 1000)
 
@@ -271,12 +275,15 @@ def evaluate_room_image(image_bytes: bytes | list[bytes]) -> dict[str, Any]:
             raw_text = getattr(msg, "content", None) or ""
             raw_text = raw_text.strip()
 
-            # Xử lý chuỗi JSON nếu model bọc trong ```json ... ```
+            # Trích xuất JSON thuần
             if "```" in raw_text:
                 import re
                 match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw_text)
                 if match:
                     raw_text = match.group(1).strip()
+            
+            if "{" in raw_text and "}" in raw_text:
+                raw_text = raw_text[raw_text.find("{"):raw_text.rfind("}") + 1]
 
             if not raw_text:
                 raise ValueError("NVIDIA model trả về nội dung rỗng")
@@ -286,7 +293,9 @@ def evaluate_room_image(image_bytes: bytes | list[bytes]) -> dict[str, Any]:
             result["ai_response_time_ms"] = duration_ms
             return result
         except Exception as e:
-            print(f"[WARN] Lỗi khi gọi NVIDIA NIM ({e}), chuyển sang Gemini dự phòng...")
+            import traceback
+            print(f"[WARN] Lỗi khi gọi NVIDIA NIM ({e}), chi tiết:\n{traceback.format_exc()}")
+            print("[INFO] Đang chuyển sang Gemini dự phòng...")
 
     # =========================================================================
     # LỰA CHỌN 2: DÙNG GOOGLE GEMINI VISION

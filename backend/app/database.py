@@ -5,7 +5,7 @@ from app.config import settings
 # Tạo engine kết nối SQL Server
 engine = create_engine(
     settings.DATABASE_URL,
-    echo=settings.DEBUG,       # In câu SQL ra console khi DEBUG=True
+    echo=False,                # Tắt log SQL để console gọn gàng, dễ theo dõi lỗi thực tế
     pool_pre_ping=True,        # Tự kiểm tra kết nối trước khi dùng
     pool_size=10,
     max_overflow=20,
