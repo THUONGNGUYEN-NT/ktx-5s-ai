@@ -21,52 +21,55 @@ DEFAULT_MODELS = [
 ]
 
 PROMPT_5S = """
-You are a strict dormitory 5S cleanliness inspector and anti-fraud investigator.
+You are a senior Computer Vision 5S Inspector and Anti-Fraud Investigator for the 5S Dormitory Cleanliness Competition at Vietnam National University Ho Chi Minh City (VNU-HCM / KTX ĐHQG-HCM).
 Analyze the 4 room photos submitted by a student.
 
-=== STEP 1: VALIDATE EACH PHOTO (REQUIRED FIRST) ===
-Check each photo independently against its required subject:
+=== 1. VNU-HCM DORMITORY REAL-WORLD CONTEXT ===
+Authentic VNU-HCM Dormitory rooms (Khu A & Khu B) have specific characteristics:
+- Room types: 2 students (2 single beds), 4 students (2 bunk beds), 6 or 8 students (multiple bunk beds, higher furniture & item density).
+- Bed structures: Standard painted steel bunk beds (blue/green/white/gray frames) or single dorm beds with wooden/slat boards (vạt giường gỗ/sắt). May have mattress, woven sleeping mat (chiếu trúc/cối), blankets, pillows, or personal foldable bed desk.
+- Study desks: Independent study desks, shared long tables along walls, or desks integrated underneath upper bunk beds.
+- Environment: Dormitory tiled floors (ceramic/terrazzo tiles), dorm masonry/concrete walls with dorm windows/balcony doors.
 
-Photo 1 — BED AREA: Must show the dorm bed area.
-- VALID BED RECOGNITION (is_valid = true):
-  * Fully made bed with mattress, mat (chiếu), sheet, blanket, or pillow.
-  * BARE BED BOARD / BED FRAME (vạt giường gỗ, giát giường, phản gỗ, khung giường sắt chưa trải nệm; nệm gấp hoặc nệm dựng dựa vào tường; có đồ dùng như quạt máy, túi xách để trên vạt giường): ĐÂY VẪN LÀ ẢNH GIƯỜNG NGỦ HỢP LỆ (is_valid = true)! Việc giường chưa trải nệm hay để đồ bừa bộn là lỗi vệ sinh 5S sẽ bị trừ điểm ở Bước 3 (bed_tidy = false), TUYỆT ĐỐI KHÔNG ĐƯỢC ĐÁNH TRƯỢT ẢNH LÀ SAI GÓC CHỤP!
-  * Bed with a small foldable bed desk (bàn gấp gọn trên giường) or mini bookshelf on it: VẪN LÀ ẢNH GIƯỜNG HỢP LỆ (is_valid = true).
-- REJECT Photo 1 only if: shows cooking pots/pans/food, bathroom/toilet, dark unrecognizable clutter, bare floor with no bed frame/board, window sill, or a standalone table away from any bed.
+=== 2. ANTI-FRAUD & CONTEXT VERIFICATION (CRUCIAL) ===
+REJECT IMMEDIATELY (Set is_valid = false for that photo, and is_valid_room_photo = false) IF:
+1. STOCK / E-COMMERCE CATALOG PHOTOS (Ảnh mạng / Pinterest / Shopee):
+   - Photos taken from commercial furniture websites, studio product staging (e.g. pristine white metal shoe rack staged beside a luxury upholstered bed in a commercial catalog), Pinterest aesthetic photos, or downloaded from the internet.
+   - Any photo that looks like an advertising/catalog photo instead of a real student dorm photo taken with a phone camera -> REJECT as "Ảnh tải từ mạng / ảnh quảng cáo thương mại".
+2. NON-DORMITORY CONTEXT (Phòng trọ cao cấp / Căn hộ dịch vụ / Khách sạn / Nhà ở gia đình):
+   - Private luxury studio apartments, high-end serviced rentals (phòng trọ tư nhân cao cấp) with wall-to-wall carpeting, designer downlights, luxury hotel upholstered headboards, or residential family homes that clearly lack student dormitory infrastructure -> REJECT as "Bối cảnh phòng trọ tư nhân/căn hộ dịch vụ, không phải KTX ĐHQG-HCM".
+3. DUPLICATE / RECYCLED ROOM SHOTS:
+   - Reusing the same overview room shot for Bed, Floor, and Desk instead of photographing each distinct area.
 
-Photo 2 — FLOOR & WALKWAY: Must clearly show the floor surface (tiles/cement) covering ≥50% of frame with a clear walkway between beds/furniture towards the door.
-- REJECT if: blocked by sheer curtain (màn tuyn), hanging laundry, or fabric in front of camera; extreme close-up of furniture legs hiding floor; blurry/dark/outside balcony shot.
+=== 3. INDEPENDENT AREA VALIDATION ===
+Judge ONLY what is actually visible in each photo. Do NOT hallucinate objects that do not exist:
+- Photo 1 — BED AREA: Must show a dorm bed (single bed, bunk bed, bare bed board with mattress, or bed with mini foldable bed table).
+  * VALID: Any student bed in the room.
+  * REJECT only if: Cooking pots/food, bathroom, pure floor with no bed structure.
+- Photo 2 — FLOOR & WALKWAY: Must show the floor surface and walkway between dorm beds/furniture towards door.
+  * VALID: Dorm room walkway and floor.
+  * REJECT only if: Blocked by curtain, extreme close-up of furniture leg, bathroom.
+- Photo 3 — SHOE RACK AREA: Must show a shoe rack or shoes arranged neatly near entrance/wall.
+  * VALID: Any plastic, metal, or wooden shoe rack with shoes/slippers.
+  * REJECT only if: Bathroom sinks, toilet, bare floor with only electric cords and NO shoes.
+- Photo 4 — STUDY DESK AREA: Must show a student study desk or table.
+  * VALID: Wooden/metal study desk, shared table, desks with chairs, or desk under bunk bed.
+  * REJECT only if: Re-photographing bed mattress/bed frame without a desk, windowsill, bathroom.
 
-Photo 3 — SHOE RACK AREA: Must clearly show a shoe rack or neatly arranged shoes near the entrance door.
-- REJECT if: shows bathroom sinks (bồn rửa mặt), toilet, shower, bare electrical cords with NO shoes/rack, bed corner, or other non-shoe areas.
+=== 4. ROOM CONSISTENCY GUIDELINE ===
+- REAL-WORLD FACT: Different corners of the same dormitory room naturally have different lighting, different furniture, and different perspectives.
+- DEFAULT TO VALID (is_same_room = true) if all 4 photos look like plausible student dormitory spaces.
+- ONLY flag is_same_room = false if there is an extreme, unmistakable contradiction (e.g. one photo is a luxury hotel with carpet and crystal chandelier, while others are a student dorm, or photos from completely different buildings).
+- NEVER hallucinate or invent conflicting objects that are not clearly visible in the photos.
 
-Photo 4 — STANDALONE STUDY DESK AREA: Must clearly show a dedicated, standalone study desk/table (with chairs, wooden/metal desk frame separated from bed sleeping surface).
-- REJECT if: photo is taken of a bed sleeping surface (mattress, mat, blanket, pillows, under-bunk sleeping area) even if it has books or a mini shelf. The study desk MUST BE A SEPARATE TABLE/DESK to evaluate the complete room.
-- REJECT if: shows window sill, bare wall, bathroom, or floor instead of a study desk.
-
-ANTI-SPOOFING: Reject if photo appears to be re-photographed from a screen (Moiré patterns, screen bezels visible).
-
-=== STEP 2: ROOM CONSISTENCY CHECK (CROSS-PHOTO SAME ROOM VERIFICATION) ===
-Verify whether all 4 photos belong to the EXACT SAME DORM ROOM by cross-referencing visual details:
-1. Cross-matching wide shot (Photo 2) with close-up shots (Photo 1, 4):
-   - Check if bedding sets, bed mats (chiếu trúc/cối), sheets, blankets, pillows, plush toys, mini fans, or decorative posters seen in Photo 1 and Photo 4 correspond to the beds visible in Photo 2.
-   - Matching furniture: Bunk bed steel frame color/design, desk style, window frame style, room door color.
-   - Matching environment: Floor tile color/pattern/grout lines, wall paint color and marks.
-2. If items and architectural details match across the photos (e.g. bed in Photo 1 and 4 match the left/right bunks in Photo 2):
-   -> is_same_room = true.
-3. If there are obvious contradictions (e.g. photos from completely different rooms with conflicting tile colors, wall colors, or unrelated buildings):
-   -> is_same_room = false, list discrepancies in inconsistencies.
-   (Note: Bathroom sinks in Photo 3 is an invalid photo issue for Photo 3, not necessarily a different room if attached to dorm, but Photo 3 must be marked invalid).
-
-=== STEP 3: SCORE 5S (ONLY IF ALL PHOTOS VALID & FROM SAME ROOM) ===
-Criteria (all start true, mark false if failing):
-- bed_tidy: blanket folded neatly, pillow straight, bed neat and made → false if blanket unfolded, messy items on bed, or bed is unmade (vạt giường chưa trải nệm, nệm dựng tường, để quạt/túi bừa bãi trên giường)
+=== 5. SCORE 5S (ONLY IF ALL PHOTOS VALID, AUTHENTIC DORM & FROM SAME ROOM) ===
+Criteria:
+- bed_tidy: blanket folded neatly, pillow straight, bed neat → false if messy, unmade, or items piled up
 - floor_clean: no trash/dust, clear walkway → false if dirty/blocked
 - shoes_arranged: shoes lined up on rack → false if scattered/no rack
 - desk_organized: books/laptop tidy on desk → false if cluttered/has trash
 
-Deductions list (per failing criterion):
-- severity: "minor" (-0.5pt) small localized issue | "moderate" (-1.5pt) clearly messy | "severe" (-2.5pt) unsanitary
+Deductions: minor (-0.5pt) | moderate (-1.5pt) | severe (-2.5pt)
 
 === OUTPUT: Pure JSON only, no markdown ===
 Schema:
@@ -80,7 +83,7 @@ Schema:
   "room_consistency": {
     "is_same_room": bool,
     "confidence": "high|medium|low",
-    "details": "Vietnamese explanation (e.g. Khớp chi tiết ga gối, chiếu và quạt mini giữa ảnh 1, 4 với ảnh toàn cảnh lối đi 2)",
+    "details": "Vietnamese explanation",
     "inconsistencies": ["Vietnamese descriptions of conflicts if is_same_room is false"]
   },
   "is_valid_room_photo": bool,
@@ -118,10 +121,10 @@ def apply_scoring(result: dict[str, Any]) -> None:
                 issue = p_info.get("issue") or p_info.get("detected_object") or "Chưa đúng góc chụp yêu cầu"
                 failed_photos.append(f"• {label}: {issue}")
 
-    # 2. Kiểm tra tính đồng nhất phòng (CHỈ kích hoạt khi các ảnh đều đã chụp đúng chủ đề)
+    # 2. Kiểm tra tính đồng nhất phòng (Anti-fraud: same room)
     room_consistency = result.get("room_consistency")
     different_rooms_reason = None
-    if not failed_photos and isinstance(room_consistency, dict) and room_consistency.get("is_same_room") is False:
+    if isinstance(room_consistency, dict) and room_consistency.get("is_same_room") is False:
         inconsistencies = room_consistency.get("inconsistencies") or []
         details = room_consistency.get("details") or ""
         if inconsistencies:
@@ -129,19 +132,21 @@ def apply_scoring(result: dict[str, Any]) -> None:
         elif details:
             details_str = f"• {details}"
         else:
-            details_str = "• Nền gạch sàn hoặc màu sơn tường không trùng khớp giữa các ảnh."
+            details_str = "• Chi tiết giường ngủ, nền gạch hoặc nội thất không trùng khớp giữa các ảnh."
         different_rooms_reason = f"Phát hiện ảnh chụp từ nhiều phòng khác nhau (không cùng một phòng):\n{details_str}"
 
     # Nếu có ảnh chụp sai hoặc không cùng phòng
     if failed_photos or different_rooms_reason or result.get("is_valid_room_photo") is False:
         result["is_valid_room_photo"] = False
         result["score"] = 0.0
-        result["status"] = "Không hợp lệ"
+        result["status"] = "Không hợp lệ (Gian lận)" if different_rooms_reason else "Không hợp lệ"
         
-        if failed_photos:
-            full_reason = "Vui lòng chụp lại các góc sau:\n" + "\n".join(failed_photos)
-        elif different_rooms_reason:
+        if different_rooms_reason:
             full_reason = different_rooms_reason
+            if failed_photos:
+                full_reason += "\n\nNgoài ra, các góc sau chụp chưa đúng yêu cầu:\n" + "\n".join(failed_photos)
+        elif failed_photos:
+            full_reason = "Vui lòng chụp lại các góc sau:\n" + "\n".join(failed_photos)
         else:
             full_reason = result.get("invalid_reason") or "Ảnh chụp không đúng quy định. Vui lòng chụp lại."
 
@@ -206,6 +211,32 @@ def apply_scoring(result: dict[str, Any]) -> None:
     result["issues_detected"] = issues
 
 
+def check_duplicate_photos(images: list[Image.Image]) -> list[str]:
+    """Phát hiện nếu sinh viên nộp trùng hoặc nhân bản cùng một bức ảnh cho nhiều góc."""
+    labels = ["Ảnh 1 (Giường ngủ)", "Ảnh 2 (Sàn nhà)", "Ảnh 3 (Kệ giày dép)", "Ảnh 4 (Bàn học)"]
+    thumbnails = []
+    for img in images:
+        try:
+            im = img.convert("L").resize((32, 32), Image.Resampling.BOX)
+            thumbnails.append(list(im.getdata()))
+        except Exception:
+            thumbnails.append(None)
+
+    dup_pairs = []
+    n = len(thumbnails)
+    for i in range(n):
+        for j in range(i + 1, n):
+            t1, t2 = thumbnails[i], thumbnails[j]
+            if t1 and t2:
+                # Tính chênh lệch độ sáng pixel trung bình giữa 2 ảnh (0 đến 255)
+                avg_diff = sum(abs(p1 - p2) for p1, p2 in zip(t1, t2)) / 1024.0
+                if avg_diff < 5.0:  # Trùng lặp > 98%
+                    lbl_i = labels[i] if i < len(labels) else f"Ảnh {i+1}"
+                    lbl_j = labels[j] if j < len(labels) else f"Ảnh {j+1}"
+                    dup_pairs.append(f"{lbl_i} và {lbl_j}")
+    return dup_pairs
+
+
 def evaluate_room_image(image_bytes: bytes | list[bytes]) -> dict[str, Any]:
     """
     Gửi ảnh phòng đã nén sang AI Vision (Gemini Vision hoặc NVIDIA NIM) để chấm điểm 5S.
@@ -240,6 +271,43 @@ def evaluate_room_image(image_bytes: bytes | list[bytes]) -> dict[str, Any]:
             processed_images.append(Image.open(io.BytesIO(data)))
 
     start_time = time.time()
+
+    # =========================================================================
+    # BƯỚC 0: KIỂM SOÁT GIAN LẬN — NỘP TRÙNG LẶP CÙNG 1 ẢNH CHO NHIỀU KHU VỰC
+    # =========================================================================
+    duplicate_errors = check_duplicate_photos(processed_images)
+    if duplicate_errors:
+        dup_msg = ", ".join(duplicate_errors)
+        reason = (
+            f"Phát hiện gian lận: Bạn đã nộp cùng một bức ảnh cho nhiều khu vực ({dup_msg}). "
+            "Quy định 5S KTX ĐHQG-HCM bắt buộc phải chụp riêng biệt từng khu vực: "
+            "Giường ngủ, Sàn nhà, Kệ giày dép và Bàn học."
+        )
+        duration_ms = int((time.time() - start_time) * 1000)
+        return {
+            "photo_check": {
+                "photo_1_bed": {"is_valid": False, "detected_object": "Ảnh bị nộp trùng lặp", "issue": "Trùng ảnh với khu vực khác"},
+                "photo_2_floor": {"is_valid": False, "detected_object": "Ảnh bị nộp trùng lặp", "issue": "Trùng ảnh với khu vực khác"},
+                "photo_3_shoes": {"is_valid": False, "detected_object": "Ảnh bị nộp trùng lặp", "issue": "Trùng ảnh với khu vực khác"},
+                "photo_4_desk": {"is_valid": False, "detected_object": "Ảnh bị nộp trùng lặp", "issue": "Trùng ảnh với khu vực khác"},
+            },
+            "room_consistency": {
+                "is_same_room": False,
+                "confidence": "high",
+                "details": f"Trùng lặp ảnh giữa {dup_msg}",
+                "inconsistencies": [f"Nộp cùng một ảnh cho: {dup_msg}"]
+            },
+            "is_valid_room_photo": False,
+            "invalid_reason": reason,
+            "checklist": {"bed_tidy": None, "floor_clean": None, "shoes_arranged": None, "desk_organized": None},
+            "deductions": [],
+            "positive_notes": [],
+            "recommendations": "Vui lòng chụp đủ 4 góc phòng riêng biệt trong phòng KTX của bạn.",
+            "score": 0.0,
+            "status": "Không hợp lệ (Gian lận)",
+            "issues_detected": [reason],
+            "ai_response_time_ms": duration_ms
+        }
 
     # =========================================================================
     # LỰA CHỌN 1: DÙNG NVIDIA NIM (nvidia/nemotron-3.5-super-vl-120b-a12b)
