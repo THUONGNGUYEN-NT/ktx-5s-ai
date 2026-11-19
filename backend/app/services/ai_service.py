@@ -27,9 +27,12 @@ Analyze the 4 room photos submitted by a student.
 === STEP 1: VALIDATE EACH PHOTO (REQUIRED FIRST) ===
 Check each photo independently against its required subject:
 
-Photo 1 — BED AREA: Must clearly show a dorm bed (mattress, mat/chiếu, blanket, pillow, bed frame).
-- VALID: If a small foldable bed desk (bàn gấp gọn trên giường) or mini bookshelf is placed ON TOP of the bed, IT IS STILL FULLY VALID (is_valid = true) because students commonly use foldable bed tables on their beds. Do NOT reject the bed just because there is a small foldable study desk or mini shelf on it.
-- REJECT only if: shows cooking pots/pans/food, bathroom/toilet, dark unrecognizable clutter, bare floor, window sill, or a standalone table with chairs away from bed.
+Photo 1 — BED AREA: Must show the dorm bed area.
+- VALID BED RECOGNITION (is_valid = true):
+  * Fully made bed with mattress, mat (chiếu), sheet, blanket, or pillow.
+  * BARE BED BOARD / BED FRAME (vạt giường gỗ, giát giường, phản gỗ, khung giường sắt chưa trải nệm; nệm gấp hoặc nệm dựng dựa vào tường; có đồ dùng như quạt máy, túi xách để trên vạt giường): ĐÂY VẪN LÀ ẢNH GIƯỜNG NGỦ HỢP LỆ (is_valid = true)! Việc giường chưa trải nệm hay để đồ bừa bộn là lỗi vệ sinh 5S sẽ bị trừ điểm ở Bước 3 (bed_tidy = false), TUYỆT ĐỐI KHÔNG ĐƯỢC ĐÁNH TRƯỢT ẢNH LÀ SAI GÓC CHỤP!
+  * Bed with a small foldable bed desk (bàn gấp gọn trên giường) or mini bookshelf on it: VẪN LÀ ẢNH GIƯỜNG HỢP LỆ (is_valid = true).
+- REJECT Photo 1 only if: shows cooking pots/pans/food, bathroom/toilet, dark unrecognizable clutter, bare floor with no bed frame/board, window sill, or a standalone table away from any bed.
 
 Photo 2 — FLOOR & WALKWAY: Must clearly show the floor surface (tiles/cement) covering ≥50% of frame with a clear walkway between beds/furniture towards the door.
 - REJECT if: blocked by sheer curtain (màn tuyn), hanging laundry, or fabric in front of camera; extreme close-up of furniture legs hiding floor; blurry/dark/outside balcony shot.
@@ -57,7 +60,7 @@ Verify whether all 4 photos belong to the EXACT SAME DORM ROOM by cross-referenc
 
 === STEP 3: SCORE 5S (ONLY IF ALL PHOTOS VALID & FROM SAME ROOM) ===
 Criteria (all start true, mark false if failing):
-- bed_tidy: blanket folded neatly, pillow straight, bed neat → false if messy/unfolded
+- bed_tidy: blanket folded neatly, pillow straight, bed neat and made → false if blanket unfolded, messy items on bed, or bed is unmade (vạt giường chưa trải nệm, nệm dựng tường, để quạt/túi bừa bãi trên giường)
 - floor_clean: no trash/dust, clear walkway → false if dirty/blocked
 - shoes_arranged: shoes lined up on rack → false if scattered/no rack
 - desk_organized: books/laptop tidy on desk → false if cluttered/has trash
