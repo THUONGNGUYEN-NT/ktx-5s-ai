@@ -412,15 +412,17 @@ async def evaluate_four_photos(
         )
 
     if not ai_result.get("is_valid_room_photo", True):
+        invalid_msg = (
+            ai_result.get("invalid_reason")
+            or ai_result.get("recommendations")
+            or "Ảnh chụp không đúng góc quy định hoặc bị phát hiện gian lận. Vui lòng chụp lại đúng các khu vực trong phòng."
+        )
         return JSONResponse(
             status_code=400,
             content={
                 "success": False,
                 "data": None,
-                "message": ai_result.get(
-                    "recommendations",
-                    "Ảnh quá tối, mờ hoặc không phải phòng KTX. Vui lòng chụp lại rõ nét hơn.",
-                ),
+                "message": invalid_msg,
                 "error_code": "INVALID_IMAGE",
             },
         )

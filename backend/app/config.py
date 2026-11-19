@@ -16,8 +16,10 @@ class Settings(BaseSettings):
     DB_USERNAME: str = ""
     DB_PASSWORD: str = ""
 
-    # Gemini AI
+    # AI Provider: "gemini" hoặc "nvidia"
+    AI_PROVIDER: str = "gemini"
     GEMINI_API_KEY: str = ""
+    NVIDIA_API_KEY: str = ""
 
     # Cloudinary
     CLOUDINARY_CLOUD_NAME: str = ""

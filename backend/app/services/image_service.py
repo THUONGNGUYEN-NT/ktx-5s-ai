@@ -4,8 +4,8 @@ from PIL import Image, ImageOps
 
 def process_and_compress_image(
     image_bytes: bytes,
-    max_dimension: int = 1024,
-    quality: int = 80,
+    max_dimension: int = 768,
+    quality: int = 75,
 ) -> tuple[bytes, int]:
     """
     Xử lý & nén ảnh:
