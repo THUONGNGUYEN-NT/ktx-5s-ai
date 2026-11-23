@@ -106,7 +106,7 @@ async def get_rooms(
     floor: Optional[int] = Query(None, description="Tầng"),
     room_code: Optional[str] = Query(None, description="Mã phòng hoặc tìm kiếm"),
     page: int = Query(1, ge=1),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(500, ge=1, le=1000),
     current_admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):

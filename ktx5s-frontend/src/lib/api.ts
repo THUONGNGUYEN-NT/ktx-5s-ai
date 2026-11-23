@@ -217,7 +217,17 @@ export async function getRoomHistory(roomCode: string) {
 
 // ---- CÁN BỘ: Dashboard tổng hợp 200 phòng theo tuần ----  GET /admin/dashboard
 export async function getDashboard(week = `2026-W${CURRENT_WEEK}`) {
-  const rooms = mergeRoomsWithLive(week, generateRooms(week));
+  try {
+    const res = await api.get("/admin/dashboard", { params: { week } });
+    if (res.data?.success && res.data?.data) {
+      return res.data;
+    }
+  } catch {
+    // Backend chưa bật hoặc offline -> tính toán cục bộ
+  }
+
+  const roomsRes = await getRooms({ week });
+  const rooms = roomsRes.data.rooms;
   const total_rooms = rooms.length;
   const submittedRooms = rooms.filter((r) => r.status !== null);
   const submitted = submittedRooms.length;
@@ -246,13 +256,13 @@ export async function getDashboard(week = `2026-W${CURRENT_WEEK}`) {
       },
       breakdown: { clean, slightly_messy, messy },
       avg_score,
-      deadline: "2026-11-22T21:00:00+07:00",
+      deadline: "Chủ Nhật hàng tuần lúc 21:00",
       top_violations,
     },
   };
 }
 
-// ---- CÁN BỘ: Danh sách phòng (10 tầng / 200 phòng + cập nhật trực tiếp từ AI) ----
+// ---- CÁN BỘ: Danh sách phòng (10 tầng / 200 phòng + cập nhật trực tiếp từ AI & CSDL) ----
 export async function getRooms(params?: {
   week?: string;
   status?: string;
@@ -262,9 +272,66 @@ export async function getRooms(params?: {
   success: boolean;
   data: { rooms: Room[] };
 }> {
-  await wait(200);
   const week = params?.week ?? `2026-W${CURRENT_WEEK}`;
-  const rooms = mergeRoomsWithLive(week, generateRooms(week));
+  const baseRooms = generateRooms(week);
+
+  // 1. Thử gọi API Backend thật từ cổng 8000
+  try {
+    const res = await api.get("/admin/rooms", {
+      params: { week, limit: 500 },
+    });
+    if (res.data?.success && Array.isArray(res.data.data?.rooms)) {
+      const serverRoomsList = res.data.data.rooms;
+      const serverMap = new Map<string, any>();
+      for (const sr of serverRoomsList) {
+        if (sr.room_code) {
+          serverMap.set(sr.room_code.toUpperCase(), sr);
+        }
+      }
+
+      // Hợp nhất các phòng nộp thật trên CSDL vào danh sách 200 phòng
+      const merged = baseRooms.map((base) => {
+        const sr = serverMap.get(base.room_code.toUpperCase());
+        if (!sr) return base;
+        const hasSub = sr.submission_id || (sr.status && sr.status !== "not_submitted" && sr.status !== "Chưa nộp ảnh");
+        return {
+          ...base,
+          submission_id: sr.submission_id ?? base.submission_id,
+          status: hasSub ? (sr.status as RoomStatus) : base.status,
+          score: hasSub && sr.score != null ? Number(sr.score) : base.score,
+          submitted_at: sr.submitted_at ?? base.submitted_at,
+          image_url: sr.image_url ? resolveImageUrl(sr.image_url) : base.image_url,
+          is_overridden: Boolean(sr.is_overridden),
+        };
+      });
+
+      // Nếu có phòng mới trên server không nằm trong baseRooms
+      serverMap.forEach((sr, code) => {
+        if (!merged.some((m) => m.room_code.toUpperCase() === code)) {
+          merged.push({
+            submission_id: sr.submission_id ?? null,
+            room_code: sr.room_code,
+            building: sr.building || code[0] || "A",
+            floor: Number(sr.floor) || 1,
+            week: sr.week || week,
+            status: (sr.status === "Chưa nộp ảnh" || sr.status === "not_submitted" ? null : sr.status) as RoomStatus,
+            score: sr.score != null ? Number(sr.score) : null,
+            submitted_at: sr.submitted_at ?? null,
+            image_url: sr.image_url ? resolveImageUrl(sr.image_url) : null,
+            is_overridden: Boolean(sr.is_overridden),
+            members: 4,
+          });
+        }
+      });
+
+      return { success: true, data: { rooms: mergeRoomsWithLive(week, merged) } };
+    }
+  } catch {
+    // Backend chưa bật hoặc offline -> dùng mock data
+  }
+
+  await wait(150);
+  const rooms = mergeRoomsWithLive(week, baseRooms);
   return { success: true, data: { rooms } };
 }
 
@@ -282,7 +349,43 @@ export type SubmissionDetail = {
 export async function getSubmissionDetail(
   submissionId: string
 ): Promise<{ success: boolean; data: SubmissionDetail | null }> {
-  await wait(200);
+  // 1. Thử gọi API Backend thật từ CSDL
+  try {
+    const res = await api.get(`/admin/submissions/${submissionId}`);
+    if (res.data?.success && res.data?.data) {
+      const d = res.data.data;
+      const rawUrls: string[] = d.image_urls && d.image_urls.length ? d.image_urls : [d.image_url];
+      const urls = rawUrls.map(resolveImageUrl);
+      return {
+        success: true,
+        data: {
+          submission_id: d.submission_id,
+          room_code: d.room_code,
+          submitted_at: d.submitted_at,
+          image_url: resolveImageUrl(d.image_url),
+          area_images: {
+            bed: urls[0] || resolveImageUrl(d.image_url),
+            floor: urls[1] || urls[0] || resolveImageUrl(d.image_url),
+            shoes: urls[2] || urls[0] || resolveImageUrl(d.image_url),
+            desk: urls[3] || urls[0] || resolveImageUrl(d.image_url),
+          },
+          ai_result: d.ai_result,
+          override: d.override_info?.is_overridden
+            ? {
+                new_status: d.override_info.final_status,
+                new_score: d.override_info.final_score,
+                note: d.override_info.override_note ?? "",
+              }
+            : null,
+        },
+      };
+    }
+  } catch {
+    // Tiếp tục kiểm tra live storage
+  }
+
+  // 2. Thử trong localStorage live records
+  await wait(150);
   const allLive = Object.values(loadLiveRecords());
   const live = allLive.find((r) => r.submission_id === submissionId);
   if (live) {
@@ -306,6 +409,7 @@ export async function getSubmissionDetail(
     };
   }
 
+  // 3. Fallback mock data
   const parts = submissionId.split("_"); // sub_2026-W47_A1-101
   const week = parts.length >= 3 ? parts[1] : `2026-W${CURRENT_WEEK}`;
   const room = generateRooms(week).find((r) => r.submission_id === submissionId);
@@ -329,7 +433,17 @@ export async function overrideSubmission(
   submissionId: string,
   payload: { new_status: string; new_score: number; note: string }
 ) {
-  await wait(300);
+  try {
+    await api.patch(`/admin/submissions/${submissionId}/override`, {
+      status: payload.new_status,
+      score: payload.new_score,
+      override_note: payload.note,
+    });
+  } catch {
+    // Không chặn nếu chạy offline
+  }
+
+  await wait(200);
   const parts = submissionId.split("_");
   const week = parts.length >= 3 ? parts[1] : `2026-W${CURRENT_WEEK}`;
   const roomCode = parts.length >= 3 ? parts.slice(2).join("_") : "";

@@ -71,7 +71,7 @@ export default function ResultPage() {
                       <div className="aspect-video bg-gray-200 flex items-center justify-center">
                         {url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={url} alt={a.label} className="w-full h-full object-cover" />
+                          <img src={url} alt={a.label} className="w-full h-full object-contain bg-slate-900/10" />
                         ) : (
                           <span className="text-2xl">{a.emoji}</span>
                         )}

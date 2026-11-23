@@ -69,7 +69,7 @@ function Detail() {
               <img
                 src={data.area_images?.[activeArea] ?? data.image_url}
                 alt={`Phòng ${data.room_code}`}
-                className="w-full aspect-video object-cover"
+                className="w-full aspect-video object-contain bg-slate-900"
               />
               <span className="absolute top-2.5 left-2.5 bg-black/70 text-white text-xs px-3 py-1 rounded-sm font-semibold">
                 {AREAS.find((a) => a.key === activeArea)?.emoji}{" "}
@@ -95,7 +95,7 @@ function Detail() {
                     <img
                       src={data.area_images?.[a.key] ?? data.image_url}
                       alt={a.label}
-                      className="w-full aspect-video object-cover"
+                      className="w-full aspect-video object-contain bg-slate-900"
                     />
                     <div className="px-2 py-1.5 flex items-center justify-between text-xs bg-white">
                       <span className="font-semibold truncate">

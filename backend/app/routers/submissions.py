@@ -448,50 +448,72 @@ async def evaluate_four_photos(
     try:
         with SessionLocal() as db:
             room_obj = db.query(Room).filter(Room.room_code == clean_room_code).first()
-            if room_obj:
-                existing = (
-                    db.query(Submission)
-                    .filter(Submission.room_id == room_obj.id, Submission.week == week_str)
-                    .first()
+            if not room_obj:
+                parts = clean_room_code.split("-")
+                building = parts[0][0] if parts and parts[0] else "A"
+                floor_num = 1
+                room_num = clean_room_code
+                if len(parts) >= 2:
+                    room_num = parts[1]
+                    try:
+                        floor_num = int(room_num[0])
+                    except Exception:
+                        floor_num = 1
+                room_obj = Room(
+                    room_code=clean_room_code,
+                    building=building,
+                    floor=floor_num,
+                    room_number=room_num,
+                    capacity=4,
+                    is_active=True,
                 )
-                if existing:
-                    db.query(SubmissionPhoto).filter(SubmissionPhoto.submission_id == existing.id).delete()
-                    db.query(AiEvaluation).filter(AiEvaluation.submission_id == existing.id).delete()
-                    db.delete(existing)
-                    db.flush()
-
-                sub = Submission(
-                    room_id=room_obj.id,
-                    week=week_str,
-                    image_url=image_urls[0],
-                    image_size_kb=size_kb,
-                    captured_at=datetime.utcnow(),
-                )
-                db.add(sub)
-                db.flush()
-                submission_id = sub.id
-
-                ai_eval = AiEvaluation(
-                    submission_id=sub.id,
-                    status=clean_status,
-                    score=score,
-                    is_valid_room_photo=True,
-                    bed_tidy=bool(checklist.get("bed_tidy")),
-                    floor_clean=bool(checklist.get("floor_clean")),
-                    desk_organized=bool(checklist.get("desk_organized")),
-                    shoes_arranged=bool(checklist.get("shoes_arranged")),
-                    issues_detected=json.dumps(issues_list, ensure_ascii=False),
-                    positive_notes=json.dumps(positive_list, ensure_ascii=False),
-                    recommendations=recommendations_text,
-                    deductions=json.dumps(ai_result.get("deductions", []), ensure_ascii=False),
-                    final_status=clean_status,
-                    final_score=score,
-                    ai_response_time_ms=ai_result.get("ai_response_time_ms", 0),
-                )
-                db.add(ai_eval)
-                for pos, u in enumerate(image_urls, start=1):
-                    db.add(SubmissionPhoto(submission_id=sub.id, position=pos, image_url=u))
+                db.add(room_obj)
                 db.commit()
+                db.refresh(room_obj)
+
+            existing = (
+                db.query(Submission)
+                .filter(Submission.room_id == room_obj.id, Submission.week == week_str)
+                .first()
+            )
+            if existing:
+                db.query(SubmissionPhoto).filter(SubmissionPhoto.submission_id == existing.id).delete()
+                db.query(AiEvaluation).filter(AiEvaluation.submission_id == existing.id).delete()
+                db.delete(existing)
+                db.flush()
+
+            sub = Submission(
+                room_id=room_obj.id,
+                week=week_str,
+                image_url=image_urls[0],
+                image_size_kb=size_kb,
+                captured_at=datetime.utcnow(),
+            )
+            db.add(sub)
+            db.flush()
+            submission_id = sub.id
+
+            ai_eval = AiEvaluation(
+                submission_id=sub.id,
+                status=clean_status,
+                score=score,
+                is_valid_room_photo=True,
+                bed_tidy=bool(checklist.get("bed_tidy")),
+                floor_clean=bool(checklist.get("floor_clean")),
+                desk_organized=bool(checklist.get("desk_organized")),
+                shoes_arranged=bool(checklist.get("shoes_arranged")),
+                issues_detected=json.dumps(issues_list, ensure_ascii=False),
+                positive_notes=json.dumps(positive_list, ensure_ascii=False),
+                recommendations=recommendations_text,
+                deductions=json.dumps(ai_result.get("deductions", []), ensure_ascii=False),
+                final_status=clean_status,
+                final_score=score,
+                ai_response_time_ms=ai_result.get("ai_response_time_ms", 0),
+            )
+            db.add(ai_eval)
+            for pos, u in enumerate(image_urls, start=1):
+                db.add(SubmissionPhoto(submission_id=sub.id, position=pos, image_url=u))
+            db.commit()
     except Exception:
         logger.warning("Bỏ qua lưu DB (SQL Server chưa kết nối), vẫn trả kết quả AI bình thường.")
 

@@ -161,7 +161,7 @@ export default function CameraPage() {
                     {cap ? (
                       <>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={cap.preview} alt={area.label} className="w-full h-full object-cover" />
+                        <img src={cap.preview} alt={area.label} className="w-full h-full object-contain bg-slate-900/10" />
                         <span className="absolute bottom-1.5 left-1.5 bg-black/65 text-white text-[10px] px-2 py-0.5 rounded-sm">
                           {room} · {area.label} · {cap.capturedAt}
                         </span>
