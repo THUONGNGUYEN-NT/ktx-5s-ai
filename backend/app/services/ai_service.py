@@ -26,41 +26,30 @@ Analyze the 4 room photos submitted by a student.
 
 === 1. VNU-HCM DORMITORY REAL-WORLD CONTEXT ===
 Authentic VNU-HCM Dormitory rooms (Khu A & Khu B) have specific characteristics:
-- Room types: 2 students (2 single beds), 4 students (2 bunk beds), 6 or 8 students (multiple bunk beds, higher furniture & item density).
-- Bed structures: Standard painted steel bunk beds (blue/green/white/gray frames) or single dorm beds with wooden/slat boards (vạt giường gỗ/sắt). May have mattress, woven sleeping mat (chiếu trúc/cối), blankets, pillows, or personal foldable bed desk.
-- Study desks: Independent study desks, shared long tables along walls, or desks integrated underneath upper bunk beds.
-- Environment: Dormitory tiled floors (ceramic/terrazzo tiles), dorm masonry/concrete walls with dorm windows/balcony doors.
+- Standard rooms (4 or 6 students): Standard painted steel bunk beds (khung sắt giường tầng màu xanh, xám, trắng) with wooden/metal slat boards. Shoes rack is placed separately near entrance/wall.
+- Service rooms (phòng dịch vụ 4 sinh viên): May have wall-mounted air conditioner (máy lạnh), window curtains, and 4 single metal dorm beds or bunk beds.
+- Private rental rooms (phòng trọ tư nhân cao cấp, phòng chung cư mini, studio gia đình có giường gỗ đôi, đèn trang trí phòng ngủ tư nhân) are NOT authentic VNU-HCM dormitories -> REJECT.
 
 === 2. ANTI-FRAUD & CONTEXT VERIFICATION (CRUCIAL) ===
 REJECT IMMEDIATELY (Set is_valid = false for that photo, and is_valid_room_photo = false) IF:
-1. STOCK / E-COMMERCE CATALOG PHOTOS (Ảnh mạng / Pinterest / Shopee):
-   - Photos taken from commercial furniture websites, studio product staging (e.g. pristine white metal shoe rack staged beside a luxury upholstered bed in a commercial catalog), Pinterest aesthetic photos, or downloaded from the internet.
-   - Any photo that looks like an advertising/catalog photo instead of a real student dorm photo taken with a phone camera -> REJECT as "Ảnh tải từ mạng / ảnh quảng cáo thương mại".
-2. NON-DORMITORY CONTEXT (Phòng trọ cao cấp / Căn hộ dịch vụ / Khách sạn / Nhà ở gia đình):
-   - Private luxury studio apartments, high-end serviced rentals (phòng trọ tư nhân cao cấp) with wall-to-wall carpeting, designer downlights, luxury hotel upholstered headboards, or residential family homes that clearly lack student dormitory infrastructure -> REJECT as "Bối cảnh phòng trọ tư nhân/căn hộ dịch vụ, không phải KTX ĐHQG-HCM".
-3. DUPLICATE / RECYCLED ROOM SHOTS:
-   - Reusing the same overview room shot for Bed, Floor, and Desk instead of photographing each distinct area.
+1. DUPLICATE / RECYCLED PHOTOS:
+   - Submitting the same photo for more than one area (e.g. Photo 1 Bed and Photo 4 Desk are the same image) -> REJECT as "Nộp trùng ảnh giữa các góc chụp".
+2. SPLICED PHOTOS FROM DIFFERENT ROOMS (Ghép từ nhiều phòng khác nhau / Không cùng một không gian):
+   - If one photo has wooden domestic bed / studio room, another photo has metal dorm bunk bed, or flooring tiles and wall colors clearly belong to different apartments/buildings -> SET is_same_room = false and REJECT as "Ảnh chụp từ nhiều phòng khác nhau, không cùng một không gian".
+3. NON-DORMITORY CONTEXT (Phòng trọ tư nhân ngoài KTX / Căn hộ mini gia đình):
+   - Luxury private rented rooms with personal wooden double beds, decorative bedroom lighting, home studio setup that lack student dorm infrastructure -> REJECT as "Bối cảnh phòng trọ tư nhân, không phải KTX ĐHQG-HCM".
+4. STOCK / CATALOG PHOTOS (Ảnh mạng / Shopee / Pinterest).
 
 === 3. INDEPENDENT AREA VALIDATION ===
-Judge ONLY what is actually visible in each photo. Do NOT hallucinate objects that do not exist:
-- Photo 1 — BED AREA: Must show a dorm bed (single bed, bunk bed, bare bed board with mattress, or bed with mini foldable bed table).
-  * VALID: Any student bed in the room.
-  * REJECT only if: Cooking pots/food, bathroom, pure floor with no bed structure.
-- Photo 2 — FLOOR & WALKWAY: Must show the floor surface and walkway between dorm beds/furniture towards door.
-  * VALID: Dorm room walkway and floor.
-  * REJECT only if: Blocked by curtain, extreme close-up of furniture leg, bathroom.
-- Photo 3 — SHOE RACK AREA: Must show a shoe rack or shoes arranged neatly near entrance/wall.
-  * VALID: Any plastic, metal, or wooden shoe rack with shoes/slippers.
-  * REJECT only if: Bathroom sinks, toilet, bare floor with only electric cords and NO shoes.
-- Photo 4 — STUDY DESK AREA: Must show a student study desk or table.
-  * VALID: Wooden/metal study desk, shared table, desks with chairs, or desk under bunk bed.
-  * REJECT only if: Re-photographing bed mattress/bed frame without a desk, windowsill, bathroom.
+Judge ONLY what is actually visible in each photo.
+- Photo 1 — BED AREA: Must show a student dorm bed (steel bunk bed, dorm single bed). If it shows a domestic wooden master bed or private studio room -> REJECT.
+- Photo 2 — FLOOR & WALKWAY: Must show the dorm floor and walkway between beds.
+- Photo 3 — SHOE RACK AREA: Must show a shoe rack or shoes placed separately near the entrance or wall.
+- Photo 4 — STUDY DESK AREA: Must show a student study desk. Must NOT be a duplicate of Photo 1.
 
 === 4. ROOM CONSISTENCY GUIDELINE ===
-- REAL-WORLD FACT: Different corners of the same dormitory room naturally have different lighting, different furniture, and different perspectives.
-- DEFAULT TO VALID (is_same_room = true) if all 4 photos look like plausible student dormitory spaces.
-- ONLY flag is_same_room = false if there is an extreme, unmistakable contradiction (e.g. one photo is a luxury hotel with carpet and crystal chandelier, while others are a student dorm, or photos from completely different buildings).
-- NEVER hallucinate or invent conflicting objects that are not clearly visible in the photos.
+- All 4 photos MUST belong to the SAME dormitory room.
+- If photos show completely different beds (e.g. Photo 1 is a low wooden bed in a private studio, Photo 2 is a daylit dorm with wooden furniture, Photo 3 is a metal bunk bed frame) -> THEY ARE FROM DIFFERENT ROOMS! You MUST set is_same_room = false and list the inconsistencies clearly.
 
 === 5. SCORE 5S (ONLY IF ALL PHOTOS VALID, AUTHENTIC DORM & FROM SAME ROOM) ===
 Criteria:
@@ -230,7 +219,7 @@ def check_duplicate_photos(images: list[Image.Image]) -> list[str]:
             if t1 and t2:
                 # Tính chênh lệch độ sáng pixel trung bình giữa 2 ảnh (0 đến 255)
                 avg_diff = sum(abs(p1 - p2) for p1, p2 in zip(t1, t2)) / 1024.0
-                if avg_diff < 5.0:  # Trùng lặp > 98%
+                if avg_diff < 12.0:  # Trùng lặp > 95% (kể cả khi nén JPEG lại)
                     lbl_i = labels[i] if i < len(labels) else f"Ảnh {i+1}"
                     lbl_j = labels[j] if j < len(labels) else f"Ảnh {j+1}"
                     dup_pairs.append(f"{lbl_i} và {lbl_j}")

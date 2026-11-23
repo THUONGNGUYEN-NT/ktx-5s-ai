@@ -462,3 +462,18 @@ async def export_report(
             "Content-Disposition": f"attachment; filename=bao_cao_ktx5s_{week}.csv"
         },
     )
+
+
+# =============================================
+# 5. DỌN DẸP ẢNH CŨ TRÊN CLOUDINARY
+# =============================================
+@router.post("/cleanup-images", summary="Dọn dẹp ảnh cũ trên Cloudinary để giải phóng dung lượng")
+async def cleanup_images(
+    days: int = Query(30, ge=1, le=365, description="Số ngày tối đa lưu trữ (mặc định 30 ngày)"),
+    current_admin: User = Depends(require_admin),
+):
+    """Xóa các bức ảnh nộp cũ hơn số ngày chỉ định trên Cloudinary để không bị đầy bộ nhớ 25GB."""
+    from app.services.storage_service import cleanup_old_cloudinary_images
+    result = cleanup_old_cloudinary_images(max_keep_days=days)
+    return result
+

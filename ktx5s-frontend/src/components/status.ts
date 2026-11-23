@@ -1,7 +1,7 @@
 // Định nghĩa kiểu dữ liệu phòng + bảng màu trạng thái dùng chung toàn hệ thống
 // Màu theo phong cách trang quản trị (AdminLTE)
 
-export type RoomStatus = "Sạch" | "Hơi bừa bộn" | "Bừa bộn" | null;
+export type RoomStatus = "Sạch" | "Hơi bừa bộn" | "Bừa bộn" | "Không hợp lệ (Gian lận)" | "Không hợp lệ" | null;
 
 export type Room = {
   submission_id: string | null;
@@ -17,19 +17,23 @@ export type Room = {
   members?: number;
 };
 
-export type TileKey = "clean" | "slightly_messy" | "messy" | "overridden" | "not_submitted";
+export type TileKey = "clean" | "slightly_messy" | "messy" | "fraud" | "overridden" | "not_submitted";
 
-export const TILE_ORDER: TileKey[] = ["clean", "slightly_messy", "messy", "overridden", "not_submitted"];
+export const TILE_ORDER: TileKey[] = ["clean", "slightly_messy", "messy", "fraud", "overridden", "not_submitted"];
 
 export const TILE_STYLES: Record<TileKey, { label: string; bg: string; text: string }> = {
-  clean:          { label: "Sạch",                bg: "bg-[#00a65a]", text: "text-[#00a65a]" },
-  slightly_messy: { label: "Hơi bừa bộn",         bg: "bg-[#f39c12]", text: "text-[#f39c12]" },
-  messy:          { label: "Bừa bộn",             bg: "bg-[#dd4b39]", text: "text-[#dd4b39]" },
-  overridden:     { label: "Cán bộ đã duyệt lại", bg: "bg-[#605ca8]", text: "text-[#605ca8]" },
-  not_submitted:  { label: "Chưa nộp ảnh",        bg: "bg-[#3c8dbc]", text: "text-[#3c8dbc]" },
+  clean:          { label: "Sạch",                    bg: "bg-[#00a65a]", text: "text-[#00a65a]" },
+  slightly_messy: { label: "Hơi bừa bộn",             bg: "bg-[#f39c12]", text: "text-[#f39c12]" },
+  messy:          { label: "Bừa bộn",                 bg: "bg-[#dd4b39]", text: "text-[#dd4b39]" },
+  fraud:          { label: "Không hợp lệ (Gian lận)", bg: "bg-[#d81b60]", text: "text-[#d81b60]" },
+  overridden:     { label: "Cán bộ đã duyệt lại",     bg: "bg-[#605ca8]", text: "text-[#605ca8]" },
+  not_submitted:  { label: "Chưa nộp ảnh",            bg: "bg-[#3c8dbc]", text: "text-[#3c8dbc]" },
 };
 
-export function statusToKey(status: RoomStatus): TileKey {
+export function statusToKey(status: any): TileKey {
+  if (!status) return "not_submitted";
+  const s = String(status).toLowerCase();
+  if (s.includes("gian lận") || s.includes("không hợp lệ") || s.includes("fraud") || s.includes("invalid")) return "fraud";
   if (status === "Sạch") return "clean";
   if (status === "Hơi bừa bộn") return "slightly_messy";
   if (status === "Bừa bộn") return "messy";

@@ -14,7 +14,7 @@ import {
 } from "@/components/status";
 
 export type AIResult = {
-  status: "Sạch" | "Hơi bừa bộn" | "Bừa bộn";
+  status: NonNullable<RoomStatus>;
   score: number;
   is_valid_room_photo: boolean;
   checklist: { bed_tidy: boolean; floor_clean: boolean; desk_organized: boolean; shoes_arranged: boolean };
@@ -23,7 +23,20 @@ export type AIResult = {
   recommendations: string;
 };
 
-export function buildMockAiResult(status: "Sạch" | "Hơi bừa bộn" | "Bừa bộn", score: number): AIResult {
+export function buildMockAiResult(status: NonNullable<RoomStatus>, score: number): AIResult {
+  if (status === "Không hợp lệ (Gian lận)" || status === "Không hợp lệ") {
+    return {
+      status,
+      score: 0.0,
+      is_valid_room_photo: false,
+      checklist: { bed_tidy: false, floor_clean: false, desk_organized: false, shoes_arranged: false },
+      issues_detected: [
+        "Phát hiện ảnh gian lận, ghép ảnh từ nhiều phòng khác nhau hoặc trùng lặp không gian",
+      ],
+      positive_notes: [],
+      recommendations: "Ảnh nộp vi phạm quy chế (gian lận/không hợp lệ). Sinh viên cần chụp ảnh thực tế phòng mình để nộp lại.",
+    };
+  }
   if (status === "Sạch") {
     return {
       status, score, is_valid_room_photo: true,

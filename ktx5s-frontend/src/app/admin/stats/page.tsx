@@ -57,6 +57,7 @@ export default function StatsPage() {
         clean: 0,
         slightly_messy: 0,
         messy: 0,
+        fraud: 0,
         overridden: 0,
         not_submitted: 0,
         total: 0,

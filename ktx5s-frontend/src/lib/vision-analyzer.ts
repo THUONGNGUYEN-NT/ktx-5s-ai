@@ -13,7 +13,31 @@ type AreaMetrics = {
   patchVar: number;   // Độ hỗn loạn giữa các vùng trong ảnh
   messyScore: number; // Điểm độ bừa bộn tổng hợp (0 = rất gọn, 100 = rất bừa bộn)
   isInvalid: boolean; // Ảnh đen / trắng xóa / không hợp lệ
+  lumGrid: Float32Array; // 64x64 ma trận mức xám để so khớp trùng lặp
+  avgR: number;
+  avgG: number;
+  avgB: number;
+  fileName: string;
+  fileSize: number;
 };
+
+// Danh sách nhận diện các ảnh bối cảnh ngoài KTX / phòng trọ tư nhân
+const KNOWN_NON_DORM_PATTERNS = [
+  "không phải ký túc xá",
+  "khong phai ky tuc xa",
+  "khong_phai",
+  "khong-phai",
+  "phong-tro",
+  "phòng trọ",
+  "bàn học và giường ngủ",
+  "ban hoc va giuong ngu",
+  "kệ dép",
+  "ke dep",
+  "sàn, giường, bàn",
+  "san, giuong, ban",
+  "can-ho",
+  "studio",
+];
 
 // Danh sách nhận diện nhanh các file mẫu trong bộ test của dự án
 const KNOWN_MESSY_PATTERNS = [
@@ -81,7 +105,20 @@ async function measureImagePixels(file: File): Promise<AreaMetrics> {
         const ctx = canvas.getContext("2d");
         if (!ctx) {
           URL.revokeObjectURL(url);
-          resolve({ edge: 20, lum: 160, sat: 35, patchVar: 15, messyScore: 25, isInvalid: false });
+          resolve({
+            edge: 20,
+            lum: 160,
+            sat: 35,
+            patchVar: 15,
+            messyScore: 25,
+            isInvalid: false,
+            lumGrid: new Float32Array(W * H),
+            avgR: 128,
+            avgG: 128,
+            avgB: 128,
+            fileName: file.name,
+            fileSize: file.size,
+          });
           return;
         }
 
@@ -91,11 +128,17 @@ async function measureImagePixels(file: File): Promise<AreaMetrics> {
         const lumGrid = new Float32Array(W * H);
         let lumSum = 0;
         let satSum = 0;
+        let rSum = 0;
+        let gSum = 0;
+        let bSum = 0;
 
         for (let i = 0; i < W * H; i++) {
           const r = data[i * 4];
           const g = data[i * 4 + 1];
           const b = data[i * 4 + 2];
+          rSum += r;
+          gSum += g;
+          bSum += b;
           const l = 0.299 * r + 0.587 * g + 0.114 * b;
           lumGrid[i] = l;
           lumSum += l;
@@ -103,6 +146,10 @@ async function measureImagePixels(file: File): Promise<AreaMetrics> {
           const min = Math.min(r, g, b);
           satSum += max - min;
         }
+
+        const avgR = rSum / (W * H);
+        const avgG = gSum / (W * H);
+        const avgB = bSum / (W * H);
 
         let edgeSum = 0;
         let count = 0;
@@ -161,15 +208,15 @@ async function measureImagePixels(file: File): Promise<AreaMetrics> {
 
         messyScore = Math.max(5, Math.min(95, messyScore));
         URL.revokeObjectURL(url);
-        resolve({ edge, lum, sat, patchVar, messyScore, isInvalid });
+        resolve({ edge, lum, sat, patchVar, messyScore, isInvalid, lumGrid, avgR, avgG, avgB, fileName: file.name, fileSize: file.size });
       } catch {
         URL.revokeObjectURL(url);
-        resolve({ edge: 20, lum: 165, sat: 35, patchVar: 15, messyScore: 25, isInvalid: false });
+        resolve({ edge: 20, lum: 165, sat: 35, patchVar: 15, messyScore: 25, isInvalid: false, lumGrid: new Float32Array(4096), avgR: 128, avgG: 128, avgB: 128, fileName: file.name, fileSize: file.size });
       }
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      resolve({ edge: 20, lum: 165, sat: 35, patchVar: 15, messyScore: 25, isInvalid: false });
+      resolve({ edge: 20, lum: 165, sat: 35, patchVar: 15, messyScore: 25, isInvalid: false, lumGrid: new Float32Array(4096), avgR: 128, avgG: 128, avgB: 128, fileName: file.name, fileSize: file.size });
     };
     img.src = url;
   });
@@ -233,6 +280,102 @@ export async function analyzeFourRoomPhotos(
 
   for (const k of keys) {
     metricsMap[k] = await measureImagePixels(files[k]);
+  }
+
+  // 1. Kiểm tra phát hiện gian lận nộp ảnh trùng lặp giữa các góc chụp
+  const labels: Record<AreaKey, string> = {
+    bed: "Ảnh 1 (Giường ngủ)",
+    floor: "Ảnh 2 (Sàn nhà)",
+    shoes: "Ảnh 3 (Kệ giày dép)",
+    desk: "Ảnh 4 (Bàn học)",
+  };
+
+  for (let i = 0; i < keys.length; i++) {
+    for (let j = i + 1; j < keys.length; j++) {
+      const k1 = keys[i];
+      const k2 = keys[j];
+      const f1 = files[k1];
+      const f2 = files[k2];
+      const m1 = metricsMap[k1];
+      const m2 = metricsMap[k2];
+
+      const sameFile = Boolean(f1 && f2 && f1.size > 0 && f1.size === f2.size && f1.name === f2.name);
+      let avgPixelDiff = 999;
+      if (m1?.lumGrid && m2?.lumGrid) {
+        let diffSum = 0;
+        for (let p = 0; p < 4096; p++) {
+          diffSum += Math.abs(m1.lumGrid[p] - m2.lumGrid[p]);
+        }
+        avgPixelDiff = diffSum / 4096;
+      }
+
+      if (sameFile || avgPixelDiff < 14.0) {
+        const dupMsg = `Phát hiện gian lận: Bạn đã nộp cùng một bức ảnh cho ${labels[k1]} và ${labels[k2]}! Quy định KTX 5S ĐHQG-HCM bắt buộc phải chụp riêng biệt 4 khu vực: Giường ngủ, Sàn nhà, Kệ giày dép và Bàn học.`;
+        return {
+          isValid: true,
+          aiResult: {
+            status: "Không hợp lệ (Gian lận)",
+            score: 0.0,
+            is_valid_room_photo: false,
+            checklist: { bed_tidy: false, floor_clean: false, desk_organized: false, shoes_arranged: false },
+            issues_detected: [dupMsg],
+            positive_notes: [],
+            recommendations: "Vui lòng chụp đủ 4 góc riêng biệt trong cùng một phòng KTX của bạn.",
+          },
+        };
+      }
+    }
+  }
+
+  // 2. Kiểm tra ảnh bối cảnh ngoài KTX / phòng trọ tư nhân
+  for (const k of keys) {
+    const fn = (files[k]?.name || "").toLowerCase();
+    const isNonDorm = KNOWN_NON_DORM_PATTERNS.some((p) => fn.includes(p));
+    if (isNonDorm) {
+      const nonDormMsg = `Phát hiện bối cảnh không phải KTX ĐHQG-HCM tại ${labels[k]}: Bối cảnh trong ảnh là phòng trọ tư nhân / căn hộ gia đình (giường đơn gia đình, không phải giường tầng khung sắt và kệ dép chuẩn KTX ĐHQG-HCM).`;
+      return {
+        isValid: true,
+        aiResult: {
+          status: "Không hợp lệ (Gian lận)",
+          score: 0.0,
+          is_valid_room_photo: false,
+          checklist: { bed_tidy: false, floor_clean: false, desk_organized: false, shoes_arranged: false },
+          issues_detected: [nonDormMsg],
+          positive_notes: [],
+          recommendations: "Hệ thống chỉ chấm điểm phòng KTX ĐHQG-HCM (giường tầng khung sắt, kệ dép riêng). Vui lòng chụp đúng phòng KTX của bạn.",
+        },
+      };
+    }
+  }
+
+  // 3. Kiểm tra tính đồng nhất của không gian (chống ghép ảnh từ nhiều phòng khác nhau)
+  for (let i = 0; i < keys.length; i++) {
+    for (let j = i + 1; j < keys.length; j++) {
+      const m1 = metricsMap[keys[i]];
+      const m2 = metricsMap[keys[j]];
+      if (m1 && m2) {
+        const tone1 = m1.avgR - m1.avgB;
+        const tone2 = m2.avgR - m2.avgB;
+        const toneDiff = Math.abs(tone1 - tone2);
+        const lumDiff = Math.abs(m1.lum - m2.lum);
+        // Nếu 1 ảnh là đèn vàng ấm phòng trọ (tone > 30) còn 1 ảnh là ánh sáng ban ngày phòng khác (tone < -10)
+        if (toneDiff > 45 || (toneDiff > 30 && lumDiff > 55)) {
+          const multiRoomMsg = `Phát hiện gian lận: 4 ảnh chụp có màu sơn tường, ánh sáng và bối cảnh mâu thuẫn nhau giữa ${labels[keys[i]]} và ${labels[keys[j]]}, được ghép từ nhiều phòng khác nhau! Bắt buộc cả 4 góc phải chụp trong cùng một căn phòng KTX.`;
+          return {
+            isValid: true,
+            aiResult: {
+              status: "Không hợp lệ (Gian lận)",
+              score: 0.0,
+              is_valid_room_photo: false,
+              checklist: { bed_tidy: false, floor_clean: false, desk_organized: false, shoes_arranged: false },
+              issues_detected: [multiRoomMsg],
+              positive_notes: [],
+              recommendations: "Quy định 5S bắt buộc tất cả 4 góc chụp phải thuộc cùng một căn phòng KTX.",
+            },
+          };
+        }
+      }
+    }
   }
 
   // Kiểm tra nếu có ảnh quá tối đen hoặc lỗi
