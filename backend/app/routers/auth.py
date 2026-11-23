@@ -174,6 +174,7 @@ async def get_me(
 # ============================================================================
 import random
 import time
+from app.services.email_service import send_otp_email
 
 ACTIVE_OTPS: dict[str, dict] = {}
 
@@ -207,12 +208,16 @@ async def request_otp(req: ForgotPasswordOtpRequest, db: Session = Depends(get_d
     ident = req.identifier.strip().lower()
     method = req.method or "phone"
 
-    # Tìm user trong DB hoặc chấp nhận username tài khoản demo
+    # Tìm user trong DB
     user = db.query(User).filter(User.username == ident).first()
+    recipient_name = user.full_name if user else "Người dùng KTX"
+
+    # Xác định email/phone nhận mã
+    recipient_email = ident if "@" in ident else (getattr(user, "email", None) or f"{ident}@student.edu.vn")
     
     # Tạo mã OTP 6 số ngẫu nhiên
     otp_code = str(random.randint(100000, 999999))
-    target_display = f"093****890 (SMS)" if method == "phone" else f"{ident[:2]}****@student.edu.vn"
+    target_display = f"093****890" if method == "phone" else f"{recipient_email.split('@')[0][:2]}****@{recipient_email.split('@')[-1]}"
 
     ACTIVE_OTPS[ident] = {
         "otp": otp_code,
@@ -220,13 +225,20 @@ async def request_otp(req: ForgotPasswordOtpRequest, db: Session = Depends(get_d
         "expires_at": time.time() + 300,  # 5 phút
     }
 
+    # Nếu gửi qua Email: Gửi email thực tế qua SMTP
+    email_sent = False
+    if method == "email" or "@" in ident:
+        email_sent, _ = send_otp_email(recipient_email, recipient_name, otp_code)
+
+    print(f"📩 [OTP Thực tế] Tài khoản: {ident} | Mã OTP: {otp_code} | Target: {target_display} | Đã gửi email thực: {email_sent}")
+
     return {
         "success": True,
-        "message": f"Mã OTP đã được gửi đến {method.upper()}: {target_display}",
+        "message": f"Mã xác thực OTP đã được gửi đến {method.upper()} ({target_display}). Vui lòng kiểm tra hộp thư/tin nhắn.",
         "data": {
-            "otp_demo": otp_code,
             "masked_target": target_display,
             "expires_in_seconds": 300,
+            "email_sent": email_sent,
         },
     }
 

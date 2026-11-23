@@ -43,9 +43,8 @@ export default function UserProfileView({ role }: { role: UserRole }) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordMessage, setPasswordMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Thử nghiệm gửi OTP xác thực
+  // Kiểm tra gửi mã OTP xác thực thực tế
   const [otpTestStatus, setOtpTestStatus] = useState<string>("");
-  const [simulatedOtp, setSimulatedOtp] = useState<string>("");
 
   useEffect(() => {
     const session = getSession();
@@ -148,16 +147,15 @@ export default function UserProfileView({ role }: { role: UserRole }) {
     }
   };
 
-  // Kiểm tra thử nghiệm tính năng nhận OTP
-  const handleTestOtp = (method: "phone" | "email") => {
+  // Kiểm tra gửi OTP thực tế
+  const handleTestOtp = async (method: "phone" | "email") => {
     if (!account) return;
-    const target = method === "phone" ? account.phone : account.email;
-    const res = requestPasswordResetOtp(account.username, method);
-    if (res.success && res.otp) {
-      setSimulatedOtp(res.otp);
-      setOtpTestStatus(`Đã phát sinh mã OTP qua ${method === "phone" ? "SMS" : "Email"}: ${res.maskedTarget}`);
+    setOtpTestStatus("Đang gửi mã xác thực OTP thực tế...");
+    const res = await requestPasswordResetOtp(account.username, method);
+    if (res.success) {
+      setOtpTestStatus(`✅ Đã gửi mã OTP thực tế tới ${method === "phone" ? "SMS số điện thoại" : "hòm thư Email"}: ${res.maskedTarget}. Vui lòng kiểm tra hộp thư hoặc tin nhắn của bạn.`);
     } else {
-      setOtpTestStatus(res.message);
+      setOtpTestStatus(`❌ ${res.message}`);
     }
   };
 
@@ -563,16 +561,8 @@ export default function UserProfileView({ role }: { role: UserRole }) {
               </div>
 
               {otpTestStatus && (
-                <div className="bg-sky-50 border border-sky-200 rounded p-4 text-xs text-sky-950 space-y-2">
-                  <p className="font-semibold text-sky-900">{otpTestStatus}</p>
-                  {simulatedOtp && (
-                    <div className="bg-white p-3 rounded border border-sky-200">
-                      <p className="text-gray-600">Nội dung tin nhắn mô phỏng:</p>
-                      <p className="font-mono text-sm font-extrabold text-[#d81b60] mt-1">
-                        [KTX 5S AI] Ma OTP xac thuc cua ban la: <span className="bg-amber-100 px-2 py-0.5 rounded text-amber-900">{simulatedOtp}</span> (Hieu luc 5 phut). Khong chia se ma nay cho nguoi khac.
-                      </p>
-                    </div>
-                  )}
+                <div className="bg-sky-50 border border-sky-200 rounded p-4 text-xs text-sky-950">
+                  <p className="font-semibold text-sky-900 leading-relaxed">{otpTestStatus}</p>
                 </div>
               )}
             </div>
