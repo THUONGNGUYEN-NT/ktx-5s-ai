@@ -692,22 +692,9 @@ export default function UserProfileView({ role }: { role: UserRole }) {
                       </button>
                     </div>
 
-                    <p className="text-[11px] text-gray-600 mb-2">
-                      Hệ thống đã gửi mã OTP gồm 6 chữ số. Vui lòng nhập mã vào ô bên dưới để hoàn tất chứng thực:
+                    <p className="text-[11px] text-gray-600 mb-3">
+                      Hệ thống đã gửi mã OTP gồm 6 chữ số đến email/số điện thoại của bạn. Vui lòng kiểm tra hộp thư (bao gồm cả mục Spam/Thư rác) và nhập mã vào ô bên dưới:
                     </p>
-
-                    {getActiveOtpCode() && (
-                      <div className="mb-3 flex items-center justify-between bg-amber-100/80 border border-amber-300 rounded px-2.5 py-1 text-amber-900 text-xs">
-                        <span>💡 Mã OTP phát sinh: <b className="font-mono text-sm tracking-wider text-[#d81b60]">{getActiveOtpCode()}</b></span>
-                        <button
-                          type="button"
-                          onClick={() => setVerifyOtpInput(getActiveOtpCode() || "")}
-                          className="px-2 py-0.5 bg-amber-200 hover:bg-amber-300 rounded font-medium text-[11px] text-amber-900 transition-colors"
-                        >
-                          Điền nhanh
-                        </button>
-                      </div>
-                    )}
 
                     <div className="flex items-center gap-3">
                       <input
