@@ -35,6 +35,12 @@ backendProc.on('error', (err) => {
 
 // 3. Chạy Frontend Next.js (:3000)
 console.log(`[2/2] Đang khởi động Web Frontend Next.js...`);
+const nextCacheDir = path.join(frontendDir, '.next');
+if (fs.existsSync(nextCacheDir)) {
+  try {
+    fs.rmSync(nextCacheDir, { recursive: true, force: true });
+  } catch (e) {}
+}
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const frontendProc = spawn(npmCmd, ['run', 'dev'], {
   cwd: frontendDir,
