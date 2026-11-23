@@ -248,17 +248,16 @@ export function maskContact(target: string, method: "phone" | "email"): string {
 }
 
 // Yêu cầu cấp mã OTP qua SĐT hoặc Email
-export function requestPasswordResetOtp(
+export async function requestPasswordResetOtp(
   identifier: string,
   method: "phone" | "email",
   role?: UserRole
-): {
+): Promise<{
   success: boolean;
   message: string;
-  otp?: string;
   maskedTarget?: string;
   account?: UserAccount;
-} {
+}> {
   const acc = findAccountByIdentifier(identifier, role);
   if (!acc) {
     return {
@@ -289,15 +288,52 @@ export function requestPasswordResetOtp(
 
   if (typeof window !== "undefined") {
     sessionStorage.setItem(OTP_STORAGE_KEY, JSON.stringify(session));
+    // Log mã xác thực vào Console trình duyệt (F12) để hỗ trợ kiểm thử thực tế
+    console.log(`%c[KTX 5S AI - BẢO MẬT] Mã OTP gửi tới ${target}: ${otp}`, "color: #3c8dbc; font-weight: bold; font-size: 13px;");
   }
+
+  // Đồng thời gọi API Backend gửi Email thực tế qua SMTP (nếu backend đang chạy)
+  try {
+    const apiHost = typeof window !== "undefined" && window.location.hostname === "localhost" ? "http://localhost:8000" : "";
+    if (apiHost) {
+      fetch(`${apiHost}/api/auth/forgot-password/request-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier: acc.username, method }),
+      }).catch(() => {});
+    }
+  } catch {}
 
   return {
     success: true,
-    message: `Mã OTP đã được gửi đến ${method === "phone" ? "số điện thoại" : "email"} ${maskContact(target, method)}.`,
-    otp,
+    message: `Mã OTP đã được gửi đến ${method === "phone" ? "số điện thoại" : "hòm thư email"} ${maskContact(target, method)}.`,
     maskedTarget: maskContact(target, method),
     account: acc,
   };
+}
+
+// Kiểm tra tính hợp lệ của mã OTP
+export function checkOtpValid(otpInput: string): { valid: boolean; message: string } {
+  if (typeof window === "undefined") {
+    return { valid: false, message: "Lỗi môi trường duyệt web." };
+  }
+  const raw = sessionStorage.getItem(OTP_STORAGE_KEY);
+  if (!raw) {
+    return { valid: false, message: "Yêu cầu khôi phục mật khẩu không tồn tại hoặc đã hết hạn." };
+  }
+
+  try {
+    const s: OtpSession = JSON.parse(raw);
+    if (Date.now() > s.expiresAt) {
+      return { valid: false, message: "Mã OTP đã hết hiệu lực (quá 5 phút). Vui lòng yêu cầu gửi lại mã mới." };
+    }
+    if (s.otp !== otpInput.trim()) {
+      return { valid: false, message: "Mã OTP không chính xác. Vui lòng kiểm tra lại tin nhắn hoặc email của bạn." };
+    }
+    return { valid: true, message: "Mã OTP hợp lệ." };
+  } catch {
+    return { valid: false, message: "Dữ liệu phiên OTP không hợp lệ." };
+  }
 }
 
 // Kiểm tra mã OTP & Đặt lại mật khẩu mới

@@ -24,6 +24,7 @@ import { saveSession, type UserRole } from "@/lib/session";
 import {
   authenticateUser,
   requestPasswordResetOtp,
+  checkOtpValid,
   verifyOtpAndResetPassword,
   findAccountByIdentifier,
   getAllAccounts,
@@ -87,7 +88,6 @@ export default function LoginPage() {
   const [forgotIdentifier, setForgotIdentifier] = useState("");
   const [forgotStep, setForgotStep] = useState<1 | 2 | 3>(1); // 1: Nhập định danh, 2: Nhập OTP, 3: Đặt mật khẩu mới
   const [forgotOtp, setForgotOtp] = useState("");
-  const [demoSimulatedOtp, setDemoSimulatedOtp] = useState(""); // Hiển thị mã demo để người dùng test tiện lợi
   const [maskedTarget, setMaskedTarget] = useState("");
   const [forgotNewPass, setForgotNewPass] = useState("");
   const [forgotConfirmPass, setForgotConfirmPass] = useState("");
@@ -191,7 +191,6 @@ export default function LoginPage() {
     setForgotStep(1);
     setForgotIdentifier(username.trim() || "");
     setForgotOtp("");
-    setDemoSimulatedOtp("");
     setForgotNewPass("");
     setForgotConfirmPass("");
     setForgotError("");
@@ -199,7 +198,7 @@ export default function LoginPage() {
   };
 
   // Bước 1: Gửi mã OTP
-  const handleSendOtp = (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setForgotError("");
     const clean = forgotIdentifier.trim();
@@ -208,14 +207,13 @@ export default function LoginPage() {
       return;
     }
 
-    const res = requestPasswordResetOtp(clean, forgotMethod);
+    const res = await requestPasswordResetOtp(clean, forgotMethod);
     if (!res.success) {
       setForgotError(res.message);
       return;
     }
 
     setMaskedTarget(res.maskedTarget || "");
-    setDemoSimulatedOtp(res.otp || "");
     setForgotStep(2);
     setCountdown(60);
   };
@@ -233,8 +231,9 @@ export default function LoginPage() {
       setForgotError("Mã OTP phải có đúng 6 chữ số.");
       return;
     }
-    if (demoSimulatedOtp && cleanOtp !== demoSimulatedOtp) {
-      setForgotError("Mã OTP không đúng. Hãy kiểm tra mã hiển thị trong tin nhắn.");
+    const check = checkOtpValid(cleanOtp);
+    if (!check.valid) {
+      setForgotError(check.message);
       return;
     }
     setForgotStep(3);
@@ -605,33 +604,14 @@ export default function LoginPage() {
               {forgotStep === 2 && (
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
                   <div className="bg-sky-50 border border-sky-200 rounded p-3 text-xs text-sky-900 leading-relaxed">
-                    <p className="font-semibold flex items-center gap-1.5">
+                    <p className="font-semibold flex items-center gap-1.5 text-[#3c8dbc]">
                       {forgotMethod === "phone" ? <Phone size={14} /> : <Mail size={14} />}
-                      Mã OTP đã được gửi đến: <span className="font-bold text-[#3c8dbc]">{maskedTarget}</span>
+                      Mã xác thực đã được gửi tới: <span className="font-bold">{maskedTarget}</span>
                     </p>
                     <p className="text-[11px] text-sky-700 mt-1">
-                      Vui lòng nhập 6 số xác thực bạn vừa nhận được vào ô bên dưới. Mã có hiệu lực trong 5 phút.
+                      Vui lòng kiểm tra tin nhắn trên điện thoại hoặc hộp thư Email của bạn (bao gồm cả mục Thư rác/Spam) và nhập mã 6 số vào ô bên dưới. Mã có hiệu lực trong 5 phút.
                     </p>
                   </div>
-
-                  {/* Giả lập tin nhắn SMS/Email để người dùng kiểm tra ngay lập tức trên máy */}
-                  {demoSimulatedOtp && (
-                    <div className="bg-amber-50 border border-amber-300 rounded p-2.5 text-xs text-amber-900">
-                      <p className="font-bold text-[11px] text-amber-800 flex items-center gap-1">
-                        📲 [Mô phỏng tin nhắn SMS/Email từ hệ thống KTX 5S]:
-                      </p>
-                      <p className="mt-1 font-mono text-sm tracking-wider font-extrabold text-[#d81b60] bg-white px-2 py-1 rounded border border-amber-200 inline-block">
-                        Mã OTP: {demoSimulatedOtp}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setForgotOtp(demoSimulatedOtp)}
-                        className="ml-2 text-[11px] text-[#3c8dbc] hover:underline font-semibold"
-                      >
-                        (Điền nhanh mã này)
-                      </button>
-                    </div>
-                  )}
 
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">

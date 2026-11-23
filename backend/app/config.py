@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY: str = ""
     CLOUDINARY_API_SECRET: str = ""
 
+    # SMTP Gửi Email thực tế (Gmail / Mail Server KTX)
+    SMTP_SERVER: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_EMAIL: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_SENDER_NAME: str = "KTX 5S AI — Trung tâm Quản lý KTX"
+
     @property
     def DATABASE_URL(self) -> str:
         driver = self.DB_DRIVER.replace(" ", "+")
