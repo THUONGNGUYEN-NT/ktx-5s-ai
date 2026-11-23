@@ -9,6 +9,7 @@ import {
 } from "./mock-api";
 import { analyzeFourRoomPhotos } from "./vision-analyzer";
 import { CURRENT_WEEK, type AreaKey, type Room, type RoomStatus } from "@/components/status";
+import { uploadAllFourAreasToCloudinary } from "./cloudinary";
 
 const api = axios.create({ baseURL: BASE_URL });
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -136,8 +137,12 @@ export async function submitPhotos(roomCode: string, files: Record<AreaKey, File
 
     // Nếu chạy trên GitHub Pages hoặc khi cổng 8000 chưa bật -> Chạy bộ phân tích điểm ảnh 5S trực tiếp trên 4 ảnh
     if (USE_MOCK) {
-      await wait(1200);
-      const analysis = await analyzeFourRoomPhotos(files);
+      // Tự động upload song song 4 ảnh lên Cloudinary vào thư mục của phòng: ktx5s/{cleanCode}/
+      const cloudUploadPromise = uploadAllFourAreasToCloudinary(files, cleanCode);
+      const analysisPromise = analyzeFourRoomPhotos(files);
+
+      const [cloudUrls, analysis] = await Promise.all([cloudUploadPromise, analysisPromise]);
+
       if (!analysis.isValid) {
         throw new Error(
           analysis.invalidMessage || "Ảnh quá tối hoặc không hợp lệ. Vui lòng chụp lại!"
@@ -145,10 +150,10 @@ export async function submitPhotos(roomCode: string, files: Record<AreaKey, File
       }
 
       const areaImages: Record<AreaKey, string> = {
-        bed: await fileToDataUrl(files.bed),
-        floor: await fileToDataUrl(files.floor),
-        shoes: await fileToDataUrl(files.shoes),
-        desk: await fileToDataUrl(files.desk),
+        bed: cloudUrls.bed || (await fileToDataUrl(files.bed)),
+        floor: cloudUrls.floor || (await fileToDataUrl(files.floor)),
+        shoes: cloudUrls.shoes || (await fileToDataUrl(files.shoes)),
+        desk: cloudUrls.desk || (await fileToDataUrl(files.desk)),
       };
       const submittedAt = new Date().toISOString();
       const subId = `sub_${week}_${cleanCode}`;
