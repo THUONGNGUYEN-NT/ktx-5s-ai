@@ -3,9 +3,8 @@ title KTX 5S AI - Dong goi va day len GitHub Pages
 cd /d "%~dp0ktx5s-frontend"
 
 echo Dang dong goi giao dien web...
-set NEXT_DIST_DIR=.next-build
 set NEXT_BASE_PATH=/ktx-5s-ai
-call npx next build
+call npm run build
 
 if %ERRORLEVEL% NEQ 0 (
   echo Loi khi dong goi!
@@ -13,7 +12,7 @@ if %ERRORLEVEL% NEQ 0 (
   exit /b 1
 )
 
-xcopy /E /Y ".next-build\*" "..\" >nul
+xcopy /E /Y "out\*" "..\" >nul
 type nul > "..\.nojekyll"
 
 cd /d "%~dp0"
