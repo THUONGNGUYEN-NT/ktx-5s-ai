@@ -28,7 +28,6 @@ import {
   verifyOtpAndResetPassword,
   findAccountByIdentifier,
   getAllAccounts,
-  getAllRoomCodes,
 } from "@/lib/user-store";
 
 type SavedAccount = {
@@ -378,33 +377,6 @@ export default function LoginPage() {
           )}
 
           <form onSubmit={submit} className="flex flex-col gap-4 mt-5" autoComplete="on">
-            {mode === "student" && (
-              <div className="bg-blue-50/80 border border-blue-200 rounded p-2.5 text-xs text-gray-700">
-                <label className="block font-semibold text-[#3c8dbc] mb-1.5 flex items-center justify-between">
-                  <span>🏢 Chọn nhanh phòng của bạn (200 phòng KTX):</span>
-                  <span className="text-[10px] text-gray-500 font-normal">Tòa A, B, C, D · 10 Tầng</span>
-                </label>
-                <select
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      setUsername(e.target.value);
-                      setPassword("ktx@123");
-                      setError("");
-                    }
-                  }}
-                  value={getAllRoomCodes().includes(username.toUpperCase()) ? username.toUpperCase() : ""}
-                  className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:border-[#3c8dbc]"
-                >
-                  <option value="">-- Bấm để chọn phòng (hoặc tự nhập bên dưới) --</option>
-                  {getAllRoomCodes().map((r) => (
-                    <option key={r} value={r}>
-                      Phòng {r} (Tòa {r[0]} · Tầng {r.split("-")[1]?.[0] || "1"})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             <div className="relative">
               <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -412,12 +384,8 @@ export default function LoginPage() {
                 autoComplete="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder={
-                  mode === "student"
-                    ? "Nhập mã phòng (VD: A3-301, B2-201, A1-101...) hoặc tên đăng nhập"
-                    : "Tên đăng nhập cán bộ (VD: admin, canbo01)"
-                }
-                className="w-full border border-gray-300 rounded-sm pl-9 pr-3 py-2.5 focus:border-[#3c8dbc] focus:outline-none uppercase"
+                placeholder="Tên đăng nhập (VD: admin, canbo01, sinhvien01)"
+                className="w-full border border-gray-300 rounded-sm pl-9 pr-3 py-2.5 focus:border-[#3c8dbc] focus:outline-none"
               />
             </div>
 
@@ -470,15 +438,16 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Hộp gợi ý tài khoản */}
+          {/* Hộp gợi ý tài khoản demo */}
           <div className="mt-5 pt-4 border-t border-gray-100 text-[11px] text-gray-500">
-            <p className="font-semibold text-gray-700 mb-1">🔑 Tài khoản đăng nhập hệ thống:</p>
+            <p className="font-semibold text-gray-700 mb-1">🔑 Tài khoản thử nghiệm có sẵn:</p>
             <p>
-              • <b>Cán bộ KTX:</b> <code className="bg-gray-100 px-1 py-0.5 rounded">admin</code> (mk: <code>admin123</code>) |{" "}
+              • <b>Cán bộ:</b> <code className="bg-gray-100 px-1 py-0.5 rounded">admin</code> (mk: <code>admin123</code>) |{" "}
               <code className="bg-gray-100 px-1 py-0.5 rounded">canbo01</code> (mk: <code>ktx@2026</code>)
             </p>
-            <p className="mt-1 leading-relaxed">
-              • <b>Sinh viên:</b> Đăng nhập bằng <b>Mã phòng bất kỳ</b> trong 200 phòng KTX (VD: <code className="bg-gray-100 px-1 py-0.5 rounded">A3-301</code>, <code className="bg-gray-100 px-1 py-0.5 rounded">B2-201</code>, <code className="bg-gray-100 px-1 py-0.5 rounded">A1-101</code>, <code className="bg-gray-100 px-1 py-0.5 rounded">B3-301</code>, <code className="bg-gray-100 px-1 py-0.5 rounded">C2-203</code>... mk: <code>ktx@123</code>) hoặc tài khoản mẫu <code className="bg-gray-100 px-1 py-0.5 rounded">sinhvien01</code> (mk: <code>Ktx#9482</code>), <code className="bg-gray-100 px-1 py-0.5 rounded">sinhvien02</code> (mk: <code>Phong@7159</code>).
+            <p className="mt-0.5">
+              • <b>Sinh viên:</b> <code className="bg-gray-100 px-1 py-0.5 rounded">sinhvien01</code> (mk: <code>Ktx#9482</code>) |{" "}
+              <code className="bg-gray-100 px-1 py-0.5 rounded">sinhvien02</code> (mk: <code>Phong@7159</code>)
             </p>
           </div>
         </section>
