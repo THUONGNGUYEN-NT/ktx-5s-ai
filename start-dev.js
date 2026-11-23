@@ -1,4 +1,4 @@
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -11,6 +11,29 @@ console.log('  🚀 HỆ THỐNG KTX 5S AI — ĐANG KHỞI ĐỘNG CẢ 2 HỆ 
 console.log('  🔹 Backend AI:   http://localhost:8000 (Swagger: /docs)');
 console.log('  🔹 Web Frontend: http://localhost:3000');
 console.log('='.repeat(60));
+
+// Giải phóng cổng bị chiếm dụng trước khi khởi động
+function freePort(port) {
+  try {
+    if (process.platform === 'win32') {
+      const out = execSync(`netstat -ano | findstr :${port}`, { stdio: ['pipe', 'pipe', 'ignore'] }).toString();
+      const lines = out.split('\n').filter(l => l.includes('LISTENING'));
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        const pid = parts[parts.length - 1];
+        if (pid && !isNaN(pid) && pid !== '0' && pid !== process.pid.toString()) {
+          console.log(`[Cổng ${port}] Đang giải phóng tiến trình cũ PID ${pid}...`);
+          try {
+            execSync(`taskkill /pid ${pid} /F`, { stdio: 'ignore' });
+          } catch {}
+        }
+      }
+    }
+  } catch {}
+}
+
+freePort(3000);
+freePort(8000);
 
 // 1. Tìm đường dẫn Python môi trường ảo (venv)
 let pythonPath = 'python';

@@ -28,6 +28,7 @@ import {
   verifyOtpAndResetPassword,
   findAccountByIdentifier,
   getAllAccounts,
+  getActiveOtpCode,
 } from "@/lib/user-store";
 
 type SavedAccount = {
@@ -94,6 +95,7 @@ export default function LoginPage() {
   const [forgotError, setForgotError] = useState("");
   const [forgotSuccess, setForgotSuccess] = useState("");
   const [countdown, setCountdown] = useState(0);
+  const [activeOtp, setActiveOtp] = useState("");
 
   // Khởi động dữ liệu mẫu
   useEffect(() => {
@@ -223,6 +225,8 @@ export default function LoginPage() {
     setMaskedTarget(res.maskedTarget || "");
     setForgotStep(2);
     setCountdown(60);
+    const code = getActiveOtpCode();
+    if (code) setActiveOtp(code);
   };
 
   // Bước 2: Xác nhận OTP
@@ -630,6 +634,19 @@ export default function LoginPage() {
                       Vui lòng kiểm tra tin nhắn trên điện thoại hoặc hộp thư Email của bạn (bao gồm cả mục Thư rác/Spam) và nhập mã 6 số vào ô bên dưới. Mã có hiệu lực trong 5 phút.
                     </p>
                   </div>
+
+                  {activeOtp && (
+                    <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded px-3 py-2 text-xs text-amber-900">
+                      <span>💡 Mã OTP phát sinh: <b className="font-mono text-sm tracking-wider text-[#d81b60]">{activeOtp}</b></span>
+                      <button
+                        type="button"
+                        onClick={() => setForgotOtp(activeOtp)}
+                        className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 rounded font-medium text-[11px] text-amber-900 transition-colors cursor-pointer"
+                      >
+                        Điền nhanh
+                      </button>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">

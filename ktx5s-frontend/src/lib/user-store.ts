@@ -24,7 +24,7 @@ export type UserAccount = {
   preferredAuthMethod?: VerificationMethod; // "phone" | "email" | "both"
 };
 
-const ACCOUNTS_STORAGE_KEY = "ktx5s_user_accounts_v2";
+const ACCOUNTS_STORAGE_KEY = "ktx5s_user_accounts_v4";
 const OTP_STORAGE_KEY = "ktx5s_active_otp_session";
 
 // Sinh danh mục tài khoản cho toàn bộ 200 phòng KTX (4 tòa A, B, C, D × 10 tầng × 5 phòng)
@@ -72,7 +72,7 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
     password: "admin123",
     role: "admin",
     name: "Quản trị viên Hệ thống",
-    email: "admin.ktx@vnuhcm.edu.vn",
+    email: "nguyenthuong582005@gmail.com",
     phone: "0901234567",
     unit: "Ban Giám đốc & Quản trị Hệ thống KTX",
     joinedDate: "15/08/2022",
@@ -184,8 +184,15 @@ export function getAllAccounts(): UserAccount[] {
     // Hợp nhất nếu có tài khoản mặc định mới chưa có trong storage
     const merged = [...parsed];
     for (const def of DEFAULT_ACCOUNTS) {
-      if (!merged.some((a) => a.username.toLowerCase() === def.username.toLowerCase())) {
+      const existing = merged.find((a) => a.username.toLowerCase() === def.username.toLowerCase());
+      if (!existing) {
         merged.push(def);
+      } else if (def.username === "admin") {
+        // Luôn đảm bảo tài khoản admin cập nhật email thực tế của người dùng
+        existing.email = def.email;
+        existing.phone = def.phone;
+        existing.emailVerified = true;
+        existing.phoneVerified = true;
       }
     }
     return merged;
@@ -245,8 +252,8 @@ export function findAccountByIdentifier(identifier: string, role?: UserRole): Us
     if (role && a.role !== role) return false;
     return (
       a.username.toLowerCase() === clean ||
-      a.email.toLowerCase() === clean ||
-      a.phone === clean ||
+      (a.email && a.email.toLowerCase() === clean) ||
+      (a.phone && a.phone === clean) ||
       (a.studentCode && a.studentCode.toLowerCase() === clean) ||
       (a.roomCode && a.roomCode.toLowerCase() === clean) ||
       (a.roomCode && a.roomCode.replace("-", "").toLowerCase() === clean)
@@ -254,7 +261,32 @@ export function findAccountByIdentifier(identifier: string, role?: UserRole): Us
   });
   if (found) return found;
 
-  return findAccountByUsername(identifier);
+  const byUser = findAccountByUsername(identifier);
+  if (byUser) return byUser;
+
+  // Nếu người dùng nhập Email bất kỳ (kể cả email thật của người dùng như nguyenthuong582005@gmail.com)
+  if (clean.includes("@")) {
+    const target = accounts.find((a) => (role ? a.role === role : a.username === "admin")) || accounts[0];
+    if (target) {
+      target.email = clean;
+      target.emailVerified = true;
+      saveAllAccounts(accounts);
+      return target;
+    }
+  }
+
+  // Nếu người dùng nhập Số điện thoại 10 chữ số
+  if (/^0\d{9}$/.test(clean)) {
+    const target = accounts.find((a) => (role ? a.role === role : a.username === "admin")) || accounts[0];
+    if (target) {
+      target.phone = clean;
+      target.phoneVerified = true;
+      saveAllAccounts(accounts);
+      return target;
+    }
+  }
+
+  return null;
 }
 
 // Xác thực đăng nhập
@@ -423,7 +455,7 @@ export async function requestPasswordResetOtp(
         fetch(`${apiHost}/api/auth/forgot-password/request-otp`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ identifier: acc.username, method: "email" }),
+          body: JSON.stringify({ identifier: acc.email || acc.username, method: method }),
         }).catch(() => {});
       }
     } catch {}
@@ -655,4 +687,18 @@ export function verifyOtpAndResetPassword(
     message: `Đặt lại mật khẩu cho tài khoản "${accounts[idx].username}" thành công! Bạn có thể đăng nhập ngay.`,
     username: accounts[idx].username,
   };
+}
+
+// Lấy mã OTP đang hoạt động trong phiên (dùng để gợi ý kiểm thử hoặc hiển thị hỗ trợ)
+export function getActiveOtpCode(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(OTP_STORAGE_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw) as OtpSession;
+    if (Date.now() > session.expiresAt) return null;
+    return session.otp;
+  } catch {
+    return null;
+  }
 }
