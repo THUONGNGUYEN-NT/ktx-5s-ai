@@ -120,7 +120,20 @@ const pad = (n: number) => String(n).padStart(2, "0");
 export function generateRooms(week = `2026-W${CURRENT_WEEK}`): Room[] {
   const weekNum = Number(week.split("-W")[1]) || CURRENT_WEEK;
   const isCurrent = weekNum === CURRENT_WEEK;
-  const monday = weekMonday(weekNum).getTime();
+  const monDate = weekMonday(weekNum);
+  const monY = monDate.getUTCFullYear();
+  const monM = pad(monDate.getUTCMonth() + 1);
+  const monD = pad(monDate.getUTCDate());
+
+  // Mốc bắt đầu tuần (07:00 sáng Thứ Hai giờ Việt Nam +07:00)
+  const weekStartMs = new Date(`${monY}-${monM}-${monD}T07:00:00+07:00`).getTime();
+  // Mốc kết thúc tuần (21:00 tối Chủ Nhật giờ Việt Nam +07:00)
+  const weekEndMs = weekStartMs + 6 * 86400000 + 14 * 3600000;
+  // Chặn trên bởi thời gian thực hiện tại (lùi 3 phút so với đồng hồ thực) để không bao giờ sinh ngày/giờ ở tương lai
+  const nowCapMs = Date.now() - 3 * 60 * 1000;
+  const maxAllowedMs = Math.max(weekStartMs + 60 * 1000, Math.min(weekEndMs, nowCapMs));
+  const spanMs = Math.max(60 * 1000, maxAllowedMs - weekStartMs);
+
   const rooms: Room[] = [];
   let i = 0;
   for (const b of BUILDINGS) {
@@ -137,8 +150,10 @@ export function generateRooms(week = `2026-W${CURRENT_WEEK}`): Room[] {
         if (status === "Bừa bộn") score = 1 + (h % 39) / 10;
 
         const code = `${b}${f}-${f}${pad(r)}`;
-        const day = new Date(monday + (h % (isCurrent ? 2 : 7)) * 86400000);
-        const submittedAt = `${day.getUTCFullYear()}-${pad(day.getUTCMonth() + 1)}-${pad(day.getUTCDate())}T${pad(7 + (h % 15))}:${pad((h * 7) % 60)}:00+07:00`;
+        // Phân bổ thời gian nộp ảnh nằm nghiêm ngặt trong khoảng [07:00 Thứ Hai .. Thời điểm thực tế hiện tại]
+        let ts = weekStartMs + Math.floor(((h % 997) / 997) * spanMs);
+        ts = Math.min(ts, maxAllowedMs);
+        const submittedAt = new Date(ts).toISOString();
 
         rooms.push({
           submission_id: status ? `sub_${week}_${code}` : null,

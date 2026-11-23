@@ -7,7 +7,7 @@ import AppShell from "@/components/AppShell";
 import Panel from "@/components/Panel";
 import { getSession } from "@/lib/session";
 import { getRoomHistory } from "@/lib/api";
-import { TILE_STYLES, statusToKey, type RoomStatus } from "@/components/status";
+import { TILE_STYLES, CURRENT_WEEK, weekMonday, statusToKey, type RoomStatus } from "@/components/status";
 
 type HistoryItem = { submission_id: string; week: string; status: RoomStatus; score: number };
 
@@ -34,6 +34,8 @@ export default function StudentHome() {
   }, []);
 
   const latest = history[0];
+  const sun = new Date(weekMonday(CURRENT_WEEK).getTime() + 6 * 86400000);
+  const sunStr = `${String(sun.getUTCDate()).padStart(2, "0")}/${String(sun.getUTCMonth() + 1).padStart(2, "0")}/${sun.getUTCFullYear()}`;
 
   return (
     <AppShell role="student" title="Trang chủ sinh viên" showBack={false}>
@@ -43,7 +45,7 @@ export default function StudentHome() {
           <DoorOpen size={40} className="opacity-40" />
         </div>
         <div className="bg-[#f39c12] text-white rounded-sm p-4 flex items-center justify-between shadow-sm">
-          <div><p className="text-2xl font-bold">21:00 CN</p><p className="text-xs opacity-90">Hạn nộp ảnh tuần 47 (23/11/2026)</p></div>
+          <div><p className="text-2xl font-bold">21:00 CN</p><p className="text-xs opacity-90">Hạn nộp ảnh tuần {CURRENT_WEEK} ({sunStr})</p></div>
           <CalendarDays size={40} className="opacity-40" />
         </div>
         <div className={`${latest ? TILE_STYLES[statusToKey(latest.status)].bg : "bg-gray-400"} text-white rounded-sm p-4 flex items-center justify-between shadow-sm`}>

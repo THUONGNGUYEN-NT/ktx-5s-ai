@@ -98,7 +98,9 @@ export const WEEKS = Array.from({ length: 12 }, (_, i) => {
 });
 
 export function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString("vi-VN", {
+  const parsed = new Date(iso).getTime();
+  const safeMs = Number.isNaN(parsed) ? Date.now() : Math.min(parsed, Date.now());
+  return new Date(safeMs).toLocaleString("vi-VN", {
     hour: "2-digit",
     minute: "2-digit",
     day: "2-digit",
