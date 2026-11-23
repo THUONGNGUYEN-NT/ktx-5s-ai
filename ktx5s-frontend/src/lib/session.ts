@@ -5,9 +5,12 @@ export type UserRole = "student" | "admin";
 
 export type Session = {
   role: UserRole;
+  username?: string;
   roomCode?: string;   // chỉ có khi role = "student"
   studentId?: string;  // chỉ có khi role = "student"
   name?: string;       // tên hiển thị
+  phone?: string;
+  email?: string;
 };
 
 const SESSION_KEY = "ktx5s_session";

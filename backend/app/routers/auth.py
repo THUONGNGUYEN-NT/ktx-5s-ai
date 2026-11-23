@@ -167,3 +167,151 @@ async def get_me(
         },
         "message": "OK",
     }
+
+
+# ============================================================================
+# CÁC API KHÔI PHỤC MẬT KHẨU QUA MÃ OTP (SMS / EMAIL) & ĐỔI MẬT KHẨU
+# ============================================================================
+import random
+import time
+
+ACTIVE_OTPS: dict[str, dict] = {}
+
+
+class ForgotPasswordOtpRequest(BaseModel):
+    identifier: str
+    method: Optional[str] = "phone"  # "phone" | "email"
+
+
+class ForgotPasswordVerifyRequest(BaseModel):
+    identifier: str
+    otp: str
+    new_password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    username: str
+    old_password: str
+    new_password: str
+
+
+class UpdateProfileRequest(BaseModel):
+    username: str
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+
+
+@router.post("/forgot-password/request-otp", summary="Yêu cầu phát sinh mã OTP khôi phục mật khẩu qua SMS/Email")
+async def request_otp(req: ForgotPasswordOtpRequest, db: Session = Depends(get_db)):
+    ident = req.identifier.strip().lower()
+    method = req.method or "phone"
+
+    # Tìm user trong DB hoặc chấp nhận username tài khoản demo
+    user = db.query(User).filter(User.username == ident).first()
+    
+    # Tạo mã OTP 6 số ngẫu nhiên
+    otp_code = str(random.randint(100000, 999999))
+    target_display = f"093****890 (SMS)" if method == "phone" else f"{ident[:2]}****@student.edu.vn"
+
+    ACTIVE_OTPS[ident] = {
+        "otp": otp_code,
+        "method": method,
+        "expires_at": time.time() + 300,  # 5 phút
+    }
+
+    return {
+        "success": True,
+        "message": f"Mã OTP đã được gửi đến {method.upper()}: {target_display}",
+        "data": {
+            "otp_demo": otp_code,
+            "masked_target": target_display,
+            "expires_in_seconds": 300,
+        },
+    }
+
+
+@router.post("/forgot-password/verify-otp", summary="Xác thực OTP và đặt lại mật khẩu mới")
+async def verify_otp_and_reset(req: ForgotPasswordVerifyRequest, db: Session = Depends(get_db)):
+    ident = req.identifier.strip().lower()
+    saved = ACTIVE_OTPS.get(ident)
+
+    if not saved or time.time() > saved["expires_at"]:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "message": "Mã OTP không tồn tại hoặc đã hết hạn (quá 5 phút)."},
+        )
+
+    if saved["otp"] != req.otp.strip():
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "message": "Mã OTP không chính xác. Vui lòng kiểm tra lại!"},
+        )
+
+    if len(req.new_password) < 6:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "message": "Mật khẩu mới phải có ít nhất 6 ký tự."},
+        )
+
+    # Cập nhật DB nếu có user
+    user = db.query(User).filter(User.username == ident).first()
+    if user:
+        user.password_hash = hash_password(req.new_password)
+        db.commit()
+
+    ACTIVE_OTPS.pop(ident, None)
+
+    return {
+        "success": True,
+        "message": "Đặt lại mật khẩu thành công! Bạn có thể đăng nhập ngay bằng mật khẩu mới.",
+    }
+
+
+@router.post("/change-password", summary="Đổi mật khẩu người dùng đang đăng nhập")
+async def change_password(req: ChangePasswordRequest, db: Session = Depends(get_db)):
+    username = req.username.strip().lower()
+    user = db.query(User).filter(User.username == username).first()
+
+    if user and not verify_password(req.old_password, user.password_hash):
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "message": "Mật khẩu hiện tại không chính xác!"},
+        )
+
+    if len(req.new_password) < 6:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "message": "Mật khẩu mới phải có tối thiểu 6 ký tự."},
+        )
+
+    if user:
+        user.password_hash = hash_password(req.new_password)
+        db.commit()
+
+    return {
+        "success": True,
+        "message": "Đổi mật khẩu thành công!",
+    }
+
+
+@router.put("/profile", summary="Cập nhật hồ sơ tài khoản")
+async def update_profile(req: UpdateProfileRequest, db: Session = Depends(get_db)):
+    username = req.username.strip().lower()
+    user = db.query(User).filter(User.username == username).first()
+
+    if user and req.full_name:
+        user.full_name = req.full_name.strip()
+        db.commit()
+
+    return {
+        "success": True,
+        "message": "Cập nhật hồ sơ thành công!",
+        "data": {
+            "username": username,
+            "full_name": req.full_name,
+            "phone": req.phone,
+            "email": req.email,
+        },
+    }
+

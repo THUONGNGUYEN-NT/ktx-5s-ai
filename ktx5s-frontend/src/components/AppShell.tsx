@@ -16,6 +16,8 @@ import {
   History,
   Home,
   ChevronRight,
+  UserCog,
+  UserCheck,
 } from "lucide-react";
 import { getSession, clearSession, type Session, type UserRole } from "@/lib/session";
 
@@ -25,12 +27,14 @@ const MENUS: Record<UserRole, MenuItem[]> = {
   admin: [
     { href: "/admin", label: "Quản lý phòng", icon: LayoutGrid },
     { href: "/admin/stats", label: "Thống kê tuần", icon: BarChart3 },
+    { href: "/admin/profile", label: "Thông tin & Đổi mật khẩu", icon: UserCog },
   ],
   student: [
     { href: "/student", label: "Trang chủ", icon: Home },
     { href: "/student/camera", label: "Nộp ảnh phòng", icon: Camera },
     { href: "/student/result", label: "Kết quả gần nhất", icon: ClipboardCheck },
     { href: "/student/history", label: "Lịch sử đánh giá", icon: History },
+    { href: "/student/profile", label: "Thông tin & Đổi mật khẩu", icon: UserCheck },
   ],
 };
 
@@ -97,11 +101,20 @@ export default function AppShell({
 
         {!collapsed && (
           <div className="flex items-center gap-3 px-4 py-4">
-            <div className="w-11 h-11 rounded-full bg-[#3c8dbc] text-white flex items-center justify-center text-lg font-bold">
+            <Link
+              href={role === "admin" ? "/admin/profile" : "/student/profile"}
+              title="Xem thông tin tài khoản & Đổi mật khẩu"
+              className="w-11 h-11 rounded-full bg-[#3c8dbc] text-white flex items-center justify-center text-lg font-bold shrink-0 hover:ring-2 hover:ring-teal-400 transition-all"
+            >
               {initial}
-            </div>
+            </Link>
             <div className="min-w-0">
-              <p className="text-white font-semibold truncate">{displayName}</p>
+              <Link
+                href={role === "admin" ? "/admin/profile" : "/student/profile"}
+                className="text-white font-semibold truncate hover:text-teal-300 block"
+              >
+                {displayName}
+              </Link>
               <p className="text-[11px] flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-[#00a65a]" /> {subtitle}
               </p>
@@ -170,14 +183,18 @@ export default function AppShell({
               <Bell size={17} />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#dd4b39]" />
             </button>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-[#3c8dbc] flex items-center justify-center font-bold">
+            <Link
+              href={role === "admin" ? "/admin/profile" : "/student/profile"}
+              title="Xem thông tin tài khoản & đổi mật khẩu"
+              className="flex items-center gap-2 hover:opacity-85 transition-opacity"
+            >
+              <div className="w-8 h-8 rounded-full bg-[#3c8dbc] flex items-center justify-center font-bold text-white shadow-xs">
                 {initial}
               </div>
               <span className="hidden md:inline">
                 Xin chào: <b>{displayName}</b>
               </span>
-            </div>
+            </Link>
             <button
               onClick={logout}
               title="Đăng xuất"
