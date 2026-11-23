@@ -5,6 +5,8 @@
 // ============================================================================
 import { UserRole } from "./session";
 
+export type VerificationMethod = "phone" | "email" | "both";
+
 export type UserAccount = {
   username: string;
   password: string;
@@ -17,6 +19,9 @@ export type UserAccount = {
   unit?: string;         // Đơn vị/Tòa nhà phụ trách (dành cho cán bộ)
   major?: string;        // Khoa / Ngành học (dành cho sinh viên)
   joinedDate?: string;
+  phoneVerified?: boolean;
+  emailVerified?: boolean;
+  preferredAuthMethod?: VerificationMethod; // "phone" | "email" | "both"
 };
 
 const ACCOUNTS_STORAGE_KEY = "ktx5s_user_accounts_v2";
@@ -45,6 +50,9 @@ export function generateAllRoomAccounts(): UserAccount[] {
           phone: `09${pad(f)}${pad(r)}8888`,
           major: `Khoa học & Kỹ thuật KTX (Tòa ${b})`,
           joinedDate: "05/09/2024",
+          phoneVerified: false,
+          emailVerified: false,
+          preferredAuthMethod: "phone",
         });
       }
     }
@@ -68,6 +76,9 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
     phone: "0901234567",
     unit: "Ban Giám đốc & Quản trị Hệ thống KTX",
     joinedDate: "15/08/2022",
+    phoneVerified: true,
+    emailVerified: true,
+    preferredAuthMethod: "both",
   },
   {
     username: "canbo01",
@@ -78,6 +89,9 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
     phone: "0912345678",
     unit: "Ban Quản lý Cụm Nhà B (B2, B3, B5)",
     joinedDate: "01/02/2023",
+    phoneVerified: true,
+    emailVerified: true,
+    preferredAuthMethod: "phone",
   },
   {
     username: "canbo_demo",
@@ -88,6 +102,9 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
     phone: "0987654321",
     unit: "Tổ Giám sát Vệ sinh & 5S KTX Khu A",
     joinedDate: "10/05/2024",
+    phoneVerified: false,
+    emailVerified: true,
+    preferredAuthMethod: "email",
   },
   // Sinh viên đại diện mẫu
   {
@@ -101,6 +118,9 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
     phone: "0934567890",
     major: "Khoa học Máy tính - K21 (ĐH Bách Khoa)",
     joinedDate: "05/09/2023",
+    phoneVerified: true,
+    emailVerified: true,
+    preferredAuthMethod: "both",
   },
   {
     username: "sinhvien02",
@@ -113,6 +133,9 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
     phone: "0945678901",
     major: "Công nghệ Thông tin - K21 (ĐH KHTN)",
     joinedDate: "05/09/2023",
+    phoneVerified: true,
+    emailVerified: false,
+    preferredAuthMethod: "phone",
   },
   {
     username: "sv_demo_101",
@@ -125,6 +148,9 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
     phone: "0967890123",
     major: "Kỹ thuật Phần mềm - K22 (ĐH CNTT)",
     joinedDate: "12/09/2024",
+    phoneVerified: false,
+    emailVerified: true,
+    preferredAuthMethod: "email",
   },
   {
     username: "sv_demo_102",
@@ -137,6 +163,9 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
     phone: "0978901234",
     major: "Hệ thống Thông tin - K22 (ĐH Kinh tế - Luật)",
     joinedDate: "12/09/2024",
+    phoneVerified: false,
+    emailVerified: false,
+    preferredAuthMethod: "both",
   },
   // Toàn bộ 200 phòng KTX
   ...generateAllRoomAccounts(),
@@ -288,24 +317,27 @@ export function changeUserPassword(
 }
 
 // ============================================================================
-// HỆ THỐNG XỬ LÝ OTP QUÊN MẬT KHẨU (QUA SMS HOẶC EMAIL)
+// HỆ THỐNG XỬ LÝ OTP, XÁC THỰC SỐ ĐIỆN THOẠI & EMAIL (1 TRONG 2 HOẶC CẢ 2)
 // ============================================================================
 export type OtpSession = {
   username: string;
   otp: string;
-  method: "phone" | "email";
+  method: "phone" | "email" | "both";
   target: string;
+  phoneTarget?: string;
+  emailTarget?: string;
   expiresAt: number;
+  purpose?: "forgot_password" | "verify_contact";
 };
 
 // Làm mờ số điện thoại (VD: 093****890) hoặc email (VD: tu****@student.edu.vn)
-export function maskContact(target: string, method: "phone" | "email"): string {
+export function maskContact(target: string, method: "phone" | "email" | "both"): string {
   if (method === "phone") {
     if (target.length >= 7) {
       return target.slice(0, 3) + "****" + target.slice(-3);
     }
     return target;
-  } else {
+  } else if (method === "email") {
     const parts = target.split("@");
     if (parts.length === 2) {
       const name = parts[0];
@@ -313,13 +345,16 @@ export function maskContact(target: string, method: "phone" | "email"): string {
       return `${maskedName}@${parts[1]}`;
     }
     return target;
+  } else {
+    // Both
+    return target;
   }
 }
 
-// Yêu cầu cấp mã OTP qua SĐT hoặc Email
+// Yêu cầu cấp mã OTP qua SĐT hoặc Email hoặc CẢ HAI
 export async function requestPasswordResetOtp(
   identifier: string,
-  method: "phone" | "email",
+  method: "phone" | "email" | "both",
   role?: UserRole
 ): Promise<{
   success: boolean;
@@ -335,49 +370,214 @@ export async function requestPasswordResetOtp(
     };
   }
 
-  const target = method === "phone" ? acc.phone : acc.email;
-  if (!target) {
+  const phoneTarget = acc.phone;
+  const emailTarget = acc.email;
+
+  if (method === "phone" && !phoneTarget) {
+    return { success: false, message: "Tài khoản chưa đăng ký Số điện thoại." };
+  }
+  if (method === "email" && !emailTarget) {
+    return { success: false, message: "Tài khoản chưa đăng ký Địa chỉ Email." };
+  }
+  if (method === "both" && (!phoneTarget || !emailTarget)) {
     return {
       success: false,
-      message: `Tài khoản chưa đăng ký ${method === "phone" ? "Số điện thoại" : "Địa chỉ Email"}. Hãy chọn phương thức khác.`,
+      message: "Tài khoản cần có đầy đủ cả Số điện thoại và Email để sử dụng chế độ xác thực kép.",
     };
   }
 
   // Sinh mã OTP ngẫu nhiên 6 chữ số
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiresAt = Date.now() + 5 * 60 * 1000; // Có hiệu lực trong 5 phút
+  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 phút
+
+  let displayTarget = "";
+  if (method === "phone") {
+    displayTarget = maskContact(phoneTarget, "phone");
+  } else if (method === "email") {
+    displayTarget = maskContact(emailTarget, "email");
+  } else {
+    displayTarget = `${maskContact(phoneTarget, "phone")} & ${maskContact(emailTarget, "email")}`;
+  }
 
   const session: OtpSession = {
     username: acc.username,
     otp,
     method,
-    target,
+    target: displayTarget,
+    phoneTarget,
+    emailTarget,
     expiresAt,
+    purpose: "forgot_password",
   };
 
   if (typeof window !== "undefined") {
     sessionStorage.setItem(OTP_STORAGE_KEY, JSON.stringify(session));
-    // Log mã xác thực vào Console trình duyệt (F12) để hỗ trợ kiểm thử thực tế
-    console.log(`%c[KTX 5S AI - BẢO MẬT] Mã OTP gửi tới ${target}: ${otp}`, "color: #3c8dbc; font-weight: bold; font-size: 13px;");
+    console.log(`%c[KTX 5S AI - BẢO MẬT] Mã OTP (${method.toUpperCase()}): ${otp}`, "color: #3c8dbc; font-weight: bold; font-size: 13px;");
   }
 
-  // Đồng thời gọi API Backend gửi Email thực tế qua SMTP (nếu backend đang chạy)
-  try {
-    const apiHost = typeof window !== "undefined" && window.location.hostname === "localhost" ? "http://localhost:8000" : "";
-    if (apiHost) {
-      fetch(`${apiHost}/api/auth/forgot-password/request-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier: acc.username, method }),
-      }).catch(() => {});
-    }
-  } catch {}
+  // Gửi Email thực tế qua SMTP backend
+  if (method === "email" || method === "both") {
+    try {
+      const apiHost = typeof window !== "undefined" && window.location.hostname === "localhost" ? "http://localhost:8000" : "";
+      if (apiHost) {
+        fetch(`${apiHost}/api/auth/forgot-password/request-otp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier: acc.username, method: "email" }),
+        }).catch(() => {});
+      }
+    } catch {}
+  }
+
+  const methodLabel =
+    method === "phone"
+      ? "số điện thoại"
+      : method === "email"
+      ? "hòm thư email"
+      : "đồng thời cả số điện thoại và email";
 
   return {
     success: true,
-    message: `Mã OTP đã được gửi đến ${method === "phone" ? "số điện thoại" : "hòm thư email"} ${maskContact(target, method)}.`,
-    maskedTarget: maskContact(target, method),
+    message: `Mã OTP đã được gửi đến ${methodLabel} (${displayTarget}).`,
+    maskedTarget: displayTarget,
     account: acc,
+  };
+}
+
+// Yêu cầu phát sinh mã OTP để xác thực Số điện thoại / Email chính chủ
+export async function requestContactVerificationOtp(
+  username: string,
+  method: VerificationMethod
+): Promise<{ success: boolean; message: string; maskedTarget?: string }> {
+  const acc = findAccountByUsername(username);
+  if (!acc) return { success: false, message: "Không tìm thấy tài khoản người dùng." };
+
+  const phoneTarget = acc.phone;
+  const emailTarget = acc.email;
+
+  if (method === "phone" && !phoneTarget) {
+    return { success: false, message: "Vui lòng cập nhật số điện thoại trước khi xác thực." };
+  }
+  if (method === "email" && !emailTarget) {
+    return { success: false, message: "Vui lòng cập nhật email trước khi xác thực." };
+  }
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = Date.now() + 5 * 60 * 1000;
+
+  const displayTarget =
+    method === "phone"
+      ? maskContact(phoneTarget, "phone")
+      : method === "email"
+      ? maskContact(emailTarget, "email")
+      : `${maskContact(phoneTarget, "phone")} & ${maskContact(emailTarget, "email")}`;
+
+  const session: OtpSession = {
+    username: acc.username,
+    otp,
+    method,
+    target: displayTarget,
+    phoneTarget,
+    emailTarget,
+    expiresAt,
+    purpose: "verify_contact",
+  };
+
+  if (typeof window !== "undefined") {
+    sessionStorage.setItem(OTP_STORAGE_KEY, JSON.stringify(session));
+    console.log(`%c[KTX 5S AI - XÁC THỰC ${method.toUpperCase()}] Mã OTP: ${otp}`, "color: #00a65a; font-weight: bold; font-size: 13px;");
+  }
+
+  if (method === "email" || method === "both") {
+    try {
+      const apiHost = typeof window !== "undefined" && window.location.hostname === "localhost" ? "http://localhost:8000" : "";
+      if (apiHost) {
+        fetch(`${apiHost}/api/auth/forgot-password/request-otp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier: acc.username, method: "email" }),
+        }).catch(() => {});
+      }
+    } catch {}
+  }
+
+  return {
+    success: true,
+    message: `Đã gửi mã xác thực OTP tới ${displayTarget}. Vui lòng nhập mã để hoàn tất.`,
+    maskedTarget: displayTarget,
+  };
+}
+
+// Xác nhận mã OTP và đánh dấu Đã xác thực
+export function confirmContactVerification(
+  username: string,
+  otp: string,
+  method: VerificationMethod
+): { success: boolean; message: string; updated?: UserAccount } {
+  const check = checkOtpValid(otp);
+  if (!check.valid) {
+    return { success: false, message: check.message };
+  }
+
+  const accounts = getAllAccounts();
+  const idx = accounts.findIndex((a) => a.username.toLowerCase() === username.toLowerCase());
+  if (idx === -1) {
+    return { success: false, message: "Không tìm thấy tài khoản để xác thực." };
+  }
+
+  const updates: Partial<UserAccount> = {};
+  if (method === "phone" || method === "both") updates.phoneVerified = true;
+  if (method === "email" || method === "both") updates.emailVerified = true;
+
+  accounts[idx] = {
+    ...accounts[idx],
+    ...updates,
+  };
+
+  saveAllAccounts(accounts);
+  if (typeof window !== "undefined") {
+    sessionStorage.removeItem(OTP_STORAGE_KEY);
+  }
+
+  const label =
+    method === "phone"
+      ? "Số điện thoại"
+      : method === "email"
+      ? "Hòm thư Email"
+      : "Số điện thoại và Email";
+
+  return {
+    success: true,
+    message: `Xác thực ${label} thành công! Kênh liên lạc đã được chứng thực.`,
+    updated: accounts[idx],
+  };
+}
+
+// Cập nhật phương thức xác thực bảo mật ưu tiên (chọn 1 trong 2 hoặc cả 2)
+export function updateAuthPreferences(
+  username: string,
+  preferredMethod: VerificationMethod
+): { success: boolean; message: string; updated?: UserAccount } {
+  const accounts = getAllAccounts();
+  const idx = accounts.findIndex((a) => a.username.toLowerCase() === username.toLowerCase());
+  if (idx === -1) {
+    return { success: false, message: "Không tìm thấy tài khoản người dùng." };
+  }
+
+  accounts[idx].preferredAuthMethod = preferredMethod;
+  saveAllAccounts(accounts);
+
+  const desc =
+    preferredMethod === "phone"
+      ? "Chỉ xác thực qua Số điện thoại (SMS OTP)"
+      : preferredMethod === "email"
+      ? "Chỉ xác thực qua Hòm thư Email (Email OTP)"
+      : "Bắt buộc xác thực CẢ HAI (SMS & Email)";
+
+  return {
+    success: true,
+    message: `Đã lưu cài đặt phương thức xác thực: ${desc}.`,
+    updated: accounts[idx],
   };
 }
 

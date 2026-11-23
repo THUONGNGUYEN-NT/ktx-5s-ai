@@ -22,7 +22,11 @@ import {
   updateUserProfile,
   changeUserPassword,
   requestPasswordResetOtp,
+  requestContactVerificationOtp,
+  confirmContactVerification,
+  updateAuthPreferences,
   type UserAccount,
+  type VerificationMethod,
 } from "@/lib/user-store";
 
 export default function UserProfileView({ role }: { role: UserRole }) {
@@ -42,6 +46,16 @@ export default function UserProfileView({ role }: { role: UserRole }) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordMessage, setPasswordMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Lựa chọn phương thức xác thực bảo mật (1 trong 2 hoặc cả 2)
+  const [preferredMethod, setPreferredMethod] = useState<VerificationMethod>("phone");
+  const [prefMessage, setPrefMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Tiến trình xác thực Số điện thoại / Email qua OTP
+  const [verifyingTarget, setVerifyingTarget] = useState<VerificationMethod | null>(null);
+  const [verifyOtpInput, setVerifyOtpInput] = useState("");
+  const [verifyStatusMessage, setVerifyStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [isSendingVerifyOtp, setIsSendingVerifyOtp] = useState(false);
 
   // Kiểm tra gửi mã OTP xác thực thực tế
   const [otpTestStatus, setOtpTestStatus] = useState<string>("");
@@ -69,6 +83,7 @@ export default function UserProfileView({ role }: { role: UserRole }) {
     setEmail(acc.email);
     setUnit(acc.unit || "");
     setMajor(acc.major || "");
+    setPreferredMethod(acc.preferredAuthMethod || "phone");
   };
 
   // Lưu thông tin cá nhân
@@ -147,13 +162,79 @@ export default function UserProfileView({ role }: { role: UserRole }) {
     }
   };
 
+  // Bắt đầu quy trình xác thực SĐT hoặc Email
+  const handleStartVerify = async (method: VerificationMethod) => {
+    if (!account) return;
+    setVerifyStatusMessage(null);
+    setVerifyOtpInput("");
+    setIsSendingVerifyOtp(true);
+    setVerifyingTarget(method);
+
+    const res = await requestContactVerificationOtp(account.username, method);
+    setIsSendingVerifyOtp(false);
+    if (res.success) {
+      setVerifyStatusMessage({
+        type: "success",
+        text: res.message,
+      });
+    } else {
+      setVerifyStatusMessage({
+        type: "error",
+        text: res.message,
+      });
+      setVerifyingTarget(null);
+    }
+  };
+
+  // Xác nhận mã OTP để hoàn tất xác thực
+  const handleConfirmVerify = () => {
+    if (!account || !verifyingTarget) return;
+    setVerifyStatusMessage(null);
+
+    const cleanOtp = verifyOtpInput.trim();
+    if (!cleanOtp) {
+      setVerifyStatusMessage({ type: "error", text: "Vui lòng nhập mã OTP gồm 6 chữ số." });
+      return;
+    }
+
+    const res = confirmContactVerification(account.username, cleanOtp, verifyingTarget);
+    if (res.success && res.updated) {
+      setAccount(res.updated);
+      setVerifyStatusMessage({ type: "success", text: res.message });
+      setVerifyingTarget(null);
+      setVerifyOtpInput("");
+    } else {
+      setVerifyStatusMessage({ type: "error", text: res.message });
+    }
+  };
+
+  // Lưu lựa chọn phương thức xác thực bảo mật
+  const handleSavePreferences = () => {
+    if (!account) return;
+    setPrefMessage(null);
+
+    const res = updateAuthPreferences(account.username, preferredMethod);
+    if (res.success && res.updated) {
+      setAccount(res.updated);
+      setPrefMessage({ type: "success", text: res.message });
+    } else {
+      setPrefMessage({ type: "error", text: res.message });
+    }
+  };
+
   // Kiểm tra gửi OTP thực tế
-  const handleTestOtp = async (method: "phone" | "email") => {
+  const handleTestOtp = async (method: VerificationMethod) => {
     if (!account) return;
     setOtpTestStatus("Đang gửi mã xác thực OTP thực tế...");
     const res = await requestPasswordResetOtp(account.username, method);
     if (res.success) {
-      setOtpTestStatus(`✅ Đã gửi mã OTP thực tế tới ${method === "phone" ? "SMS số điện thoại" : "hòm thư Email"}: ${res.maskedTarget}. Vui lòng kiểm tra hộp thư hoặc tin nhắn của bạn.`);
+      const targetLabel =
+        method === "phone"
+          ? "SMS số điện thoại"
+          : method === "email"
+          ? "hòm thư Email"
+          : "CẢ HAI kênh (SMS & Email)";
+      setOtpTestStatus(`✅ Đã gửi mã OTP thực tế tới ${targetLabel}: ${res.maskedTarget}. Vui lòng kiểm tra tin nhắn/hộp thư.`);
     } else {
       setOtpTestStatus(`❌ ${res.message}`);
     }
@@ -508,63 +589,299 @@ export default function UserProfileView({ role }: { role: UserRole }) {
             </div>
           )}
 
-          {/* TAB 3: BẢO MẬT & OTP KHÔI PHỤC */}
+          {/* TAB 3: XÁC THỰC SỐ ĐIỆN THOẠI, EMAIL & PHƯƠNG THỨC BẢO MẬT */}
           {activeTab === "security" && (
             <div className="bg-white rounded border border-gray-200 p-6 shadow-sm space-y-6">
               <div className="border-b border-gray-200 pb-3">
-                <h2 className="text-base font-bold text-gray-800">Cấu hình Khôi phục & Nhận mã OTP</h2>
+                <h2 className="text-base font-bold text-gray-800">Xác thực Liên hệ & Phương thức Bảo mật OTP</h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Thử nghiệm và kiểm tra kênh nhận mã OTP khi bạn thực hiện chức năng Quên mật khẩu
+                  Xác thực chứng thực chính chủ Số điện thoại, Email và tùy chọn phương thức nhận mã OTP (1 trong 2 hoặc cả hai).
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                <div className="border border-gray-200 rounded p-4 bg-gray-50/70">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-gray-800 flex items-center gap-1.5">
-                      <Phone size={15} className="text-[#3c8dbc]" /> Kênh SMS Số điện thoại
-                    </span>
-                    <span className="text-emerald-700 bg-emerald-100 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                      Sẵn sàng
-                    </span>
+              {/* 1. TRẠNG THÁI XÁC THỰC SĐT & EMAIL */}
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 flex items-center gap-1.5">
+                  <ShieldCheck size={16} className="text-[#3c8dbc]" />
+                  1. Trạng thái chứng thực liên hệ
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  {/* SỐ ĐIỆN THOẠI */}
+                  <div className={`border rounded p-4 transition-all ${account.phoneVerified ? "border-emerald-200 bg-emerald-50/40" : "border-amber-200 bg-amber-50/40"}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-gray-800 flex items-center gap-1.5">
+                        <Phone size={15} className="text-[#3c8dbc]" /> Số điện thoại
+                      </span>
+                      {account.phoneVerified ? (
+                        <span className="text-emerald-700 bg-emerald-100 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <CheckCircle2 size={12} /> Đã xác thực
+                        </span>
+                      ) : (
+                        <span className="text-amber-800 bg-amber-100 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <AlertCircle size={12} /> Chưa xác thực
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-gray-600 mb-3">
+                      Số đăng ký: <span className="font-mono font-bold text-gray-900">{account.phone || "Chưa có"}</span>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleStartVerify("phone")}
+                      disabled={isSendingVerifyOtp}
+                      className={`w-full py-1.5 px-3 rounded text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 ${
+                        account.phoneVerified
+                          ? "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                          : "bg-[#3c8dbc] hover:bg-[#367fa9] text-white border-transparent shadow-xs"
+                      }`}
+                    >
+                      <Send size={13} /> {account.phoneVerified ? "Xác thực lại qua SMS" : "Xác thực số điện thoại ngay"}
+                    </button>
                   </div>
-                  <p className="text-gray-600 mb-3">
-                    Số đăng ký: <span className="font-mono font-bold text-gray-900">{account.phone}</span>
-                  </p>
-                  <button
-                    onClick={() => handleTestOtp("phone")}
-                    className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-semibold rounded transition-colors"
-                  >
-                    <Send size={13} /> Gửi thử OTP qua SMS
-                  </button>
+
+                  {/* HÒM THƯ EMAIL */}
+                  <div className={`border rounded p-4 transition-all ${account.emailVerified ? "border-emerald-200 bg-emerald-50/40" : "border-amber-200 bg-amber-50/40"}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-gray-800 flex items-center gap-1.5">
+                        <Mail size={15} className="text-[#3c8dbc]" /> Hòm thư Email
+                      </span>
+                      {account.emailVerified ? (
+                        <span className="text-emerald-700 bg-emerald-100 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <CheckCircle2 size={12} /> Đã xác thực
+                        </span>
+                      ) : (
+                        <span className="text-amber-800 bg-amber-100 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <AlertCircle size={12} /> Chưa xác thực
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-gray-600 mb-3 truncate">
+                      Email đăng ký: <span className="font-mono font-bold text-gray-900">{account.email || "Chưa có"}</span>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleStartVerify("email")}
+                      disabled={isSendingVerifyOtp}
+                      className={`w-full py-1.5 px-3 rounded text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 ${
+                        account.emailVerified
+                          ? "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                          : "bg-[#00a65a] hover:bg-[#008d4c] text-white border-transparent shadow-xs"
+                      }`}
+                    >
+                      <Send size={13} /> {account.emailVerified ? "Xác thực lại qua Email" : "Xác thực Email ngay"}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="border border-gray-200 rounded p-4 bg-gray-50/70">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-gray-800 flex items-center gap-1.5">
-                      <Mail size={15} className="text-[#3c8dbc]" /> Kênh Hòm thư Email
-                    </span>
-                    <span className="text-emerald-700 bg-emerald-100 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                      Sẵn sàng
-                    </span>
+                {/* KHUNG NHẬP MÃ OTP KHI BẤM XÁC THỰC */}
+                {verifyingTarget && (
+                  <div className="mt-4 border-2 border-[#3c8dbc] bg-blue-50/60 rounded p-4 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-bold text-gray-800 text-xs flex items-center gap-1.5">
+                        <KeyRound size={15} className="text-[#3c8dbc]" />
+                        Nhập mã OTP xác thực {verifyingTarget === "phone" ? "Số điện thoại" : verifyingTarget === "email" ? "Email" : "cả hai kênh"}
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setVerifyingTarget(null)}
+                        className="text-gray-500 hover:text-gray-700 text-xs underline"
+                      >
+                        Đóng
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] text-gray-600 mb-3">
+                      Hệ thống đã gửi mã OTP gồm 6 chữ số. Vui lòng nhập mã vào ô bên dưới để hoàn tất chứng thực:
+                    </p>
+
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="text"
+                        maxLength={6}
+                        value={verifyOtpInput}
+                        onChange={(e) => setVerifyOtpInput(e.target.value.replace(/[^0-9]/g, ""))}
+                        placeholder="Nhập 6 số OTP"
+                        className="w-40 border border-gray-300 rounded px-3 py-1.5 text-center font-mono font-bold text-base tracking-widest bg-white focus:outline-none focus:border-[#3c8dbc]"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={handleConfirmVerify}
+                        className="px-4 py-2 bg-[#00a65a] hover:bg-[#008d4c] text-white text-xs font-semibold rounded shadow-sm flex items-center gap-1.5"
+                      >
+                        <CheckCircle2 size={14} /> Hoàn tất xác thực
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-gray-600 mb-3 truncate">
-                    Email đăng ký: <span className="font-mono font-bold text-gray-900">{account.email}</span>
-                  </p>
-                  <button
-                    onClick={() => handleTestOtp("email")}
-                    className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-semibold rounded transition-colors"
+                )}
+
+                {verifyStatusMessage && (
+                  <div className={`mt-3 p-3 rounded text-xs flex items-center gap-2 ${
+                    verifyStatusMessage.type === "success" ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-red-50 border border-red-200 text-red-700"
+                  }`}>
+                    {verifyStatusMessage.type === "success" ? <CheckCircle2 size={15} className="shrink-0 text-emerald-600" /> : <AlertCircle size={15} className="shrink-0 text-red-600" />}
+                    <span>{verifyStatusMessage.text}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. LỰA CHỌN PHƯƠNG THỨC XÁC THỰC BẢO MẬT (1 TRONG 2 HOẶC CẢ 2) */}
+              <div className="pt-4 border-t border-gray-200">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-1 flex items-center gap-1.5">
+                  <Sparkles size={16} className="text-[#f39c12]" />
+                  2. Cài đặt Phương thức Xác thực Bảo mật & Khôi phục
+                </h3>
+                <p className="text-[11px] text-gray-500 mb-4">
+                  Bạn có toàn quyền lựa chọn kênh nhận mã OTP khi khôi phục tài khoản, đổi mật khẩu hoặc bảo mật:
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                  {/* OPTION 1: CHỈ QUA SỐ ĐIỆN THOẠI */}
+                  <label
+                    onClick={() => setPreferredMethod("phone")}
+                    className={`border rounded p-3.5 cursor-pointer flex flex-col justify-between transition-all ${
+                      preferredMethod === "phone"
+                        ? "border-[#3c8dbc] bg-blue-50/70 ring-2 ring-[#3c8dbc]/30"
+                        : "border-gray-200 bg-white hover:bg-gray-50"
+                    }`}
                   >
-                    <Send size={13} /> Gửi thử OTP qua Email
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="font-bold text-gray-800 flex items-center gap-1.5">
+                          <Phone size={15} className="text-[#3c8dbc]" /> Chỉ Số điện thoại
+                        </span>
+                        <input
+                          type="radio"
+                          name="authMethod"
+                          checked={preferredMethod === "phone"}
+                          onChange={() => setPreferredMethod("phone")}
+                          className="text-[#3c8dbc] focus:ring-[#3c8dbc]"
+                        />
+                      </div>
+                      <p className="text-[11px] text-gray-500 leading-relaxed">
+                        Chỉ gửi mã OTP qua tin nhắn SMS tới số điện thoại. Tiện lợi, nhận mã nhanh chóng qua di động.
+                      </p>
+                    </div>
+                    <span className="mt-3 text-[10px] text-gray-400 font-medium">1 trong 2 kênh</span>
+                  </label>
+
+                  {/* OPTION 2: CHỈ QUA EMAIL */}
+                  <label
+                    onClick={() => setPreferredMethod("email")}
+                    className={`border rounded p-3.5 cursor-pointer flex flex-col justify-between transition-all ${
+                      preferredMethod === "email"
+                        ? "border-[#3c8dbc] bg-blue-50/70 ring-2 ring-[#3c8dbc]/30"
+                        : "border-gray-200 bg-white hover:bg-gray-50"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="font-bold text-gray-800 flex items-center gap-1.5">
+                          <Mail size={15} className="text-[#3c8dbc]" /> Chỉ Hòm thư Email
+                        </span>
+                        <input
+                          type="radio"
+                          name="authMethod"
+                          checked={preferredMethod === "email"}
+                          onChange={() => setPreferredMethod("email")}
+                          className="text-[#3c8dbc] focus:ring-[#3c8dbc]"
+                        />
+                      </div>
+                      <p className="text-[11px] text-gray-500 leading-relaxed">
+                        Chỉ gửi mã OTP qua Email. Phù hợp khi làm việc trên laptop hoặc sử dụng email trường học.
+                      </p>
+                    </div>
+                    <span className="mt-3 text-[10px] text-gray-400 font-medium">1 trong 2 kênh</span>
+                  </label>
+
+                  {/* OPTION 3: BẮT BUỘC CẢ HAI */}
+                  <label
+                    onClick={() => setPreferredMethod("both")}
+                    className={`border rounded p-3.5 cursor-pointer flex flex-col justify-between transition-all ${
+                      preferredMethod === "both"
+                        ? "border-emerald-600 bg-emerald-50/70 ring-2 ring-emerald-500/30"
+                        : "border-gray-200 bg-white hover:bg-gray-50"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="font-bold text-emerald-900 flex items-center gap-1.5">
+                          <ShieldCheck size={16} className="text-emerald-600" /> Bắt buộc CẢ HAI
+                        </span>
+                        <input
+                          type="radio"
+                          name="authMethod"
+                          checked={preferredMethod === "both"}
+                          onChange={() => setPreferredMethod("both")}
+                          className="text-emerald-600 focus:ring-emerald-500"
+                        />
+                      </div>
+                      <p className="text-[11px] text-gray-600 leading-relaxed">
+                        Bảo mật 2 lớp kép (SMS + Email): Hệ thống sẽ gửi OTP đồng thời tới cả 2 kênh để bảo vệ tối đa.
+                      </p>
+                    </div>
+                    <span className="mt-3 text-[10px] text-emerald-700 font-bold">Khuyên dùng cho tài khoản chính</span>
+                  </label>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={handleSavePreferences}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-[#3c8dbc] hover:bg-[#367fa9] text-white font-semibold rounded text-xs shadow-sm transition-colors"
+                  >
+                    <Save size={14} /> Lưu tùy chọn phương thức xác thực
                   </button>
+
+                  {prefMessage && (
+                    <span className={`text-xs font-semibold ${prefMessage.type === "success" ? "text-emerald-600" : "text-red-600"}`}>
+                      {prefMessage.text}
+                    </span>
+                  )}
                 </div>
               </div>
 
-              {otpTestStatus && (
-                <div className="bg-sky-50 border border-sky-200 rounded p-4 text-xs text-sky-950">
-                  <p className="font-semibold text-sky-900 leading-relaxed">{otpTestStatus}</p>
+              {/* 3. THỬ NGHIỆM GỬI MÃ OTP THỰC TẾ */}
+              <div className="pt-4 border-t border-gray-200">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-1 flex items-center gap-1.5">
+                  <Send size={15} className="text-[#3c8dbc]" />
+                  3. Thử nghiệm gửi mã OTP theo từng kênh
+                </h3>
+                <p className="text-[11px] text-gray-500 mb-3">
+                  Bấm để kiểm tra tính năng gửi mã OTP thực tế theo các tùy chọn đã thiết lập:
+                </p>
+
+                <div className="flex flex-wrap gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => handleTestOtp("phone")}
+                    className="flex items-center gap-1.5 py-1.5 px-3 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-medium text-xs rounded transition-colors"
+                  >
+                    <Phone size={13} className="text-[#3c8dbc]" /> Gửi thử qua SMS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTestOtp("email")}
+                    className="flex items-center gap-1.5 py-1.5 px-3 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-medium text-xs rounded transition-colors"
+                  >
+                    <Mail size={13} className="text-[#3c8dbc]" /> Gửi thử qua Email
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTestOtp("both")}
+                    className="flex items-center gap-1.5 py-1.5 px-3 bg-emerald-50 border border-emerald-300 hover:bg-emerald-100 text-emerald-800 font-semibold text-xs rounded transition-colors"
+                  >
+                    <ShieldCheck size={14} className="text-emerald-600" /> Gửi thử CẢ HAI kênh (SMS + Email)
+                  </button>
                 </div>
-              )}
+
+                {otpTestStatus && (
+                  <div className="mt-3 bg-sky-50 border border-sky-200 rounded p-3 text-xs text-sky-950">
+                    <p className="font-semibold text-sky-900 leading-relaxed">{otpTestStatus}</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
