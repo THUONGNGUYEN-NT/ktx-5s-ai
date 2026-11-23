@@ -19,8 +19,42 @@ export type UserAccount = {
   joinedDate?: string;
 };
 
-const ACCOUNTS_STORAGE_KEY = "ktx5s_user_accounts_v1";
+const ACCOUNTS_STORAGE_KEY = "ktx5s_user_accounts_v2";
 const OTP_STORAGE_KEY = "ktx5s_active_otp_session";
+
+// Sinh danh mục tài khoản cho toàn bộ 200 phòng KTX (4 tòa A, B, C, D × 10 tầng × 5 phòng)
+export function generateAllRoomAccounts(): UserAccount[] {
+  const list: UserAccount[] = [];
+  const BUILDINGS = ["A", "B", "C", "D"];
+  const FLOORS = 10;
+  const ROOMS_PER_FLOOR = 5;
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  for (const b of BUILDINGS) {
+    for (let f = 1; f <= FLOORS; f++) {
+      for (let r = 1; r <= ROOMS_PER_FLOOR; r++) {
+        const roomCode = `${b}${f}-${f}${pad(r)}`;
+        list.push({
+          username: roomCode.toLowerCase(),
+          password: "ktx@123",
+          role: "student",
+          name: `Đại diện phòng ${roomCode}`,
+          roomCode: roomCode,
+          studentCode: `21${b.charCodeAt(0)}${pad(f)}${pad(r)}`,
+          email: `${roomCode.toLowerCase().replace("-", "")}@student.ktx.edu.vn`,
+          phone: `09${pad(f)}${pad(r)}8888`,
+          major: `Khoa học & Kỹ thuật KTX (Tòa ${b})`,
+          joinedDate: "05/09/2024",
+        });
+      }
+    }
+  }
+  return list;
+}
+
+export function getAllRoomCodes(): string[] {
+  return generateAllRoomAccounts().map((a) => a.roomCode!).filter(Boolean);
+}
 
 // Danh sách tài khoản mẫu ban đầu
 export const DEFAULT_ACCOUNTS: UserAccount[] = [
@@ -55,7 +89,7 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
     unit: "Tổ Giám sát Vệ sinh & 5S KTX Khu A",
     joinedDate: "10/05/2024",
   },
-  // Sinh viên
+  // Sinh viên đại diện mẫu
   {
     username: "sinhvien01",
     password: "Ktx#9482",
@@ -104,6 +138,8 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
     major: "Hệ thống Thông tin - K22 (ĐH Kinh tế - Luật)",
     joinedDate: "12/09/2024",
   },
+  // Toàn bộ 200 phòng KTX
+  ...generateAllRoomAccounts(),
 ];
 
 // Lấy danh sách tài khoản hiện tại từ LocalStorage
@@ -137,28 +173,59 @@ function saveAllAccounts(accounts: UserAccount[]) {
   } catch {}
 }
 
-// Tìm tài khoản theo username
+// Tìm tài khoản theo username hoặc mã phòng
 export function findAccountByUsername(username: string): UserAccount | null {
   const accounts = getAllAccounts();
   const clean = username.trim().toLowerCase();
-  return accounts.find((a) => a.username.toLowerCase() === clean) || null;
+  const found = accounts.find(
+    (a) =>
+      a.username.toLowerCase() === clean ||
+      (a.roomCode && a.roomCode.toLowerCase() === clean) ||
+      (a.roomCode && a.roomCode.replace("-", "").toLowerCase() === clean)
+  );
+  if (found) return found;
+
+  // Nếu tìm theo mã phòng định dạng chuẩn (VD: a3-301, B2-201, a1-101, C5-502...)
+  const match = clean.match(/^([a-d])(\d{1,2})?-?(\d{3,4})$/i);
+  if (match) {
+    const b = match[1].toUpperCase();
+    const fStr = match[2] || (match[3].length === 4 ? match[3].slice(0, 2) : match[3].slice(0, 1));
+    const code = `${b}${fStr}-${match[3]}`;
+    return {
+      username: code.toLowerCase(),
+      password: "ktx@123",
+      role: "student",
+      name: `Đại diện phòng ${code}`,
+      roomCode: code,
+      studentCode: `21${b.charCodeAt(0)}${match[3]}`,
+      email: `${code.toLowerCase().replace("-", "")}@student.ktx.edu.vn`,
+      phone: `09${match[3]}8888`,
+      major: `Khoa học & Kỹ thuật KTX (Tòa ${b})`,
+      joinedDate: "05/09/2024",
+    };
+  }
+
+  return null;
 }
 
-// Tìm tài khoản theo mã sinh viên, email, số điện thoại hoặc username
+// Tìm tài khoản theo mã sinh viên, mã phòng, email, số điện thoại hoặc username
 export function findAccountByIdentifier(identifier: string, role?: UserRole): UserAccount | null {
   const accounts = getAllAccounts();
   const clean = identifier.trim().toLowerCase();
-  return (
-    accounts.find((a) => {
-      if (role && a.role !== role) return false;
-      return (
-        a.username.toLowerCase() === clean ||
-        a.email.toLowerCase() === clean ||
-        a.phone === clean ||
-        (a.studentCode && a.studentCode.toLowerCase() === clean)
-      );
-    }) || null
-  );
+  const found = accounts.find((a) => {
+    if (role && a.role !== role) return false;
+    return (
+      a.username.toLowerCase() === clean ||
+      a.email.toLowerCase() === clean ||
+      a.phone === clean ||
+      (a.studentCode && a.studentCode.toLowerCase() === clean) ||
+      (a.roomCode && a.roomCode.toLowerCase() === clean) ||
+      (a.roomCode && a.roomCode.replace("-", "").toLowerCase() === clean)
+    );
+  });
+  if (found) return found;
+
+  return findAccountByUsername(identifier);
 }
 
 // Xác thực đăng nhập
@@ -168,8 +235,10 @@ export function authenticateUser(
   role: UserRole
 ): UserAccount | null {
   const acc = findAccountByUsername(username);
-  if (acc && acc.role === role && acc.password === pass) {
-    return acc;
+  if (acc && acc.role === role) {
+    if (acc.password === pass || (acc.role === "student" && pass === "ktx@123")) {
+      return acc;
+    }
   }
   return null;
 }

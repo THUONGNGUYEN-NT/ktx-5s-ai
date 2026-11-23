@@ -60,12 +60,50 @@ app.include_router(admin.router,       prefix="/api/admin", tags=["Admin — Cá
 
 
 # =============================================
-# Tạo bảng trong DB khi khởi động (nếu chưa có)
+# Tạo bảng và Khởi tạo đầy đủ 200 phòng KTX khi khởi động
 # =============================================
 @app.on_event("startup")
 async def startup():
     try:
         Base.metadata.create_all(bind=engine)
+        from app.database import SessionLocal
+        from app.models import Room, Student, User
+        from app.services.auth_service import hash_password
+
+        with SessionLocal() as db:
+            room_count = db.query(Room).count()
+            if room_count < 200:
+                print(f"📦 Đang khởi tạo danh mục đầy đủ 200 phòng KTX (4 tòa A-D × 10 tầng)...")
+                buildings = ["A", "B", "C", "D"]
+                floors = 10
+                rooms_per_floor = 5
+
+                for b in buildings:
+                    for f in range(1, floors + 1):
+                        for r in range(1, rooms_per_floor + 1):
+                            code = f"{b}{f}-{f}{r:02d}"
+                            exists = db.query(Room).filter(Room.room_code == code).first()
+                            if not exists:
+                                room = Room(
+                                    room_code=code,
+                                    building=b,
+                                    floor=f,
+                                    room_number=f"{f}{r:02d}",
+                                    capacity=4 if (f + r) % 2 == 0 else 6,
+                                    is_active=True,
+                                )
+                                db.add(room)
+                                db.flush()
+                                student = Student(
+                                    student_code=f"sv_{code.lower().replace('-', '_')}",
+                                    full_name=f"Sinh viên phòng {code}",
+                                    room_id=room.id,
+                                    phone=f"09{f:02d}{r:02d}8888",
+                                    is_active=True,
+                                )
+                                db.add(student)
+                db.commit()
+                print(f"✅ Đã khởi tạo thành công 200 phòng KTX vào cơ sở dữ liệu!")
     except Exception as e:
         print(f"⚠️ Warning startup: {e}")
     print(f"✅ {settings.APP_NAME} v{settings.APP_VERSION} đang chạy!")
