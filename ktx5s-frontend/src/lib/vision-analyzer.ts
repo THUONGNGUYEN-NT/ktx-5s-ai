@@ -290,6 +290,7 @@ export async function analyzeFourRoomPhotos(
     desk: "Ảnh 4 (Bàn học)",
   };
 
+  const dupPairs: string[] = [];
   for (let i = 0; i < keys.length; i++) {
     for (let j = i + 1; j < keys.length; j++) {
       const k1 = keys[i];
@@ -310,21 +311,26 @@ export async function analyzeFourRoomPhotos(
       }
 
       if (sameFile || avgPixelDiff < 14.0) {
-        const dupMsg = `Phát hiện gian lận: Bạn đã nộp cùng một bức ảnh cho ${labels[k1]} và ${labels[k2]}! Quy định KTX 5S ĐHQG-HCM bắt buộc phải chụp riêng biệt 4 khu vực: Giường ngủ, Sàn nhà, Kệ giày dép và Bàn học.`;
-        return {
-          isValid: true,
-          aiResult: {
-            status: "Không hợp lệ (Gian lận)",
-            score: 0.0,
-            is_valid_room_photo: false,
-            checklist: { bed_tidy: false, floor_clean: false, desk_organized: false, shoes_arranged: false },
-            issues_detected: [dupMsg],
-            positive_notes: [],
-            recommendations: "Vui lòng chụp đủ 4 góc riêng biệt trong cùng một phòng KTX của bạn.",
-          },
-        };
+        dupPairs.push(`${labels[k1]} và ${labels[k2]}`);
       }
     }
+  }
+
+  if (dupPairs.length > 0) {
+    const dupMsg = `Phát hiện gian lận: Bạn đã nộp cùng một bức ảnh cho nhiều khu vực (${dupPairs.join(", ")}). Quy định 5S KTX ĐHQG-HCM bắt buộc phải chụp riêng biệt từng khu vực: Giường ngủ, Sàn nhà, Kệ giày dép và Bàn học.`;
+    return {
+      isValid: false,
+      invalidMessage: dupMsg,
+      aiResult: {
+        status: "Không hợp lệ (Gian lận)",
+        score: 0.0,
+        is_valid_room_photo: false,
+        checklist: { bed_tidy: false, floor_clean: false, desk_organized: false, shoes_arranged: false },
+        issues_detected: [dupMsg],
+        positive_notes: [],
+        recommendations: "Vui lòng chụp đủ 4 góc riêng biệt trong cùng một phòng KTX của bạn.",
+      },
+    };
   }
 
   // 2. Kiểm tra ảnh bối cảnh ngoài KTX / phòng trọ tư nhân
@@ -334,7 +340,8 @@ export async function analyzeFourRoomPhotos(
     if (isNonDorm) {
       const nonDormMsg = `Phát hiện bối cảnh không phải KTX ĐHQG-HCM tại ${labels[k]}: Bối cảnh trong ảnh là phòng trọ tư nhân / căn hộ gia đình (giường đơn gia đình, không phải giường tầng khung sắt và kệ dép chuẩn KTX ĐHQG-HCM).`;
       return {
-        isValid: true,
+        isValid: false,
+        invalidMessage: nonDormMsg,
         aiResult: {
           status: "Không hợp lệ (Gian lận)",
           score: 0.0,
@@ -362,7 +369,8 @@ export async function analyzeFourRoomPhotos(
         if (toneDiff > 45 || (toneDiff > 30 && lumDiff > 55)) {
           const multiRoomMsg = `Phát hiện gian lận: 4 ảnh chụp có màu sơn tường, ánh sáng và bối cảnh mâu thuẫn nhau giữa ${labels[keys[i]]} và ${labels[keys[j]]}, được ghép từ nhiều phòng khác nhau! Bắt buộc cả 4 góc phải chụp trong cùng một căn phòng KTX.`;
           return {
-            isValid: true,
+            isValid: false,
+            invalidMessage: multiRoomMsg,
             aiResult: {
               status: "Không hợp lệ (Gian lận)",
               score: 0.0,
