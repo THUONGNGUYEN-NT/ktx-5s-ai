@@ -10,8 +10,12 @@ pyodbc==5.1.0
 Pillow==10.4.0
 python-multipart==0.0.12
 
-# AI — Gemini API
+# AI — Gemini API & NVIDIA NIM (OpenAI-compatible)
 google-generativeai==0.8.3
+openai>=1.0.0
+
+# Cloud Storage
+cloudinary>=1.36.0
 
 # Environment & Config
 python-dotenv==1.0.1
