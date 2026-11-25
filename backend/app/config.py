@@ -21,10 +21,11 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     NVIDIA_API_KEY: str = ""
 
-    # Cloudinary
+    # Cloudinary & Image Storage
     CLOUDINARY_CLOUD_NAME: str = ""
     CLOUDINARY_API_KEY: str = ""
     CLOUDINARY_API_SECRET: str = ""
+    MAX_IMAGES_PER_ROOM: int = 90
 
     # SMTP Gửi Email thực tế (Gmail / Mail Server KTX)
     SMTP_SERVER: str = "smtp.gmail.com"

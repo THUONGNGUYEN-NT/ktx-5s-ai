@@ -211,7 +211,7 @@ export default function CameraPage() {
           </div>
 
           {error && (
-            <div className="mt-4 bg-red-50 border-l-4 border-[#dd4b39] text-[#dd4b39] px-3 py-2 text-xs font-medium">
+            <div className="mt-4 bg-red-50 border-l-4 border-[#dd4b39] text-[#dd4b39] px-3 py-2 text-xs font-medium whitespace-pre-line leading-relaxed">
               ⚠️ {error}
             </div>
           )}

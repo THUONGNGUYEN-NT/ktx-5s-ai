@@ -496,10 +496,11 @@ async def export_report(
 @router.post("/cleanup-images", summary="Dọn dẹp ảnh cũ trên Cloudinary để giải phóng dung lượng")
 async def cleanup_images(
     days: int = Query(30, ge=1, le=365, description="Số ngày tối đa lưu trữ (mặc định 30 ngày)"),
+    max_images_per_room: int = Query(90, ge=1, le=500, description="Số ảnh tối đa giữ lại cho mỗi phòng (mặc định 90 ảnh)"),
     current_admin: User = Depends(require_admin),
 ):
-    """Xóa các bức ảnh nộp cũ hơn số ngày chỉ định trên Cloudinary để không bị đầy bộ nhớ 25GB."""
+    """Xóa các ảnh nộp cũ hơn số ngày chỉ định hoặc vượt quá giới hạn ảnh/phòng (mặc định 90 ảnh/phòng)."""
     from app.services.storage_service import cleanup_old_cloudinary_images
-    result = cleanup_old_cloudinary_images(max_keep_days=days)
+    result = cleanup_old_cloudinary_images(max_keep_days=days, max_images_per_room=max_images_per_room)
     return result
 

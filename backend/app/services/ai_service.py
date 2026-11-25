@@ -31,25 +31,30 @@ Authentic VNU-HCM Dormitory rooms (Khu A & Khu B) have specific characteristics:
 - Private rental rooms (phòng trọ tư nhân cao cấp, phòng chung cư mini, studio gia đình có giường gỗ đôi, đèn trang trí phòng ngủ tư nhân) are NOT authentic VNU-HCM dormitories -> REJECT.
 
 === 2. ANTI-FRAUD & CONTEXT VERIFICATION (CRUCIAL) ===
-REJECT IMMEDIATELY (Set is_valid = false for that photo, and is_valid_room_photo = false) IF:
+IMPORTANT: You MUST inspect ALL 4 photos independently and completely. NEVER stop after finding the first invalid photo!
+If multiple photos fail (e.g. Photo 1 AND Photo 2 AND Photo 3 are invalid), you MUST set `is_valid = false` and write a clear Vietnamese `issue` for EVERY single invalid photo in `photo_check`, and set `is_valid_room_photo = false`.
+
+Mark a photo `is_valid = false` (and `is_valid_room_photo = false`) IF:
 1. DUPLICATE / RECYCLED PHOTOS:
-   - Submitting the same photo for more than one area (e.g. Photo 1 Bed and Photo 4 Desk are the same image) -> REJECT as "Nộp trùng ảnh giữa các góc chụp".
+   - Submitting the same photo for more than one area (e.g. Photo 1 Bed and Photo 4 Desk are the same image) -> mark the duplicated photos `is_valid = false` with issue "Nộp trùng ảnh giữa các góc chụp".
 2. SPLICED PHOTOS FROM DIFFERENT ROOMS (Ghép từ nhiều phòng khác nhau / Không cùng một không gian):
-   - If one photo has wooden domestic bed / studio room, another photo has metal dorm bunk bed, or flooring tiles and wall colors clearly belong to different apartments/buildings -> SET is_same_room = false and REJECT as "Ảnh chụp từ nhiều phòng khác nhau, không cùng một không gian".
+   - If photos have different bed types, different flooring tiles, or wall colors clearly belonging to different rooms/apartments -> SET `is_same_room = false` and list ALL conflicting details in `inconsistencies`.
 3. NON-DORMITORY CONTEXT (Phòng trọ tư nhân ngoài KTX / Căn hộ mini gia đình):
-   - Luxury private rented rooms with personal wooden double beds, decorative bedroom lighting, home studio setup that lack student dorm infrastructure -> REJECT as "Bối cảnh phòng trọ tư nhân, không phải KTX ĐHQG-HCM".
-4. STOCK / CATALOG PHOTOS (Ảnh mạng / Shopee / Pinterest).
+   - Any photo showing a private rented room / mini apartment / family bedroom (wooden double bed, decorative lighting, home studio, non-dorm furniture) MUST have `is_valid = false` with issue "Bối cảnh phòng trọ tư nhân, không phải KTX ĐHQG-HCM". Check this for EACH of the 4 photos individually!
+4. STOCK / CATALOG PHOTOS (Ảnh mạng / Shopee / Pinterest) or BLURRY / TOO DARK:
+   - Any photo that is a stock/catalog product photo, too dark, or blurry MUST have `is_valid = false` with a specific Vietnamese `issue`.
 
 === 3. INDEPENDENT AREA VALIDATION ===
-Judge ONLY what is actually visible in each photo.
-- Photo 1 — BED AREA: Must show a student dorm bed (steel bunk bed, dorm single bed). If it shows a domestic wooden master bed or private studio room -> REJECT.
-- Photo 2 — FLOOR & WALKWAY: Must show the dorm floor and walkway between beds.
-- Photo 3 — SHOE RACK AREA: Must show a shoe rack or shoes placed separately near the entrance or wall.
-- Photo 4 — STUDY DESK AREA: Must show a student study desk. Must NOT be a duplicate of Photo 1.
+Judge EVERY photo (1, 2, 3, and 4) independently against BOTH its required area AND the VNU-HCM dormitory context:
+- Photo 1 — BED AREA: Must show a student dorm bed (steel bunk bed, dorm single bed). If it shows a domestic wooden bed, private studio room, or wrong area -> set `photo_1_bed.is_valid = false`.
+- Photo 2 — FLOOR & WALKWAY: Must show the dorm floor and walkway between beds. If it shows a private room/apartment floor, wrong area, or is too blurry/dark -> set `photo_2_floor.is_valid = false`.
+- Photo 3 — SHOE RACK AREA: Must show a dorm shoe rack or shoes placed near the entrance/wall. If it is a Shopee/catalog product photo, private apartment, or wrong area -> set `photo_3_shoes.is_valid = false`.
+- Photo 4 — STUDY DESK AREA: Must show a student study desk in a dorm room. Must NOT be a duplicate of Photo 1. If it shows a private room or wrong area -> set `photo_4_desk.is_valid = false`.
 
 === 4. ROOM CONSISTENCY GUIDELINE ===
 - All 4 photos MUST belong to the SAME dormitory room.
-- If photos show completely different beds (e.g. Photo 1 is a low wooden bed in a private studio, Photo 2 is a daylit dorm with wooden furniture, Photo 3 is a metal bunk bed frame) -> THEY ARE FROM DIFFERENT ROOMS! You MUST set is_same_room = false and list the inconsistencies clearly.
+- If photos show different rooms (e.g. different beds, different floor tiles, different wall colors) -> set `is_same_room = false` and list ALL inconsistencies clearly in `inconsistencies`.
+- In `invalid_reason`, summarize ALL invalid photos and room inconsistencies together (do NOT mention only one photo if multiple are invalid).
 
 === 5. SCORE 5S (ONLY IF ALL PHOTOS VALID, AUTHENTIC DORM & FROM SAME ROOM) ===
 Criteria:
@@ -93,7 +98,7 @@ CRITERIA = {
 DEDUCTION_POINTS = {"minor": 0.5, "moderate": 1.5, "severe": 2.5}
 
 
-def apply_scoring(result: dict[str, Any]) -> None:
+def apply_scoring(result: dict[str, Any], duplicate_errors: list[str] | None = None) -> None:
     # 1. Kiểm tra chi tiết từng ảnh từ photo_check
     photo_labels = {
         "photo_1_bed": "Ảnh 1 (Giường ngủ)",
@@ -102,6 +107,8 @@ def apply_scoring(result: dict[str, Any]) -> None:
         "photo_4_desk": "Ảnh 4 (Bàn học)",
     }
     failed_photos = []
+    if duplicate_errors:
+        failed_photos.append(f"• Nộp trùng ảnh giữa các góc: {', '.join(duplicate_errors)}")
     photo_check = result.get("photo_check")
     if isinstance(photo_check, dict):
         for key, label in photo_labels.items():
@@ -133,9 +140,9 @@ def apply_scoring(result: dict[str, Any]) -> None:
         if different_rooms_reason:
             full_reason = different_rooms_reason
             if failed_photos:
-                full_reason += "\n\nNgoài ra, các góc sau chụp chưa đúng yêu cầu:\n" + "\n".join(failed_photos)
+                full_reason += "\n\nCác ảnh không hợp lệ cần chụp lại:\n" + "\n".join(failed_photos)
         elif failed_photos:
-            full_reason = "Vui lòng chụp lại các góc sau:\n" + "\n".join(failed_photos)
+            full_reason = f"Phát hiện {len(failed_photos)} ảnh chưa hợp lệ, vui lòng chụp lại:\n" + "\n".join(failed_photos)
         else:
             full_reason = result.get("invalid_reason") or "Ảnh chụp không đúng quy định. Vui lòng chụp lại."
 
@@ -263,40 +270,9 @@ def evaluate_room_image(image_bytes: bytes | list[bytes]) -> dict[str, Any]:
 
     # =========================================================================
     # BƯỚC 0: KIỂM SOÁT GIAN LẬN — NỘP TRÙNG LẶP CÙNG 1 ẢNH CHO NHIỀU KHU VỰC
+    # Không return sớm để AI vẫn kiểm tra hết các ảnh còn lại và liệt kê đủ tất cả lỗi.
     # =========================================================================
     duplicate_errors = check_duplicate_photos(processed_images)
-    if duplicate_errors:
-        dup_msg = ", ".join(duplicate_errors)
-        reason = (
-            f"Phát hiện gian lận: Bạn đã nộp cùng một bức ảnh cho nhiều khu vực ({dup_msg}). "
-            "Quy định 5S KTX ĐHQG-HCM bắt buộc phải chụp riêng biệt từng khu vực: "
-            "Giường ngủ, Sàn nhà, Kệ giày dép và Bàn học."
-        )
-        duration_ms = int((time.time() - start_time) * 1000)
-        return {
-            "photo_check": {
-                "photo_1_bed": {"is_valid": False, "detected_object": "Ảnh bị nộp trùng lặp", "issue": "Trùng ảnh với khu vực khác"},
-                "photo_2_floor": {"is_valid": False, "detected_object": "Ảnh bị nộp trùng lặp", "issue": "Trùng ảnh với khu vực khác"},
-                "photo_3_shoes": {"is_valid": False, "detected_object": "Ảnh bị nộp trùng lặp", "issue": "Trùng ảnh với khu vực khác"},
-                "photo_4_desk": {"is_valid": False, "detected_object": "Ảnh bị nộp trùng lặp", "issue": "Trùng ảnh với khu vực khác"},
-            },
-            "room_consistency": {
-                "is_same_room": False,
-                "confidence": "high",
-                "details": f"Trùng lặp ảnh giữa {dup_msg}",
-                "inconsistencies": [f"Nộp cùng một ảnh cho: {dup_msg}"]
-            },
-            "is_valid_room_photo": False,
-            "invalid_reason": reason,
-            "checklist": {"bed_tidy": None, "floor_clean": None, "shoes_arranged": None, "desk_organized": None},
-            "deductions": [],
-            "positive_notes": [],
-            "recommendations": "Vui lòng chụp đủ 4 góc phòng riêng biệt trong phòng KTX của bạn.",
-            "score": 0.0,
-            "status": "Không hợp lệ (Gian lận)",
-            "issues_detected": [reason],
-            "ai_response_time_ms": duration_ms
-        }
 
     # =========================================================================
     # LỰA CHỌN 1: DÙNG NVIDIA NIM (nvidia/nemotron-3.5-super-vl-120b-a12b)
@@ -326,7 +302,7 @@ def evaluate_room_image(image_bytes: bytes | list[bytes]) -> dict[str, Any]:
                 model="nvidia/nemotron-3.5-super-vl-120b-a12b",
                 messages=[{"role": "user", "content": content}],
                 temperature=0.1,
-                max_tokens=1024,
+                max_tokens=1400,
                 extra_body={"chat_template_kwargs": {"thinking": False}},
             )
             duration_ms = int((time.time() - start_time) * 1000)
@@ -349,7 +325,7 @@ def evaluate_room_image(image_bytes: bytes | list[bytes]) -> dict[str, Any]:
                 raise ValueError("NVIDIA model trả về nội dung rỗng")
 
             result = json.loads(raw_text)
-            apply_scoring(result)
+            apply_scoring(result, duplicate_errors=duplicate_errors)
             result["ai_response_time_ms"] = duration_ms
             return result
         except Exception as e:
@@ -369,7 +345,7 @@ def evaluate_room_image(image_bytes: bytes | list[bytes]) -> dict[str, Any]:
     generation_config = {
         "response_mime_type": "application/json",
         "temperature": 0,
-        "max_output_tokens": 700,
+        "max_output_tokens": 1400,
     }
 
     # Thử gọi model nhanh nhất có sẵn
@@ -399,7 +375,7 @@ def evaluate_room_image(image_bytes: bytes | list[bytes]) -> dict[str, Any]:
                 raw_text = "\n".join(lines).strip()
 
             result = json.loads(raw_text)
-            apply_scoring(result)
+            apply_scoring(result, duplicate_errors=duplicate_errors)
             result["ai_response_time_ms"] = duration_ms
             return result
 
