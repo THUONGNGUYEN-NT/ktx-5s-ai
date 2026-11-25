@@ -24,7 +24,7 @@ export type UserAccount = {
   preferredAuthMethod?: VerificationMethod; // "phone" | "email" | "both"
 };
 
-const ACCOUNTS_STORAGE_KEY = "ktx5s_user_accounts_v4";
+const ACCOUNTS_STORAGE_KEY = "ktx5s_user_accounts_v5";
 const OTP_STORAGE_KEY = "ktx5s_active_otp_session";
 
 // Sinh danh mục tài khoản cho toàn bộ 200 phòng KTX (4 tòa A, B, C, D × 10 tầng × 5 phòng)
@@ -76,8 +76,8 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
     phone: "0901234567",
     unit: "Ban Giám đốc & Quản trị Hệ thống KTX",
     joinedDate: "15/08/2022",
-    phoneVerified: true,
-    emailVerified: true,
+    phoneVerified: false,
+    emailVerified: false,
     preferredAuthMethod: "both",
   },
   {
@@ -89,8 +89,8 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
     phone: "0912345678",
     unit: "Ban Quản lý Cụm Nhà B (B2, B3, B5)",
     joinedDate: "01/02/2023",
-    phoneVerified: true,
-    emailVerified: true,
+    phoneVerified: false,
+    emailVerified: false,
     preferredAuthMethod: "phone",
   },
   {
@@ -103,7 +103,7 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
     unit: "Tổ Giám sát Vệ sinh & 5S KTX Khu A",
     joinedDate: "10/05/2024",
     phoneVerified: false,
-    emailVerified: true,
+    emailVerified: false,
     preferredAuthMethod: "email",
   },
   // Sinh viên đại diện mẫu
@@ -118,8 +118,8 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
     phone: "0934567890",
     major: "Khoa học Máy tính - K21 (ĐH Bách Khoa)",
     joinedDate: "05/09/2023",
-    phoneVerified: true,
-    emailVerified: true,
+    phoneVerified: false,
+    emailVerified: false,
     preferredAuthMethod: "both",
   },
   {
@@ -133,7 +133,7 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
     phone: "0945678901",
     major: "Công nghệ Thông tin - K21 (ĐH KHTN)",
     joinedDate: "05/09/2023",
-    phoneVerified: true,
+    phoneVerified: false,
     emailVerified: false,
     preferredAuthMethod: "phone",
   },
@@ -149,7 +149,7 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
     major: "Kỹ thuật Phần mềm - K22 (ĐH CNTT)",
     joinedDate: "12/09/2024",
     phoneVerified: false,
-    emailVerified: true,
+    emailVerified: false,
     preferredAuthMethod: "email",
   },
   {
@@ -187,12 +187,9 @@ export function getAllAccounts(): UserAccount[] {
       const existing = merged.find((a) => a.username.toLowerCase() === def.username.toLowerCase());
       if (!existing) {
         merged.push(def);
-      } else if (def.username === "admin") {
-        // Luôn đảm bảo tài khoản admin cập nhật email thực tế của người dùng
+      } else if (def.username === "admin" && (!existing.email || existing.email.includes("vnuhcm.edu.vn"))) {
         existing.email = def.email;
         existing.phone = def.phone;
-        existing.emailVerified = true;
-        existing.phoneVerified = true;
       }
     }
     return merged;
@@ -268,9 +265,11 @@ export function findAccountByIdentifier(identifier: string, role?: UserRole): Us
   if (clean.includes("@")) {
     const target = accounts.find((a) => (role ? a.role === role : a.username === "admin")) || accounts[0];
     if (target) {
-      target.email = clean;
-      target.emailVerified = true;
-      saveAllAccounts(accounts);
+      if (target.email !== clean) {
+        target.email = clean;
+        target.emailVerified = false;
+        saveAllAccounts(accounts);
+      }
       return target;
     }
   }
@@ -279,9 +278,11 @@ export function findAccountByIdentifier(identifier: string, role?: UserRole): Us
   if (/^0\d{9}$/.test(clean)) {
     const target = accounts.find((a) => (role ? a.role === role : a.username === "admin")) || accounts[0];
     if (target) {
-      target.phone = clean;
-      target.phoneVerified = true;
-      saveAllAccounts(accounts);
+      if (target.phone !== clean) {
+        target.phone = clean;
+        target.phoneVerified = false;
+        saveAllAccounts(accounts);
+      }
       return target;
     }
   }
@@ -313,6 +314,18 @@ export function updateUserProfile(
   const idx = accounts.findIndex((a) => a.username.toLowerCase() === username.toLowerCase());
   if (idx === -1) {
     return { success: false, message: "Không tìm thấy tài khoản người dùng." };
+  }
+
+  const current = accounts[idx];
+  const newEmail = updates.email && updates.email.trim();
+  const newPhone = updates.phone && updates.phone.trim();
+
+  // Khi thay đổi email hoặc số điện thoại mới, bắt buộc phải xác thực lại qua mã OTP
+  if (newEmail && newEmail.toLowerCase() !== (current.email || "").toLowerCase()) {
+    updates.emailVerified = false;
+  }
+  if (newPhone && newPhone !== (current.phone || "")) {
+    updates.phoneVerified = false;
   }
 
   accounts[idx] = {
