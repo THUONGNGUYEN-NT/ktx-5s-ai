@@ -1,7 +1,7 @@
 "use client";
 // Khung giao diện chung: menu tối bên trái + thanh tiêu đề + nút Quay lại + chân trang
 // Đồng thời kiểm tra đăng nhập và phân quyền (sai vai trò -> đưa về /login)
-import { ReactNode, useEffect, useState, type ElementType } from "react";
+import { ReactNode, useCallback, useEffect, useState, type ElementType } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -20,6 +20,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import { getSession, clearSession, type Session, type UserRole } from "@/lib/session";
+import { findAccountByUsername, getAllAccounts, type UserAccount } from "@/lib/user-store";
 
 type MenuItem = { href: string; label: string; icon: ElementType };
 
@@ -51,16 +52,33 @@ export default function AppShell({
   const router = useRouter();
   const pathname = usePathname();
   const [session, setSession] = useState<Session | null>(null);
+  const [account, setAccount] = useState<UserAccount | null>(null);
   const [collapsed, setCollapsed] = useState(false);
 
-  useEffect(() => {
+  const syncUserState = useCallback(() => {
     const s = getSession();
     if (!s || s.role !== role) {
       router.replace("/login");
       return;
     }
     setSession(s);
+
+    let acc: UserAccount | null = null;
+    if (s.username) {
+      acc = findAccountByUsername(s.username);
+    } else if (s.role === "student" && s.roomCode) {
+      acc = getAllAccounts().find((a) => a.role === "student" && a.roomCode === s.roomCode) || null;
+    } else if (s.role === "admin") {
+      acc = findAccountByUsername("admin");
+    }
+    setAccount(acc);
   }, [role, router]);
+
+  useEffect(() => {
+    syncUserState();
+    window.addEventListener("ktx5s-profile-updated", syncUserState);
+    return () => window.removeEventListener("ktx5s-profile-updated", syncUserState);
+  }, [syncUserState]);
 
   if (!session) {
     return (
@@ -70,10 +88,25 @@ export default function AppShell({
     );
   }
 
-  const displayName =
-    session.role === "admin" ? session.name ?? "admin" : `Phòng ${session.roomCode ?? ""}`;
-  const subtitle = session.role === "admin" ? "Cán bộ KTX" : "Tài khoản phòng SV";
-  const initial = displayName.charAt(0).toUpperCase();
+  const fullName =
+    account?.name ||
+    session.name ||
+    (session.role === "admin" ? "Quản trị viên Hệ thống" : `Phòng ${session.roomCode ?? ""}`);
+
+  const roomCode = account?.roomCode || session.roomCode || "";
+  const studentCode = account?.studentCode || "";
+  const subtitle =
+    session.role === "admin"
+      ? account?.unit || "Cán bộ Quản lý KTX"
+      : `Phòng ${roomCode}${studentCode ? ` · MSSV ${studentCode}` : ""}`;
+
+  const headerGreeting =
+    session.role === "admin" ? fullName : `${fullName}${roomCode ? ` (${roomCode})` : ""}`;
+
+  const avatarUrl = account?.avatarUrl || session.avatarUrl || "";
+  const avatarColor = account?.avatarColor || session.avatarColor || "#3c8dbc";
+  const initial = fullName.trim().charAt(0).toUpperCase() || "U";
+  const profileHref = role === "admin" ? "/admin/profile" : "/student/profile";
 
   const logout = () => {
     clearSession();
@@ -98,26 +131,49 @@ export default function AppShell({
           )}
         </div>
 
-        {!collapsed && (
-          <div className="flex items-center gap-3 px-4 py-4">
+        {!collapsed ? (
+          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-[#1a2226]">
             <Link
-              href={role === "admin" ? "/admin/profile" : "/student/profile"}
-              title="Xem thông tin tài khoản & Đổi mật khẩu"
-              className="w-11 h-11 rounded-full bg-[#3c8dbc] text-white flex items-center justify-center text-lg font-bold shrink-0 hover:ring-2 hover:ring-teal-400 transition-all"
+              href={profileHref}
+              title="Bấm để chỉnh sửa hồ sơ & đổi Avatar"
+              className="w-10 h-10 rounded-full text-white flex items-center justify-center text-base font-bold shrink-0 hover:ring-2 hover:ring-teal-400 transition-all overflow-hidden shadow"
+              style={{ backgroundColor: avatarColor }}
             >
-              {initial}
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatarUrl} alt={fullName} className="w-full h-full object-cover" />
+              ) : (
+                initial
+              )}
             </Link>
             <div className="min-w-0">
               <Link
-                href={role === "admin" ? "/admin/profile" : "/student/profile"}
-                className="text-white font-semibold truncate hover:text-teal-300 block"
+                href={profileHref}
+                className="text-white font-semibold truncate hover:text-teal-300 block text-xs"
               >
-                {displayName}
+                {fullName}
               </Link>
-              <p className="text-[11px] flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-[#00a65a]" /> {subtitle}
+              <p className="text-[11px] flex items-center gap-1.5 text-gray-400">
+                <span className="w-2 h-2 rounded-full bg-[#00a65a] shrink-0" />
+                <span className="truncate">{subtitle}</span>
               </p>
             </div>
+          </div>
+        ) : (
+          <div className="py-3 flex justify-center border-b border-[#1a2226]">
+            <Link
+              href={profileHref}
+              title={fullName}
+              className="w-9 h-9 rounded-full text-white flex items-center justify-center text-sm font-bold overflow-hidden ring-2 ring-white/20 hover:ring-teal-400"
+              style={{ backgroundColor: avatarColor }}
+            >
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatarUrl} alt={fullName} className="w-full h-full object-cover" />
+              ) : (
+                initial
+              )}
+            </Link>
           </div>
         )}
 
@@ -183,15 +239,23 @@ export default function AppShell({
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#dd4b39]" />
             </button>
             <Link
-              href={role === "admin" ? "/admin/profile" : "/student/profile"}
-              title="Xem thông tin tài khoản & đổi mật khẩu"
-              className="flex items-center gap-2 hover:opacity-85 transition-opacity"
+              href={profileHref}
+              title="Hồ sơ cá nhân & Đổi Avatar"
+              className="flex items-center gap-2.5 px-2 py-1 rounded hover:bg-white/10 transition-colors"
             >
-              <div className="w-8 h-8 rounded-full bg-[#3c8dbc] flex items-center justify-center font-bold text-white shadow-xs">
-                {initial}
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white shadow-xs overflow-hidden ring-2 ring-white/25 shrink-0"
+                style={{ backgroundColor: avatarColor }}
+              >
+                {avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatarUrl} alt={fullName} className="w-full h-full object-cover" />
+                ) : (
+                  initial
+                )}
               </div>
-              <span className="hidden md:inline">
-                Xin chào: <b>{displayName}</b>
+              <span className="hidden md:inline text-xs">
+                Xin chào: <b className="text-white">{headerGreeting}</b>
               </span>
             </Link>
             <button

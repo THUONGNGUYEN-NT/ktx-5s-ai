@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   User,
   Mail,
@@ -15,10 +15,18 @@ import {
   Send,
   Calendar,
   Sparkles,
+  Camera,
+  Upload,
+  Trash2,
+  ZoomIn,
+  Palette,
+  BadgeCheck,
+  X,
 } from "lucide-react";
 import { getSession, saveSession, type UserRole } from "@/lib/session";
 import {
   findAccountByUsername,
+  getAllAccounts,
   updateUserProfile,
   changeUserPassword,
   requestPasswordResetOtp,
@@ -30,6 +38,75 @@ import {
   type VerificationMethod,
 } from "@/lib/user-store";
 
+// Bảng màu nền Avatar chữ cái
+const AVATAR_COLORS = [
+  { hex: "#3c8dbc", label: "Xanh KTX" },
+  { hex: "#00a65a", label: "Xanh 5S" },
+  { hex: "#605ca8", label: "Tím Quản trị" },
+  { hex: "#0d9488", label: "Xanh Ngọc" },
+  { hex: "#e67e22", label: "Cam Năng động" },
+  { hex: "#d81b60", label: "Đỏ Hồng" },
+];
+
+// Bộ Avatar minh họa SVG tích hợp sẵn
+function makeSvgAvatar(bg1: string, bg2: string, emoji: string, badge: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+    <defs>
+      <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="${bg1}"/>
+        <stop offset="100%" stop-color="${bg2}"/>
+      </linearGradient>
+    </defs>
+    <rect width="160" height="160" rx="80" fill="url(#g)"/>
+    <circle cx="80" cy="64" r="28" fill="rgba(255,255,255,0.22)"/>
+    <text x="80" y="96" font-size="72" text-anchor="middle" dominant-baseline="central">${emoji}</text>
+    <rect x="34" y="122" width="92" height="22" rx="11" fill="rgba(0,0,0,0.28)"/>
+    <text x="80" y="133" font-family="sans-serif" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">${badge}</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+const PRESET_AVATARS = [
+  { id: "sv-nam", label: "Nam SV", url: makeSvgAvatar("#2563eb", "#06b6d4", "👨‍🎓", "SINH VIÊN") },
+  { id: "sv-nu", label: "Nữ SV", url: makeSvgAvatar("#db2777", "#f43f5e", "👩‍🎓", "SINH VIÊN") },
+  { id: "sv-it", label: "SV Công nghệ", url: makeSvgAvatar("#0d9488", "#10b981", "🧑‍💻", "KTX 5S") },
+  { id: "cb-nam", label: "Cán bộ KTX", url: makeSvgAvatar("#1e3a8a", "#3c8dbc", "👮‍♂️", "CÁN BỘ") },
+  { id: "cb-nu", label: "Quản lý Tòa", url: makeSvgAvatar("#5b21b6", "#7c3aed", "👩‍💼", "QUẢN LÝ") },
+  { id: "ai-bot", label: "Trợ lý 5S AI", url: makeSvgAvatar("#0f172a", "#334155", "🤖", "5S AI") },
+];
+
+// Cắt vuông & nén ảnh đại diện theo mức Zoom trên Canvas 256x256
+async function renderCroppedAvatar(srcUrl: string, zoom = 1): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const SIZE = 256;
+        const canvas = document.createElement("canvas");
+        canvas.width = SIZE;
+        canvas.height = SIZE;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("Canvas error"));
+
+        const minSide = Math.min(img.width, img.height);
+        const cropSide = minSide / Math.max(1, zoom);
+        const sx = (img.width - cropSide) / 2;
+        const sy = (img.height - cropSide) / 2;
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, SIZE, SIZE);
+        ctx.drawImage(img, sx, sy, cropSide, cropSide, 0, 0, SIZE, SIZE);
+        resolve(canvas.toDataURL("image/jpeg", 0.88));
+      } catch (e) {
+        reject(e);
+      }
+    };
+    img.onerror = () => reject(new Error("Không thể đọc file ảnh"));
+    img.src = srcUrl;
+  });
+}
+
 export default function UserProfileView({ role }: { role: UserRole }) {
   const [account, setAccount] = useState<UserAccount | null>(null);
   const [activeTab, setActiveTab] = useState<"info" | "password" | "security">("info");
@@ -40,7 +117,17 @@ export default function UserProfileView({ role }: { role: UserRole }) {
   const [email, setEmail] = useState("");
   const [unit, setUnit] = useState("");
   const [major, setMajor] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [avatarColor, setAvatarColor] = useState("#3c8dbc");
   const [infoMessage, setInfoMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Studio chỉnh sửa Avatar
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [rawUploadUrl, setRawUploadUrl] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [draftAvatarUrl, setDraftAvatarUrl] = useState("");
+  const [draftAvatarColor, setDraftAvatarColor] = useState("#3c8dbc");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form đổi mật khẩu
   const [currentPassword, setCurrentPassword] = useState("");
@@ -63,18 +150,17 @@ export default function UserProfileView({ role }: { role: UserRole }) {
 
   useEffect(() => {
     const session = getSession();
-    if (!session || !session.username) {
-      // Fallback
+    let acc: UserAccount | null = null;
+    if (session?.username) {
+      acc = findAccountByUsername(session.username);
+    } else if (role === "student" && session?.roomCode) {
+      acc = getAllAccounts().find((a) => a.role === "student" && a.roomCode === session.roomCode) || null;
+    }
+    if (!acc) {
       const defaultUser = role === "admin" ? "admin" : "sinhvien01";
-      const acc = findAccountByUsername(defaultUser);
-      if (acc) loadAccountData(acc);
-      return;
+      acc = findAccountByUsername(defaultUser);
     }
-
-    const acc = findAccountByUsername(session.username);
-    if (acc) {
-      loadAccountData(acc);
-    }
+    if (acc) loadAccountData(acc);
   }, [role]);
 
   const loadAccountData = (acc: UserAccount) => {
@@ -84,7 +170,72 @@ export default function UserProfileView({ role }: { role: UserRole }) {
     setEmail(acc.email);
     setUnit(acc.unit || "");
     setMajor(acc.major || "");
+    setAvatarUrl(acc.avatarUrl || "");
+    setAvatarColor(acc.avatarColor || (acc.role === "admin" ? "#3c8dbc" : "#0d9488"));
     setPreferredMethod(acc.preferredAuthMethod || "phone");
+  };
+
+  // Mở khung chỉnh sửa Avatar
+  const openAvatarEditor = () => {
+    setDraftAvatarUrl(avatarUrl);
+    setDraftAvatarColor(avatarColor);
+    setRawUploadUrl(null);
+    setZoom(1);
+    setShowAvatarModal(true);
+  };
+
+  // Khi người dùng chọn file ảnh từ máy tính / điện thoại
+  const handleSelectAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const objUrl = URL.createObjectURL(file);
+    setRawUploadUrl(objUrl);
+    setZoom(1);
+    try {
+      const cropped = await renderCroppedAvatar(objUrl, 1);
+      setDraftAvatarUrl(cropped);
+    } catch {
+      setInfoMessage({ type: "error", text: "Ảnh không hợp lệ, vui lòng chọn ảnh JPG hoặc PNG." });
+    }
+  };
+
+  // Khi kéo thanh Zoom ảnh vừa tải lên
+  const handleZoomChange = async (newZoom: number) => {
+    setZoom(newZoom);
+    if (!rawUploadUrl) return;
+    try {
+      const cropped = await renderCroppedAvatar(rawUploadUrl, newZoom);
+      setDraftAvatarUrl(cropped);
+    } catch {}
+  };
+
+  // Lưu Avatar ngay lập tức và đồng bộ lên Sidebar + Header
+  const handleApplyAvatar = () => {
+    if (!account) return;
+    const res = updateUserProfile(account.username, {
+      avatarUrl: draftAvatarUrl,
+      avatarColor: draftAvatarColor,
+    });
+    if (res.success && res.updated) {
+      setAccount(res.updated);
+      setAvatarUrl(draftAvatarUrl);
+      setAvatarColor(draftAvatarColor);
+      const currentSession = getSession();
+      if (currentSession) {
+        saveSession({
+          ...currentSession,
+          username: res.updated.username,
+          name: res.updated.name,
+          avatarUrl: draftAvatarUrl,
+          avatarColor: draftAvatarColor,
+        });
+      }
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("ktx5s-profile-updated"));
+      }
+      setInfoMessage({ type: "success", text: "Đã cập nhật ảnh đại diện (Avatar) thành công!" });
+    }
+    setShowAvatarModal(false);
   };
 
   // Lưu thông tin cá nhân
@@ -112,6 +263,8 @@ export default function UserProfileView({ role }: { role: UserRole }) {
       email: email.trim(),
       unit: unit.trim(),
       major: major.trim(),
+      avatarUrl,
+      avatarColor,
     });
 
     if (res.success && res.updated) {
@@ -126,7 +279,12 @@ export default function UserProfileView({ role }: { role: UserRole }) {
           name: res.updated.name,
           phone: res.updated.phone,
           email: res.updated.email,
+          avatarUrl,
+          avatarColor,
         });
+      }
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("ktx5s-profile-updated"));
       }
     } else {
       setInfoMessage({ type: "error", text: res.message });
@@ -262,12 +420,37 @@ export default function UserProfileView({ role }: { role: UserRole }) {
         </div>
         <div className="px-6 pb-6 pt-0 relative flex flex-col md:flex-row items-start md:items-end justify-between gap-4">
           <div className="flex items-end gap-4 -mt-12">
-            <div className="w-24 h-24 rounded-full border-4 border-white bg-[#3c8dbc] text-white flex items-center justify-center text-3xl font-extrabold shadow-md">
-              {account.name.charAt(0).toUpperCase()}
+            <div className="relative group shrink-0">
+              <button
+                type="button"
+                onClick={openAvatarEditor}
+                title="Bấm để thay đổi hoặc chỉnh sửa Avatar"
+                className="w-24 h-24 rounded-full border-4 border-white text-white flex items-center justify-center text-3xl font-extrabold shadow-md overflow-hidden transition-transform group-hover:scale-[1.02]"
+                style={{ backgroundColor: avatarColor }}
+              >
+                {avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatarUrl} alt={fullName || account.name} className="w-full h-full object-cover" />
+                ) : (
+                  (fullName || account.name || "U").trim().charAt(0).toUpperCase()
+                )}
+                <span className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[11px] font-semibold transition-opacity">
+                  <Camera size={18} className="mb-0.5" />
+                  Đổi ảnh
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={openAvatarEditor}
+                title="Chỉnh sửa Avatar"
+                className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[#3c8dbc] hover:bg-[#367fa9] text-white border-2 border-white shadow flex items-center justify-center transition"
+              >
+                <Camera size={14} />
+              </button>
             </div>
             <div className="mb-1">
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-gray-800">{account.name}</h1>
+                <h1 className="text-xl font-bold text-gray-800">{fullName || account.name}</h1>
                 <span className="bg-emerald-100 text-emerald-800 text-[11px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Đang hoạt động
                 </span>
@@ -887,6 +1070,169 @@ export default function UserProfileView({ role }: { role: UserRole }) {
           )}
         </div>
       </div>
+
+      {/* ===== MODAL CHỈNH SỬA & THAY ĐỔI AVATAR ===== */}
+      {showAvatarModal && (
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
+          <div className="bg-white rounded shadow-2xl border border-gray-200 w-full max-w-md overflow-hidden">
+            <div className="bg-[#2c3b41] text-white px-4 py-3 flex items-center justify-between">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <Camera size={16} className="text-teal-300" /> Thay đổi & Chỉnh sửa Ảnh đại diện (Avatar)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAvatarModal(false)}
+                className="p-1 rounded hover:bg-white/10"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              {/* Xem trước Avatar */}
+              <div className="flex flex-col items-center gap-2">
+                <div
+                  className="w-28 h-28 rounded-full border-4 border-gray-100 shadow-lg flex items-center justify-center text-4xl font-extrabold text-white overflow-hidden"
+                  style={{ backgroundColor: draftAvatarColor }}
+                >
+                  {draftAvatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={draftAvatarUrl} alt="Avatar preview" className="w-full h-full object-cover" />
+                  ) : (
+                    (fullName || account.name || "U").trim().charAt(0).toUpperCase()
+                  )}
+                </div>
+                <p className="text-gray-500 text-[11px]">Xem trước ảnh đại diện hiển thị trên hệ thống</p>
+              </div>
+
+              {/* Tải ảnh từ thiết bị + Thanh Zoom cắt ảnh */}
+              <div className="flex flex-col gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleSelectAvatarFile}
+                />
+                <div className="flex gap-2 justify-center">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-[#3c8dbc] hover:bg-[#367fa9] text-white font-semibold rounded-sm shadow-xs"
+                  >
+                    <Upload size={14} /> Tải ảnh từ máy lên
+                  </button>
+                  {draftAvatarUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDraftAvatarUrl("");
+                        setRawUploadUrl(null);
+                      }}
+                      className="flex items-center gap-1 px-3 py-2 border border-red-200 text-red-600 hover:bg-red-50 font-semibold rounded-sm"
+                    >
+                      <Trash2 size={14} /> Dùng chữ cái
+                    </button>
+                  )}
+                </div>
+
+                {rawUploadUrl && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-sm p-2.5 flex items-center gap-3 mt-1">
+                    <ZoomIn size={15} className="text-[#3c8dbc] shrink-0" />
+                    <span className="text-gray-600 font-medium shrink-0">Phóng to / Cắt ảnh:</span>
+                    <input
+                      type="range"
+                      min={1}
+                      max={2.5}
+                      step={0.05}
+                      value={zoom}
+                      onChange={(e) => handleZoomChange(Number(e.target.value))}
+                      className="flex-1 accent-[#3c8dbc]"
+                    />
+                    <span className="font-mono text-gray-700 w-10 text-right">{Math.round(zoom * 100)}%</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Chọn nhanh Avatar mẫu */}
+              <div>
+                <p className="font-semibold text-gray-700 mb-2">Hoặc chọn nhanh Avatar mẫu KTX 5S:</p>
+                <div className="grid grid-cols-6 gap-2">
+                  {PRESET_AVATARS.map((preset) => {
+                    const selected = draftAvatarUrl === preset.url;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          setDraftAvatarUrl(preset.url);
+                          setRawUploadUrl(null);
+                        }}
+                        title={preset.label}
+                        className={`flex flex-col items-center gap-1 p-1 rounded-sm border transition ${
+                          selected
+                            ? "border-[#3c8dbc] ring-2 ring-[#3c8dbc]/40 bg-blue-50/40"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={preset.url} alt={preset.label} className="w-11 h-11 rounded-full" />
+                        <span className="text-[10px] text-gray-600 truncate w-full text-center">{preset.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Chọn màu nền khi dùng chữ cái đại diện */}
+              <div>
+                <p className="font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+                  <Palette size={13} className="text-[#3c8dbc]" /> Màu nền chữ cái đại diện:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {AVATAR_COLORS.map((c) => (
+                    <button
+                      key={c.hex}
+                      type="button"
+                      onClick={() => {
+                        setDraftAvatarColor(c.hex);
+                        setDraftAvatarUrl("");
+                        setRawUploadUrl(null);
+                      }}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium transition ${
+                        !draftAvatarUrl && draftAvatarColor === c.hex
+                          ? "border-gray-800 ring-2 ring-gray-300 font-bold"
+                          : "border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span className="w-3.5 h-3.5 rounded-full inline-block" style={{ backgroundColor: c.hex }} />
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Nút lưu */}
+              <div className="pt-3 border-t border-gray-100 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAvatarModal(false)}
+                  className="px-3.5 py-2 border border-gray-300 rounded-sm text-gray-600 hover:bg-gray-50 font-semibold"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyAvatar}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#00a65a] hover:bg-[#008d4c] text-white rounded-sm font-semibold shadow-xs"
+                >
+                  <CheckCircle2 size={14} /> Áp dụng Avatar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

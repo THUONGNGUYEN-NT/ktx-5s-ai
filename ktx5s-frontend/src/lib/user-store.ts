@@ -19,6 +19,8 @@ export type UserAccount = {
   unit?: string;         // Đơn vị/Tòa nhà phụ trách (dành cho cán bộ)
   major?: string;        // Khoa / Ngành học (dành cho sinh viên)
   joinedDate?: string;
+  avatarUrl?: string;    // Ảnh đại diện cá nhân (base64 / SVG data URL / URL)
+  avatarColor?: string;  // Màu nền avatar chữ cái mặc định
   phoneVerified?: boolean;
   emailVerified?: boolean;
   preferredAuthMethod?: VerificationMethod; // "phone" | "email" | "both"

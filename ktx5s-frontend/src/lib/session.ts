@@ -11,6 +11,8 @@ export type Session = {
   name?: string;       // tên hiển thị
   phone?: string;
   email?: string;
+  avatarUrl?: string;  // ảnh đại diện tải lên hoặc avatar mẫu
+  avatarColor?: string; // màu nền chữ cái đại diện
 };
 
 const SESSION_KEY = "ktx5s_session";
