@@ -186,20 +186,42 @@ export async function submitPhotos(roomCode: string, files: Record<AreaKey, File
   }
 }
 
+export type HistorySubmission = {
+  submission_id: string;
+  week: string;
+  submitted_at: string;
+  image_url: string;
+  area_images: Record<AreaKey, string>;
+  ai_result: AIResult;
+  status: RoomStatus;
+  score: number;
+  is_overridden: boolean;
+  override_note: string | null;
+};
+
 // ---- SINH VIÊN: Lịch sử ----  GET /rooms/{room_code}/history
 export async function getRoomHistory(roomCode: string) {
   const cleanCode = roomCode.trim().toUpperCase();
   const week = `2026-W${CURRENT_WEEK}`;
   const live = loadLiveRecords()[`${week}_${cleanCode}`];
 
-  const baseHistory = mockHistory.data.history.filter((h) => h.week !== week || !live);
-  const history = live
+  const baseHistory: HistorySubmission[] = mockHistory.data.history
+    .filter((h) => h.week !== week || !live)
+    .map((h) => ({
+      ...h,
+      area_images: mockAreaImages(cleanCode),
+      ai_result: buildMockAiResult(h.status || "Sạch", h.score),
+    }));
+
+  const history: HistorySubmission[] = live
     ? [
         {
           submission_id: live.submission_id,
           week: live.week,
           submitted_at: live.submitted_at,
           image_url: live.area_images.bed,
+          area_images: live.area_images,
+          ai_result: live.ai_result,
           status: live.ai_result.status,
           score: live.ai_result.score,
           is_overridden: live.is_overridden,
@@ -207,7 +229,7 @@ export async function getRoomHistory(roomCode: string) {
         },
         ...baseHistory,
       ]
-    : mockHistory.data.history;
+    : baseHistory;
 
   return {
     success: true,
