@@ -1,12 +1,13 @@
 // ============================================================================
-// DỊCH VỤ TỰ ĐỘNG LƯU TRỮ VÀ TẠO THƯ MỤC ẢNH TRÊN CLOUDINARY (CLIENT & SERVER)
+// DỊCH VỤ TỰ ĐỘNG LƯU TRỮ, TẠO THƯ MỤC ẢNH & ĐỒNG BỘ DỮ LIỆU XUYÊN THIẾT BỊ TRÊN CLOUDINARY
 // Tự động gom ảnh vào thư mục theo mã phòng: ktx5s/{room_code}/
-// Hoạt động 100% cả khi chạy cục bộ lẫn khi chạy trực tiếp trên GitHub Pages
+// Đồng bộ kết quả chấm điểm 5S thời gian thực giữa Điện thoại <-> Laptop trên GitHub Pages
 // ============================================================================
 
 const CLOUD_NAME = "x6qqyuno";
 const API_KEY = "347922489956772";
 const API_SECRET = "A5gKoLPsddVRIvZAofc4sqPiZhs";
+const LIVE_CLOUD_PUBLIC_ID = "ktx5s/live_submissions_v1.json";
 
 async function sha1(str: string): Promise<string> {
   const enc = new TextEncoder();
@@ -18,10 +19,6 @@ async function sha1(str: string): Promise<string> {
 
 /**
  * Upload trực tiếp 1 file ảnh lên Cloudinary vào đúng thư mục của phòng.
- * @param file File ảnh hoặc Blob từ camera/input
- * @param roomCode Mã phòng (VD: A3-301, B2-201)
- * @param areaName Tên khu vực (bed, floor, shoes, desk)
- * @returns URL ảnh an toàn (secure_url) trên Cloudinary
  */
 export async function uploadToCloudinary(
   file: File | Blob,
@@ -37,7 +34,6 @@ export async function uploadToCloudinary(
   const folder = `ktx5s/${cleanRoom}`;
   const timestamp = Math.floor(Date.now() / 1000);
 
-  // Tạo chữ ký bảo mật SHA-1 theo chuẩn Cloudinary API
   const toSign = `folder=${folder}&timestamp=${timestamp}${API_SECRET}`;
   const signature = await sha1(toSign);
 
@@ -94,4 +90,52 @@ export async function uploadAllFourAreasToCloudinary(
   );
 
   return results;
+}
+
+/**
+ * Tải danh sách lượt nộp thực tế từ Cloudinary (đồng bộ Điện thoại <-> Laptop)
+ */
+export async function fetchCloudLiveRecords<T = Record<string, unknown>>(): Promise<T | null> {
+  try {
+    const url = `https://res.cloudinary.com/${CLOUD_NAME}/raw/upload/${LIVE_CLOUD_PUBLIC_ID}?t=${Date.now()}`;
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data && typeof data === "object" && !("test" in data)) {
+      return data as T;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Lưu và đồng bộ danh sách lượt nộp lên Cloudinary để mọi thiết bị khác (Laptop / Điện thoại) đều thấy ngay
+ */
+export async function pushCloudLiveRecords(records: Record<string, unknown>): Promise<boolean> {
+  try {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const toSign = `invalidate=true&overwrite=true&public_id=${LIVE_CLOUD_PUBLIC_ID}&timestamp=${timestamp}${API_SECRET}`;
+    const signature = await sha1(toSign);
+
+    const jsonBlob = new Blob([JSON.stringify(records)], { type: "application/json" });
+    const formData = new FormData();
+    formData.append("file", jsonBlob, "live_submissions_v1.json");
+    formData.append("api_key", API_KEY);
+    formData.append("timestamp", timestamp.toString());
+    formData.append("public_id", LIVE_CLOUD_PUBLIC_ID);
+    formData.append("overwrite", "true");
+    formData.append("invalidate", "true");
+    formData.append("signature", signature);
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/raw/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn("Không thể đồng bộ dữ liệu lên Cloudinary:", err);
+    return false;
+  }
 }

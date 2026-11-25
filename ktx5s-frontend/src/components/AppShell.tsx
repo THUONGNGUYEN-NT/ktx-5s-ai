@@ -33,7 +33,6 @@ const MENUS: Record<UserRole, MenuItem[]> = {
   student: [
     { href: "/student", label: "Trang chủ", icon: Home },
     { href: "/student/camera", label: "Nộp ảnh phòng", icon: Camera },
-    { href: "/student/result", label: "Kết quả gần nhất", icon: ClipboardCheck },
     { href: "/student/history", label: "Lịch sử đánh giá", icon: History },
     { href: "/student/profile", label: "Hồ sơ & Đổi mật khẩu", icon: UserCheck },
   ],

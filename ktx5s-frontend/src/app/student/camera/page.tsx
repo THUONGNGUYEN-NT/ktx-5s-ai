@@ -86,7 +86,7 @@ export default function CameraPage() {
           desk: captures.desk!.preview,
         })
       );
-      router.push("/student/result");
+      router.push("/student/history");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Có lỗi xảy ra, vui lòng thử lại.");
     } finally {

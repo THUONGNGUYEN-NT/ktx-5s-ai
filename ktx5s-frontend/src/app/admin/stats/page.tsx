@@ -225,20 +225,24 @@ export default function StatsPage() {
         </Panel>
 
         <Panel title="Top phòng vi phạm trong tuần">
-          {dash?.top_violations.map((v, i) => (
-            <div
-              key={v.room_code}
-              className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0"
-            >
-              <span className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-[#dd4b39] text-white text-xs flex items-center justify-center font-bold">
-                  {i + 1}
-                </span>{" "}
-                Phòng <b>{v.room_code}</b>
-              </span>
-              <span className="text-[#dd4b39] font-bold">{v.score}/10</span>
-            </div>
-          ))}
+          {(!dash?.top_violations || dash.top_violations.length === 0) ? (
+            <p className="text-gray-400 text-xs py-4 text-center">Không có phòng vi phạm trong tuần này.</p>
+          ) : (
+            dash.top_violations.map((v, i) => (
+              <div
+                key={v.room_code}
+                className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0"
+              >
+                <span className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-[#dd4b39] text-white text-xs flex items-center justify-center font-bold">
+                    {i + 1}
+                  </span>{" "}
+                  Phòng <b>{v.room_code}</b>
+                </span>
+                <span className="text-[#dd4b39] font-bold">{v.score}/10</span>
+              </div>
+            ))
+          )}
           {dash && (
             <div className="mt-4 bg-gray-50 p-3 rounded-sm flex items-center gap-2">
               <Star size={16} className="text-[#f39c12]" /> Điểm trung bình toàn KTX:{" "}
