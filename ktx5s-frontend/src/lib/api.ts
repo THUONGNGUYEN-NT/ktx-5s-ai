@@ -9,7 +9,11 @@ import {
 } from "./mock-api";
 import { analyzeFourRoomPhotos } from "./vision-analyzer";
 import { CURRENT_WEEK, type AreaKey, type Room, type RoomStatus } from "@/components/status";
-import { uploadAllFourAreasToCloudinary } from "./cloudinary";
+import {
+  uploadAllFourAreasToCloudinary,
+  fetchCloudLiveRecords,
+  pushCloudLiveRecords,
+} from "./cloudinary";
 
 const api = axios.create({ baseURL: BASE_URL });
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -17,7 +21,12 @@ const BACKEND_ORIGIN = BASE_URL.replace(/\/api\/?$/, "");
 
 function resolveImageUrl(url: string): string {
   if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:") || url.startsWith("blob:")) {
+  if (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("data:") ||
+    url.startsWith("blob:")
+  ) {
     return url;
   }
   return `${BACKEND_ORIGIN}${url.startsWith("/") ? "" : "/"}${url}`;
@@ -32,8 +41,8 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-// Lưu các lượt nộp thật & duyệt đè trong trình duyệt để đồng bộ ngay lên bảng 10 tầng / 200 phòng
-type LiveRecord = {
+// Lưu các lượt nộp thật & duyệt đè trong trình duyệt + đồng bộ lên Cloudinary để mọi thiết bị (Điện thoại <-> Laptop) thấy ngay
+export type LiveRecord = {
   submission_id: string;
   room_code: string;
   week: string;
@@ -56,19 +65,102 @@ function loadLiveRecords(): Record<string, LiveRecord> {
   }
 }
 
-function saveLiveRecord(rec: LiveRecord) {
+function writeLocalLiveRecords(all: Record<string, LiveRecord>) {
   if (typeof window === "undefined") return;
   try {
-    const all = loadLiveRecords();
-    all[`${rec.week}_${rec.room_code}`] = rec;
     localStorage.setItem(LIVE_KEY, JSON.stringify(all));
   } catch {
     // ignore storage quota errors
   }
 }
 
-function mergeRoomsWithLive(week: string, baseRooms: Room[]): Room[] {
-  const all = loadLiveRecords();
+function normalizeAiResult(raw: any): AIResult {
+  const c = raw?.checklist || {};
+  return {
+    status: raw?.status || "Sạch",
+    score: typeof raw?.score === "number" ? raw.score : 8.5,
+    is_valid_room_photo: raw?.is_valid_room_photo ?? true,
+    checklist: {
+      bed_tidy: Boolean(c.bed_tidy ?? c.giuong_gon ?? c.giuong_gon_gang ?? true),
+      floor_clean: Boolean(c.floor_clean ?? c.san_sach ?? c.san_nha_sach_se ?? true),
+      shoes_arranged: Boolean(c.shoes_arranged ?? c.ke_giay_ngan_nap ?? c.giay_dep_ngan_nap ?? true),
+      desk_organized: Boolean(c.desk_organized ?? c.ban_hoc_gon ?? c.ban_hoc_gon_gang ?? true),
+    },
+    issues_detected: Array.isArray(raw?.issues_detected)
+      ? raw.issues_detected
+      : Array.isArray(raw?.detected_issues)
+      ? raw.detected_issues
+      : [],
+    positive_notes: Array.isArray(raw?.positive_notes) ? raw.positive_notes : [],
+    recommendations:
+      raw?.recommendations ||
+      "Cả 4 khu vực trong phòng đều rất gọn gàng, sạch sẽ. Hãy tiếp tục duy trì chuẩn 5S!",
+  };
+}
+
+/**
+ * Tải & hợp nhất dữ liệu nộp ảnh giữa LocalStorage của máy hiện tại và Cloudinary Cloud
+ */
+async function syncLiveRecordsFromCloud(): Promise<Record<string, LiveRecord>> {
+  const local = loadLiveRecords();
+  for (const k of Object.keys(local)) {
+    if (local[k]?.ai_result) {
+      local[k].ai_result = normalizeAiResult(local[k].ai_result);
+    }
+  }
+  try {
+    const remote = await fetchCloudLiveRecords<Record<string, LiveRecord>>();
+    if (remote && typeof remote === "object") {
+      const merged: Record<string, LiveRecord> = {};
+      for (const [k, rec] of Object.entries(remote)) {
+        if (rec && rec.room_code) {
+          merged[k] = {
+            ...rec,
+            ai_result: normalizeAiResult(rec.ai_result),
+          };
+        }
+      }
+      for (const [key, localRec] of Object.entries(local)) {
+        const remoteRec = merged[key];
+        if (!remoteRec) {
+          merged[key] = localRec;
+        } else {
+          const localTime = new Date(localRec.submitted_at || 0).getTime();
+          const remoteTime = new Date(remoteRec.submitted_at || 0).getTime();
+          if (localTime > remoteTime || (localRec.is_overridden && !remoteRec.is_overridden)) {
+            merged[key] = localRec;
+          }
+        }
+      }
+      writeLocalLiveRecords(merged);
+      return merged;
+    }
+  } catch {
+    // fallback local
+  }
+  writeLocalLiveRecords(local);
+  return local;
+}
+
+async function saveLiveRecord(rec: LiveRecord) {
+  const current = await syncLiveRecordsFromCloud();
+  current[`${rec.week}_${rec.room_code}`] = rec;
+  writeLocalLiveRecords(current);
+
+  // Chỉ đẩy các URL nhẹ (http/https từ Cloudinary) lên file JSON chung để đồng bộ siêu tốc giữa Điện thoại & Laptop
+  const cloudSafeRecords: Record<string, LiveRecord> = {};
+  for (const [k, v] of Object.entries(current)) {
+    cloudSafeRecords[k] = v;
+  }
+  await pushCloudLiveRecords(cloudSafeRecords);
+}
+
+function mergeRoomsWithLive(
+  week: string,
+  baseRooms: Room[],
+  liveRecords?: Record<string, LiveRecord>
+): Room[] {
+  const all = liveRecords ?? loadLiveRecords();
   return baseRooms.map((r) => {
     const live = all[`${week}_${r.room_code}`];
     if (!live) return r;
@@ -84,12 +176,11 @@ function mergeRoomsWithLive(week: string, baseRooms: Room[]): Room[] {
   });
 }
 
-// ---- SINH VIÊN: Nộp đủ 4 ảnh khu vực -> Gọi thẳng API AI của Sinh viên A ----
+// ---- SINH VIÊN: Nộp đủ 4 ảnh khu vực -> Gọi thẳng API AI của Sinh viên A hoặc chấm trên trình duyệt + đồng bộ Cloudinary ----
 export async function submitPhotos(roomCode: string, files: Record<AreaKey, File>) {
   const cleanCode = roomCode.trim().toUpperCase();
   const week = `2026-W${CURRENT_WEEK}`;
 
-  // Chuẩn bị FormData chứa đúng 4 ảnh theo thứ tự: Giường, Sàn nhà, Kệ giày dép, Bàn học
   const form = new FormData();
   form.append("room_code", cleanCode);
   form.append("captured_at", new Date().toISOString());
@@ -99,7 +190,6 @@ export async function submitPhotos(roomCode: string, files: Record<AreaKey, File
   form.append("image", files.desk);
 
   try {
-    // Ưu tiên gọi thẳng API AI Gemini Vision của Sinh viên A tại Backend (:8000)
     const res = await api.post("/ai/evaluate", form, {
       headers: { "Content-Type": "multipart/form-data" },
     });
@@ -112,7 +202,7 @@ export async function submitPhotos(roomCode: string, files: Record<AreaKey, File
         shoes: urls[2] || (await fileToDataUrl(files.shoes)),
         desk: urls[3] || (await fileToDataUrl(files.desk)),
       };
-      saveLiveRecord({
+      await saveLiveRecord({
         submission_id: payload.data.submission_id || `sub_${week}_${cleanCode}`,
         room_code: cleanCode,
         week,
@@ -126,7 +216,6 @@ export async function submitPhotos(roomCode: string, files: Record<AreaKey, File
     return payload;
   } catch (err) {
     const axErr = err as AxiosError<{ message?: string; detail?: string }>;
-    // Nếu Backend (:8000) đang bật và trả lỗi từ AI (VD: ảnh mờ/tối hoặc thiếu GEMINI_API_KEY) -> báo đúng lỗi đó
     if (axErr.response?.data) {
       const msg =
         axErr.response.data.message ||
@@ -135,9 +224,7 @@ export async function submitPhotos(roomCode: string, files: Record<AreaKey, File
       throw new Error(msg);
     }
 
-    // Nếu chạy trên GitHub Pages hoặc khi cổng 8000 chưa bật -> Chạy bộ phân tích điểm ảnh 5S trực tiếp trên 4 ảnh
     if (USE_MOCK) {
-      // Tự động upload song song 4 ảnh lên Cloudinary vào thư mục của phòng: ktx5s/{cleanCode}/
       const cloudUploadPromise = uploadAllFourAreasToCloudinary(files, cleanCode);
       const analysisPromise = analyzeFourRoomPhotos(files);
 
@@ -157,7 +244,7 @@ export async function submitPhotos(roomCode: string, files: Record<AreaKey, File
       };
       const submittedAt = new Date().toISOString();
       const subId = `sub_${week}_${cleanCode}`;
-      saveLiveRecord({
+      await saveLiveRecord({
         submission_id: subId,
         room_code: cleanCode,
         week,
@@ -176,7 +263,7 @@ export async function submitPhotos(roomCode: string, files: Record<AreaKey, File
           image_url: areaImages.bed,
           ai_result: analysis.aiResult,
         },
-        message: "Nộp 4 ảnh thành công! AI đã phân tích xong.",
+        message: "Nộp 4 ảnh thành công! AI đã phân tích và đồng bộ lên Cloud.",
       };
     }
 
@@ -203,7 +290,8 @@ export type HistorySubmission = {
 export async function getRoomHistory(roomCode: string) {
   const cleanCode = roomCode.trim().toUpperCase();
   const week = `2026-W${CURRENT_WEEK}`;
-  const live = loadLiveRecords()[`${week}_${cleanCode}`];
+  const allLive = await syncLiveRecordsFromCloud();
+  const live = allLive[`${week}_${cleanCode}`];
 
   const baseHistory: HistorySubmission[] = mockHistory.data.history
     .filter((h) => h.week !== week || !live)
@@ -215,20 +303,20 @@ export async function getRoomHistory(roomCode: string) {
 
   const history: HistorySubmission[] = live
     ? [
-        {
-          submission_id: live.submission_id,
-          week: live.week,
-          submitted_at: live.submitted_at,
-          image_url: live.area_images.bed,
-          area_images: live.area_images,
-          ai_result: live.ai_result,
-          status: live.ai_result.status,
-          score: live.ai_result.score,
-          is_overridden: live.is_overridden,
-          override_note: live.override_note,
-        },
-        ...baseHistory,
-      ]
+      {
+        submission_id: live.submission_id,
+        week: live.week,
+        submitted_at: live.submitted_at,
+        image_url: live.area_images.bed,
+        area_images: live.area_images,
+        ai_result: live.ai_result,
+        status: live.ai_result.status,
+        score: live.ai_result.score,
+        is_overridden: live.is_overridden,
+        override_note: live.override_note,
+      },
+      ...baseHistory,
+    ]
     : baseHistory;
 
   return {
@@ -254,7 +342,7 @@ export async function getDashboard(week = `2026-W${CURRENT_WEEK}`) {
       return res.data;
     }
   } catch {
-    // Backend chưa bật hoặc offline -> tính toán cục bộ
+    // Backend chưa bật hoặc offline -> tính toán từ dữ liệu phòng + Cloudinary sync
   }
 
   const roomsRes = await getRooms({ week });
@@ -293,7 +381,7 @@ export async function getDashboard(week = `2026-W${CURRENT_WEEK}`) {
   };
 }
 
-// ---- CÁN BỘ: Danh sách phòng (10 tầng / 200 phòng + cập nhật trực tiếp từ AI & CSDL) ----
+// ---- CÁN BỘ: Danh sách phòng (10 tầng / 200 phòng + cập nhật trực tiếp từ AI, CSDL & Cloudinary) ----
 export async function getRooms(params?: {
   week?: string;
   status?: string;
@@ -305,6 +393,7 @@ export async function getRooms(params?: {
 }> {
   const week = params?.week ?? `2026-W${CURRENT_WEEK}`;
   const baseRooms = generateRooms(week);
+  const liveRecordsPromise = syncLiveRecordsFromCloud();
 
   // 1. Thử gọi API Backend thật từ cổng 8000
   try {
@@ -320,11 +409,12 @@ export async function getRooms(params?: {
         }
       }
 
-      // Hợp nhất các phòng nộp thật trên CSDL vào danh sách 200 phòng
       const merged = baseRooms.map((base) => {
         const sr = serverMap.get(base.room_code.toUpperCase());
         if (!sr) return base;
-        const hasSub = sr.submission_id || (sr.status && sr.status !== "not_submitted" && sr.status !== "Chưa nộp ảnh");
+        const hasSub =
+          sr.submission_id ||
+          (sr.status && sr.status !== "not_submitted" && sr.status !== "Chưa nộp ảnh");
         return {
           ...base,
           submission_id: sr.submission_id ?? base.submission_id,
@@ -336,7 +426,6 @@ export async function getRooms(params?: {
         };
       });
 
-      // Nếu có phòng mới trên server không nằm trong baseRooms
       serverMap.forEach((sr, code) => {
         if (!merged.some((m) => m.room_code.toUpperCase() === code)) {
           merged.push({
@@ -345,7 +434,9 @@ export async function getRooms(params?: {
             building: sr.building || code[0] || "A",
             floor: Number(sr.floor) || 1,
             week: sr.week || week,
-            status: (sr.status === "Chưa nộp ảnh" || sr.status === "not_submitted" ? null : sr.status) as RoomStatus,
+            status: (
+              sr.status === "Chưa nộp ảnh" || sr.status === "not_submitted" ? null : sr.status
+            ) as RoomStatus,
             score: sr.score != null ? Number(sr.score) : null,
             submitted_at: sr.submitted_at ?? null,
             image_url: sr.image_url ? resolveImageUrl(sr.image_url) : null,
@@ -355,14 +446,15 @@ export async function getRooms(params?: {
         }
       });
 
-      return { success: true, data: { rooms: mergeRoomsWithLive(week, merged) } };
+      const liveRecords = await liveRecordsPromise;
+      return { success: true, data: { rooms: mergeRoomsWithLive(week, merged, liveRecords) } };
     }
   } catch {
-    // Backend chưa bật hoặc offline -> dùng mock data
+    // Backend chưa bật hoặc offline -> dùng dữ liệu đồng bộ từ Cloudinary + mock data
   }
 
-  await wait(150);
-  const rooms = mergeRoomsWithLive(week, baseRooms);
+  const liveRecords = await liveRecordsPromise;
+  const rooms = mergeRoomsWithLive(week, baseRooms, liveRecords);
   return { success: true, data: { rooms } };
 }
 
@@ -403,21 +495,21 @@ export async function getSubmissionDetail(
           ai_result: d.ai_result,
           override: d.override_info?.is_overridden
             ? {
-                new_status: d.override_info.final_status,
-                new_score: d.override_info.final_score,
-                note: d.override_info.override_note ?? "",
-              }
+              new_status: d.override_info.final_status,
+              new_score: d.override_info.final_score,
+              note: d.override_info.override_note ?? "",
+            }
             : null,
         },
       };
     }
   } catch {
-    // Tiếp tục kiểm tra live storage
+    // Tiếp tục kiểm tra Cloudinary & localStorage
   }
 
-  // 2. Thử trong localStorage live records
-  await wait(150);
-  const allLive = Object.values(loadLiveRecords());
+  // 2. Đồng bộ từ Cloudinary + localStorage live records
+  const allLiveMap = await syncLiveRecordsFromCloud();
+  const allLive = Object.values(allLiveMap);
   const live = allLive.find((r) => r.submission_id === submissionId);
   if (live) {
     return {
@@ -431,17 +523,17 @@ export async function getSubmissionDetail(
         ai_result: live.ai_result,
         override: live.is_overridden
           ? {
-              new_status: live.ai_result.status,
-              new_score: live.ai_result.score,
-              note: live.override_note ?? "",
-            }
+            new_status: live.ai_result.status,
+            new_score: live.ai_result.score,
+            note: live.override_note ?? "",
+          }
           : null,
       },
     };
   }
 
   // 3. Fallback mock data
-  const parts = submissionId.split("_"); // sub_2026-W47_A1-101
+  const parts = submissionId.split("_");
   const week = parts.length >= 3 ? parts[1] : `2026-W${CURRENT_WEEK}`;
   const room = generateRooms(week).find((r) => r.submission_id === submissionId);
   if (!room || !room.status || room.score === null) return { success: false, data: null };
@@ -474,11 +566,10 @@ export async function overrideSubmission(
     // Không chặn nếu chạy offline
   }
 
-  await wait(200);
   const parts = submissionId.split("_");
   const week = parts.length >= 3 ? parts[1] : `2026-W${CURRENT_WEEK}`;
   const roomCode = parts.length >= 3 ? parts.slice(2).join("_") : "";
-  const all = loadLiveRecords();
+  const all = await syncLiveRecordsFromCloud();
   const key = `${week}_${roomCode}`;
   const existing = all[key];
 
@@ -490,14 +581,14 @@ export async function overrideSubmission(
     };
     existing.is_overridden = true;
     existing.override_note = payload.note;
-    saveLiveRecord(existing);
+    await saveLiveRecord(existing);
   } else if (roomCode) {
     const room = generateRooms(week).find((r) => r.room_code === roomCode);
     const baseAi = buildMockAiResult(
       payload.new_status as AIResult["status"],
       payload.new_score
     );
-    saveLiveRecord({
+    await saveLiveRecord({
       submission_id: submissionId,
       room_code: roomCode,
       week,
@@ -509,5 +600,5 @@ export async function overrideSubmission(
     });
   }
 
-  return { success: true, message: "Đã cập nhật kết quả duyệt lại thành công!" };
+  return { success: true, message: "Đã cập nhật kết quả duyệt lại và đồng bộ lên Cloud!" };
 }

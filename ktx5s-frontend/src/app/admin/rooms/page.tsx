@@ -163,11 +163,11 @@ function Detail() {
                 </tbody>
               </table>
 
-              {data.ai_result.issues_detected.length > 0 && (
+              {(data.ai_result.issues_detected?.length ?? 0) > 0 && (
                 <div className="mt-3 bg-red-50 border-l-4 border-[#dd4b39] p-3">
                   <p className="font-semibold text-[#dd4b39] mb-1">Lỗi phát hiện</p>
                   <ul className="list-disc list-inside text-gray-600">
-                    {data.ai_result.issues_detected.map((s, i) => (
+                    {(data.ai_result.issues_detected ?? []).map((s, i) => (
                       <li key={i}>{s}</li>
                     ))}
                   </ul>
