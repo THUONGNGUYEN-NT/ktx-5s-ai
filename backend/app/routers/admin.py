@@ -73,6 +73,31 @@ async def get_dashboard(
 
     avg_score = round(total_score / eval_count, 1) if eval_count > 0 else 0.0
 
+    # Top phòng vi phạm trong tuần (điểm thấp nhất hoặc trạng thái Bừa bộn / Hơi bừa bộn)
+    evaluated_subs = [s for s in submissions if s.ai_evaluation]
+    evaluated_subs.sort(
+        key=lambda s: (
+            s.ai_evaluation.final_score
+            if s.ai_evaluation.final_score is not None
+            else (s.ai_evaluation.score if s.ai_evaluation.score is not None else 10.0)
+        )
+    )
+    top_violations = []
+    for s in evaluated_subs[:6]:
+        status = s.ai_evaluation.final_status or s.ai_evaluation.status or "Bừa bộn"
+        score = (
+            s.ai_evaluation.final_score
+            if s.ai_evaluation.final_score is not None
+            else (s.ai_evaluation.score if s.ai_evaluation.score is not None else 0.0)
+        )
+        room = db.query(Room).filter(Room.id == s.room_id).first()
+        room_code = room.room_code if room else f"Phòng #{s.room_id}"
+        top_violations.append({
+            "room_code": room_code,
+            "score": round(score, 1),
+            "status": status,
+        })
+
     return {
         "success": True,
         "data": {
@@ -90,6 +115,7 @@ async def get_dashboard(
             },
             "avg_score": avg_score,
             "deadline": "Chủ Nhật hàng tuần lúc 21:00",
+            "top_violations": top_violations,
         },
         "message": "OK",
     }

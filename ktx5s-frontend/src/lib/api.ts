@@ -247,6 +247,10 @@ export async function getDashboard(week = `2026-W${CURRENT_WEEK}`) {
   try {
     const res = await api.get("/admin/dashboard", { params: { week } });
     if (res.data?.success && res.data?.data) {
+      const d = res.data.data;
+      if (!Array.isArray(d.top_violations)) {
+        d.top_violations = [];
+      }
       return res.data;
     }
   } catch {
