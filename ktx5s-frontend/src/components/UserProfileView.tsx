@@ -30,12 +30,7 @@ import {
   updateUserProfile,
   changeUserPassword,
   requestPasswordResetOtp,
-  requestContactVerificationOtp,
-  confirmContactVerification,
-  updateAuthPreferences,
-  getActiveOtpCode,
   type UserAccount,
-  type VerificationMethod,
 } from "@/lib/user-store";
 
 // Bảng màu nền Avatar chữ cái
@@ -48,7 +43,7 @@ const AVATAR_COLORS = [
   { hex: "#d81b60", label: "Đỏ Hồng" },
 ];
 
-// Bộ Avatar minh họa SVG tích hợp sẵn (không cần tải file ngoài)
+// Bộ Avatar minh họa SVG tích hợp sẵn
 function makeSvgAvatar(bg1: string, bg2: string, emoji: string, badge: string): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
     <defs>
@@ -134,16 +129,6 @@ export default function UserProfileView({ role }: { role: UserRole }) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordMessage, setPasswordMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  // Lựa chọn phương thức xác thực bảo mật (1 trong 2 hoặc cả 2)
-  const [preferredMethod, setPreferredMethod] = useState<VerificationMethod>("phone");
-  const [prefMessage, setPrefMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  // Tiến trình xác thực Số điện thoại / Email qua OTP
-  const [verifyingTarget, setVerifyingTarget] = useState<VerificationMethod | null>(null);
-  const [verifyOtpInput, setVerifyOtpInput] = useState("");
-  const [verifyStatusMessage, setVerifyStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [isSendingVerifyOtp, setIsSendingVerifyOtp] = useState(false);
 
   // Kiểm tra gửi mã OTP xác thực thực tế
   const [otpTestStatus, setOtpTestStatus] = useState<string>("");
@@ -314,68 +299,8 @@ export default function UserProfileView({ role }: { role: UserRole }) {
     }
   };
 
-  // Bắt đầu quy trình xác thực SĐT hoặc Email
-  const handleStartVerify = async (method: VerificationMethod) => {
-    if (!account) return;
-    setVerifyStatusMessage(null);
-    setVerifyOtpInput("");
-    setIsSendingVerifyOtp(true);
-    setVerifyingTarget(method);
-
-    const res = await requestContactVerificationOtp(account.username, method);
-    setIsSendingVerifyOtp(false);
-    if (res.success) {
-      setVerifyStatusMessage({
-        type: "success",
-        text: res.message,
-      });
-    } else {
-      setVerifyStatusMessage({
-        type: "error",
-        text: res.message,
-      });
-      setVerifyingTarget(null);
-    }
-  };
-
-  // Xác nhận mã OTP để hoàn tất xác thực
-  const handleConfirmVerify = () => {
-    if (!account || !verifyingTarget) return;
-    setVerifyStatusMessage(null);
-
-    const cleanOtp = verifyOtpInput.trim();
-    if (!cleanOtp) {
-      setVerifyStatusMessage({ type: "error", text: "Vui lòng nhập mã OTP gồm 6 chữ số." });
-      return;
-    }
-
-    const res = confirmContactVerification(account.username, cleanOtp, verifyingTarget);
-    if (res.success && res.updated) {
-      setAccount(res.updated);
-      setVerifyStatusMessage({ type: "success", text: res.message });
-      setVerifyingTarget(null);
-      setVerifyOtpInput("");
-    } else {
-      setVerifyStatusMessage({ type: "error", text: res.message });
-    }
-  };
-
-  // Lưu lựa chọn phương thức xác thực bảo mật
-  const handleSavePreferences = () => {
-    if (!account) return;
-    setPrefMessage(null);
-
-    const res = updateAuthPreferences(account.username, preferredMethod);
-    if (res.success && res.updated) {
-      setAccount(res.updated);
-      setPrefMessage({ type: "success", text: res.message });
-    } else {
-      setPrefMessage({ type: "error", text: res.message });
-    }
-  };
-
   // Kiểm tra gửi OTP thực tế
-  const handleTestOtp = async (method: VerificationMethod) => {
+  const handleTestOtp = async (method: "phone" | "email") => {
     if (!account) return;
     setOtpTestStatus("Đang gửi mã xác thực OTP...");
     const res = await requestPasswordResetOtp(account.username, method);
@@ -398,9 +323,8 @@ export default function UserProfileView({ role }: { role: UserRole }) {
 
   return (
     <div className="space-y-4 max-w-5xl mx-auto">
-      {/* ===== CARD 1: HEADER HỒ SƠ GỌN GÀNG, VỪA KHÍT MÀN HÌNH LAPTOP ===== */}
+      {/* ===== CARD 1: HEADER HỒ SƠ GỌN GÀNG, CHỈ 1 NÚT MÁY ẢNH TRÊN AVATAR ===== */}
       <div className="bg-white rounded-sm shadow-sm border border-gray-200 overflow-hidden">
-        {/* Dải màu phân biệt rõ vai trò Sinh viên (Xanh ngọc - Xanh dương) vs Cán bộ (Xanh đen - Xanh KTX) */}
         <div
           className={`h-3 ${
             isStudent
@@ -410,7 +334,7 @@ export default function UserProfileView({ role }: { role: UserRole }) {
         />
 
         <div className="p-4 md:px-6 md:py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          {/* Cụm Avatar + Thông tin chính */}
+          {/* Cụm Avatar (duy nhất 1 nút đổi ảnh) + Thông tin chính */}
           <div className="flex items-center gap-4">
             <div className="relative group shrink-0">
               <button
@@ -447,13 +371,6 @@ export default function UserProfileView({ role }: { role: UserRole }) {
                 <span className="bg-emerald-100 text-emerald-800 text-[11px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Đang hoạt động
                 </span>
-                <button
-                  type="button"
-                  onClick={openAvatarEditor}
-                  className="text-[11px] font-semibold text-[#3c8dbc] bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-0.5 rounded-full flex items-center gap-1 transition-colors"
-                >
-                  <Camera size={12} /> Đổi Avatar
-                </button>
               </div>
 
               <div className="text-gray-500 text-xs mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -584,7 +501,7 @@ export default function UserProfileView({ role }: { role: UserRole }) {
               <Sparkles size={14} className="text-[#3c8dbc]" /> Đồng bộ hồ sơ trực tiếp:
             </p>
             <p>
-              Khi bạn đổi <b>Ảnh đại diện (Avatar)</b> hoặc <b>Họ tên</b>, thông tin sẽ tự động cập nhật ngay trên thanh menu trái và góc trên bên phải màn hình.
+              Khi bạn bấm vào <b>vòng tròn Avatar</b> để đổi ảnh hoặc cập nhật <b>Họ tên</b>, thông tin sẽ tự động cập nhật ngay trên thanh menu trái và góc trên bên phải màn hình.
             </p>
           </div>
         </div>
@@ -594,20 +511,11 @@ export default function UserProfileView({ role }: { role: UserRole }) {
           {/* TAB 1: THÔNG TIN CÁ NHÂN */}
           {activeTab === "info" && (
             <div className="bg-white rounded-sm border border-gray-200 p-5 shadow-sm">
-              <div className="border-b border-gray-100 pb-2.5 mb-4 flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-bold text-gray-800">Thông tin chi tiết tài khoản</h2>
-                  <p className="text-xs text-gray-500">
-                    Cập nhật họ tên, ảnh đại diện, số điện thoại và email nhận thông báo 5S
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={openAvatarEditor}
-                  className="text-xs font-semibold text-[#3c8dbc] hover:underline flex items-center gap-1"
-                >
-                  <Camera size={14} /> Chỉnh sửa Avatar
-                </button>
+              <div className="border-b border-gray-100 pb-2.5 mb-4">
+                <h2 className="text-sm font-bold text-gray-800">Thông tin chi tiết tài khoản</h2>
+                <p className="text-xs text-gray-500">
+                  Cập nhật họ tên, số điện thoại và email nhận thông báo 5S
+                </p>
               </div>
 
               {infoMessage && (
@@ -727,14 +635,7 @@ export default function UserProfileView({ role }: { role: UserRole }) {
                   </div>
                 )}
 
-                <div className="pt-2.5 border-t border-gray-100 flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={openAvatarEditor}
-                    className="flex items-center gap-1.5 px-3.5 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold rounded-sm transition-colors"
-                  >
-                    <Camera size={14} /> Đổi ảnh đại diện
-                  </button>
+                <div className="pt-2.5 border-t border-gray-100 flex items-center justify-end">
                   <button
                     type="submit"
                     className="flex items-center gap-1.5 px-4 py-2 bg-[#3c8dbc] hover:bg-[#367fa9] text-white font-semibold rounded-sm shadow-xs transition-colors"
@@ -873,99 +774,8 @@ export default function UserProfileView({ role }: { role: UserRole }) {
                     onClick={() => handleTestOtp("email")}
                     className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-semibold rounded-sm transition-colors"
                   >
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="font-bold text-gray-800 flex items-center gap-1.5">
-                          <Phone size={15} className="text-[#3c8dbc]" /> Chỉ Số điện thoại
-                        </span>
-                        <input
-                          type="radio"
-                          name="authMethod"
-                          checked={preferredMethod === "phone"}
-                          onChange={() => setPreferredMethod("phone")}
-                          className="text-[#3c8dbc] focus:ring-[#3c8dbc]"
-                        />
-                      </div>
-                      <p className="text-[11px] text-gray-500 leading-relaxed">
-                        Chỉ gửi mã OTP qua tin nhắn SMS tới số điện thoại. Tiện lợi, nhận mã nhanh chóng qua di động.
-                      </p>
-                    </div>
-                    <span className="mt-3 text-[10px] text-gray-400 font-medium">1 trong 2 kênh</span>
-                  </label>
-
-                  {/* OPTION 2: CHỈ QUA EMAIL */}
-                  <label
-                    onClick={() => setPreferredMethod("email")}
-                    className={`border rounded p-3.5 cursor-pointer flex flex-col justify-between transition-all ${
-                      preferredMethod === "email"
-                        ? "border-[#3c8dbc] bg-blue-50/70 ring-2 ring-[#3c8dbc]/30"
-                        : "border-gray-200 bg-white hover:bg-gray-50"
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="font-bold text-gray-800 flex items-center gap-1.5">
-                          <Mail size={15} className="text-[#3c8dbc]" /> Chỉ Hòm thư Email
-                        </span>
-                        <input
-                          type="radio"
-                          name="authMethod"
-                          checked={preferredMethod === "email"}
-                          onChange={() => setPreferredMethod("email")}
-                          className="text-[#3c8dbc] focus:ring-[#3c8dbc]"
-                        />
-                      </div>
-                      <p className="text-[11px] text-gray-500 leading-relaxed">
-                        Chỉ gửi mã OTP qua Email. Phù hợp khi làm việc trên laptop hoặc sử dụng email trường học.
-                      </p>
-                    </div>
-                    <span className="mt-3 text-[10px] text-gray-400 font-medium">1 trong 2 kênh</span>
-                  </label>
-
-                  {/* OPTION 3: BẮT BUỘC CẢ HAI */}
-                  <label
-                    onClick={() => setPreferredMethod("both")}
-                    className={`border rounded p-3.5 cursor-pointer flex flex-col justify-between transition-all ${
-                      preferredMethod === "both"
-                        ? "border-emerald-600 bg-emerald-50/70 ring-2 ring-emerald-500/30"
-                        : "border-gray-200 bg-white hover:bg-gray-50"
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="font-bold text-emerald-900 flex items-center gap-1.5">
-                          <ShieldCheck size={16} className="text-emerald-600" /> Bắt buộc CẢ HAI
-                        </span>
-                        <input
-                          type="radio"
-                          name="authMethod"
-                          checked={preferredMethod === "both"}
-                          onChange={() => setPreferredMethod("both")}
-                          className="text-emerald-600 focus:ring-emerald-500"
-                        />
-                      </div>
-                      <p className="text-[11px] text-gray-600 leading-relaxed">
-                        Bảo mật 2 lớp kép (SMS + Email): Hệ thống sẽ gửi OTP đồng thời tới cả 2 kênh để bảo vệ tối đa.
-                      </p>
-                    </div>
-                    <span className="mt-3 text-[10px] text-emerald-700 font-bold">Khuyên dùng cho tài khoản chính</span>
-                  </label>
-                </div>
-
-                <div className="mt-4 flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={handleSavePreferences}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-[#3c8dbc] hover:bg-[#367fa9] text-white font-semibold rounded text-xs shadow-sm transition-colors"
-                  >
-                    <Save size={14} /> Lưu tùy chọn phương thức xác thực
+                    <Send size={13} /> Gửi thử OTP qua Email
                   </button>
-
-                  {prefMessage && (
-                    <span className={`text-xs font-semibold ${prefMessage.type === "success" ? "text-emerald-600" : "text-red-600"}`}>
-                      {prefMessage.text}
-                    </span>
-                  )}
                 </div>
               </div>
 
@@ -973,13 +783,7 @@ export default function UserProfileView({ role }: { role: UserRole }) {
                 <div className="bg-sky-50 border border-sky-200 rounded-sm p-3 text-xs text-sky-950">
                   <p className="font-semibold text-sky-900 leading-relaxed">{otpTestStatus}</p>
                 </div>
-
-                {otpTestStatus && (
-                  <div className="mt-3 bg-sky-50 border border-sky-200 rounded p-3 text-xs text-sky-950">
-                    <p className="font-semibold text-sky-900 leading-relaxed">{otpTestStatus}</p>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           )}
         </div>
