@@ -21,7 +21,6 @@ import {
   ZoomIn,
   Palette,
   BadgeCheck,
-  IdCard,
   X,
 } from "lucide-react";
 import { getSession, saveSession, type UserRole } from "@/lib/session";
@@ -433,7 +432,7 @@ export default function UserProfileView({ role }: { role: UserRole }) {
             <h3 className="font-bold text-gray-800 text-xs uppercase tracking-wider pb-2.5 border-b border-gray-100 flex items-center gap-2">
               {isStudent ? (
                 <>
-                  <IdCard size={16} className="text-teal-600" /> Thẻ định danh Sinh viên KTX
+                  <BadgeCheck size={16} className="text-teal-600" /> Thẻ định danh Sinh viên KTX
                 </>
               ) : (
                 <>
