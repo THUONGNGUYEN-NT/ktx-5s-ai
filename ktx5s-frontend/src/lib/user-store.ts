@@ -19,8 +19,9 @@ export type UserAccount = {
   unit?: string;         // Đơn vị/Tòa nhà phụ trách (dành cho cán bộ)
   major?: string;        // Khoa / Ngành học (dành cho sinh viên)
   joinedDate?: string;
-  avatarUrl?: string;    // Ảnh đại diện cá nhân (base64 / SVG data URL)
-  avatarColor?: string;  // Màu nền avatar mặc định
+  phoneVerified?: boolean;
+  emailVerified?: boolean;
+  preferredAuthMethod?: VerificationMethod; // "phone" | "email" | "both"
 };
 
 const ACCOUNTS_STORAGE_KEY = "ktx5s_user_accounts_v5";
