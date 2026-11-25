@@ -172,22 +172,53 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 
 def get_student_room(user: User, db: Session) -> Room:
-    """Ánh xạ tài khoản sinh viên theo mã sinh viên trong danh sách phân phòng."""
+    """Ánh xạ tài khoản sinh viên theo mã sinh viên hoặc mã phòng trong danh sách phân phòng."""
     if user.role != "student":
         raise HTTPException(403, "Tài khoản này không có quyền nộp ảnh sinh viên.")
 
+    # 1. Tìm trực tiếp nếu username là mã phòng (VD: A3-301, B2-201)
+    room = db.query(Room).filter(Room.room_code.ilike(user.username.strip()), Room.is_active == True).first()
+    if room:
+        return room
+
+    # 2. Tìm qua bảng Student theo student_code
     room = (
         db.query(Room)
         .join(Student, Student.room_id == Room.id)
         .filter(
-            Student.student_code == user.username,
+            Student.student_code.ilike(user.username.strip()),
             Student.is_active == True,
             Room.is_active == True,
         )
         .first()
     )
-    if room is None:
-        raise HTTPException(403, "Tài khoản chưa được phân vào phòng đang hoạt động.")
+    if room is not None:
+        return room
+
+    # 3. Tự động tạo phòng nếu phòng chưa có sẵn trong DB
+    clean_code = user.username.strip().upper()
+    parts = clean_code.split("-")
+    building = parts[0][0] if parts and parts[0] else "A"
+    floor_num = 1
+    room_num = clean_code
+    if len(parts) >= 2:
+        room_num = parts[1]
+        try:
+            floor_num = int(room_num[0])
+        except Exception:
+            floor_num = 1
+
+    room = Room(
+        room_code=clean_code,
+        building=building,
+        floor=floor_num,
+        room_number=room_num,
+        capacity=4,
+        is_active=True,
+    )
+    db.add(room)
+    db.commit()
+    db.refresh(room)
     return room
 
 

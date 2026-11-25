@@ -30,7 +30,12 @@ import {
   updateUserProfile,
   changeUserPassword,
   requestPasswordResetOtp,
+  requestContactVerificationOtp,
+  confirmContactVerification,
+  updateAuthPreferences,
+  getActiveOtpCode,
   type UserAccount,
+  type VerificationMethod,
 } from "@/lib/user-store";
 
 // Bảng màu nền Avatar chữ cái
@@ -129,6 +134,16 @@ export default function UserProfileView({ role }: { role: UserRole }) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordMessage, setPasswordMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Lựa chọn phương thức xác thực bảo mật (1 trong 2 hoặc cả 2)
+  const [preferredMethod, setPreferredMethod] = useState<VerificationMethod>("phone");
+  const [prefMessage, setPrefMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Tiến trình xác thực Số điện thoại / Email qua OTP
+  const [verifyingTarget, setVerifyingTarget] = useState<VerificationMethod | null>(null);
+  const [verifyOtpInput, setVerifyOtpInput] = useState("");
+  const [verifyStatusMessage, setVerifyStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [isSendingVerifyOtp, setIsSendingVerifyOtp] = useState(false);
 
   // Kiểm tra gửi mã OTP xác thực thực tế
   const [otpTestStatus, setOtpTestStatus] = useState<string>("");
@@ -299,8 +314,68 @@ export default function UserProfileView({ role }: { role: UserRole }) {
     }
   };
 
+  // Bắt đầu quy trình xác thực SĐT hoặc Email
+  const handleStartVerify = async (method: VerificationMethod) => {
+    if (!account) return;
+    setVerifyStatusMessage(null);
+    setVerifyOtpInput("");
+    setIsSendingVerifyOtp(true);
+    setVerifyingTarget(method);
+
+    const res = await requestContactVerificationOtp(account.username, method);
+    setIsSendingVerifyOtp(false);
+    if (res.success) {
+      setVerifyStatusMessage({
+        type: "success",
+        text: res.message,
+      });
+    } else {
+      setVerifyStatusMessage({
+        type: "error",
+        text: res.message,
+      });
+      setVerifyingTarget(null);
+    }
+  };
+
+  // Xác nhận mã OTP để hoàn tất xác thực
+  const handleConfirmVerify = () => {
+    if (!account || !verifyingTarget) return;
+    setVerifyStatusMessage(null);
+
+    const cleanOtp = verifyOtpInput.trim();
+    if (!cleanOtp) {
+      setVerifyStatusMessage({ type: "error", text: "Vui lòng nhập mã OTP gồm 6 chữ số." });
+      return;
+    }
+
+    const res = confirmContactVerification(account.username, cleanOtp, verifyingTarget);
+    if (res.success && res.updated) {
+      setAccount(res.updated);
+      setVerifyStatusMessage({ type: "success", text: res.message });
+      setVerifyingTarget(null);
+      setVerifyOtpInput("");
+    } else {
+      setVerifyStatusMessage({ type: "error", text: res.message });
+    }
+  };
+
+  // Lưu lựa chọn phương thức xác thực bảo mật
+  const handleSavePreferences = () => {
+    if (!account) return;
+    setPrefMessage(null);
+
+    const res = updateAuthPreferences(account.username, preferredMethod);
+    if (res.success && res.updated) {
+      setAccount(res.updated);
+      setPrefMessage({ type: "success", text: res.message });
+    } else {
+      setPrefMessage({ type: "error", text: res.message });
+    }
+  };
+
   // Kiểm tra gửi OTP thực tế
-  const handleTestOtp = async (method: "phone" | "email") => {
+  const handleTestOtp = async (method: VerificationMethod) => {
     if (!account) return;
     setOtpTestStatus("Đang gửi mã xác thực OTP...");
     const res = await requestPasswordResetOtp(account.username, method);
@@ -798,8 +873,99 @@ export default function UserProfileView({ role }: { role: UserRole }) {
                     onClick={() => handleTestOtp("email")}
                     className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-semibold rounded-sm transition-colors"
                   >
-                    <Send size={13} /> Gửi thử OTP qua Email
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="font-bold text-gray-800 flex items-center gap-1.5">
+                          <Phone size={15} className="text-[#3c8dbc]" /> Chỉ Số điện thoại
+                        </span>
+                        <input
+                          type="radio"
+                          name="authMethod"
+                          checked={preferredMethod === "phone"}
+                          onChange={() => setPreferredMethod("phone")}
+                          className="text-[#3c8dbc] focus:ring-[#3c8dbc]"
+                        />
+                      </div>
+                      <p className="text-[11px] text-gray-500 leading-relaxed">
+                        Chỉ gửi mã OTP qua tin nhắn SMS tới số điện thoại. Tiện lợi, nhận mã nhanh chóng qua di động.
+                      </p>
+                    </div>
+                    <span className="mt-3 text-[10px] text-gray-400 font-medium">1 trong 2 kênh</span>
+                  </label>
+
+                  {/* OPTION 2: CHỈ QUA EMAIL */}
+                  <label
+                    onClick={() => setPreferredMethod("email")}
+                    className={`border rounded p-3.5 cursor-pointer flex flex-col justify-between transition-all ${
+                      preferredMethod === "email"
+                        ? "border-[#3c8dbc] bg-blue-50/70 ring-2 ring-[#3c8dbc]/30"
+                        : "border-gray-200 bg-white hover:bg-gray-50"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="font-bold text-gray-800 flex items-center gap-1.5">
+                          <Mail size={15} className="text-[#3c8dbc]" /> Chỉ Hòm thư Email
+                        </span>
+                        <input
+                          type="radio"
+                          name="authMethod"
+                          checked={preferredMethod === "email"}
+                          onChange={() => setPreferredMethod("email")}
+                          className="text-[#3c8dbc] focus:ring-[#3c8dbc]"
+                        />
+                      </div>
+                      <p className="text-[11px] text-gray-500 leading-relaxed">
+                        Chỉ gửi mã OTP qua Email. Phù hợp khi làm việc trên laptop hoặc sử dụng email trường học.
+                      </p>
+                    </div>
+                    <span className="mt-3 text-[10px] text-gray-400 font-medium">1 trong 2 kênh</span>
+                  </label>
+
+                  {/* OPTION 3: BẮT BUỘC CẢ HAI */}
+                  <label
+                    onClick={() => setPreferredMethod("both")}
+                    className={`border rounded p-3.5 cursor-pointer flex flex-col justify-between transition-all ${
+                      preferredMethod === "both"
+                        ? "border-emerald-600 bg-emerald-50/70 ring-2 ring-emerald-500/30"
+                        : "border-gray-200 bg-white hover:bg-gray-50"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="font-bold text-emerald-900 flex items-center gap-1.5">
+                          <ShieldCheck size={16} className="text-emerald-600" /> Bắt buộc CẢ HAI
+                        </span>
+                        <input
+                          type="radio"
+                          name="authMethod"
+                          checked={preferredMethod === "both"}
+                          onChange={() => setPreferredMethod("both")}
+                          className="text-emerald-600 focus:ring-emerald-500"
+                        />
+                      </div>
+                      <p className="text-[11px] text-gray-600 leading-relaxed">
+                        Bảo mật 2 lớp kép (SMS + Email): Hệ thống sẽ gửi OTP đồng thời tới cả 2 kênh để bảo vệ tối đa.
+                      </p>
+                    </div>
+                    <span className="mt-3 text-[10px] text-emerald-700 font-bold">Khuyên dùng cho tài khoản chính</span>
+                  </label>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={handleSavePreferences}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-[#3c8dbc] hover:bg-[#367fa9] text-white font-semibold rounded text-xs shadow-sm transition-colors"
+                  >
+                    <Save size={14} /> Lưu tùy chọn phương thức xác thực
                   </button>
+
+                  {prefMessage && (
+                    <span className={`text-xs font-semibold ${prefMessage.type === "success" ? "text-emerald-600" : "text-red-600"}`}>
+                      {prefMessage.text}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -807,7 +973,13 @@ export default function UserProfileView({ role }: { role: UserRole }) {
                 <div className="bg-sky-50 border border-sky-200 rounded-sm p-3 text-xs text-sky-950">
                   <p className="font-semibold text-sky-900 leading-relaxed">{otpTestStatus}</p>
                 </div>
-              )}
+
+                {otpTestStatus && (
+                  <div className="mt-3 bg-sky-50 border border-sky-200 rounded p-3 text-xs text-sky-950">
+                    <p className="font-semibold text-sky-900 leading-relaxed">{otpTestStatus}</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

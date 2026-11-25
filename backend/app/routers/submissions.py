@@ -411,6 +411,12 @@ async def evaluate_four_photos(
             },
         )
 
+    # Luôn tự động lưu 4 file ảnh lên Cloudinary vào thư mục của phòng: ktx5s/{room_code}/
+    image_urls = []
+    for position, compressed in enumerate(compressed_images, start=1):
+        url = await save_image(compressed, room_code=clean_room_code, filename_prefix=f"area_{position}")
+        image_urls.append(url)
+
     if not ai_result.get("is_valid_room_photo", True):
         invalid_msg = (
             ai_result.get("invalid_reason")
@@ -421,17 +427,11 @@ async def evaluate_four_photos(
             status_code=400,
             content={
                 "success": False,
-                "data": None,
+                "data": {"image_urls": image_urls},
                 "message": invalid_msg,
                 "error_code": "INVALID_IMAGE",
             },
         )
-
-    # Lưu 4 file ảnh ra ổ đĩa / Cloudinary
-    image_urls = []
-    for compressed in compressed_images:
-        url = await save_image(compressed, room_code=clean_room_code, filename_prefix="5s")
-        image_urls.append(url)
 
     checklist = ai_result.get("checklist", {})
     clean_status = normalize_status(ai_result.get("status", "Bừa bộn"))

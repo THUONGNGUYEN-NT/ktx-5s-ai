@@ -28,6 +28,7 @@ import {
   verifyOtpAndResetPassword,
   findAccountByIdentifier,
   getAllAccounts,
+  getActiveOtpCode,
 } from "@/lib/user-store";
 
 type SavedAccount = {
@@ -84,7 +85,7 @@ export default function LoginPage() {
 
   // State cho Modal "Quên mật khẩu / Khôi phục qua OTP"
   const [showForgotModal, setShowForgotModal] = useState(false);
-  const [forgotMethod, setForgotMethod] = useState<"phone" | "email">("phone");
+  const [forgotMethod, setForgotMethod] = useState<"phone" | "email" | "both">("phone");
   const [forgotIdentifier, setForgotIdentifier] = useState("");
   const [forgotStep, setForgotStep] = useState<1 | 2 | 3>(1); // 1: Nhập định danh, 2: Nhập OTP, 3: Đặt mật khẩu mới
   const [forgotOtp, setForgotOtp] = useState("");
@@ -94,6 +95,7 @@ export default function LoginPage() {
   const [forgotError, setForgotError] = useState("");
   const [forgotSuccess, setForgotSuccess] = useState("");
   const [countdown, setCountdown] = useState(0);
+  const [activeOtp, setActiveOtp] = useState("");
 
   // Khởi động dữ liệu mẫu
   useEffect(() => {
@@ -189,7 +191,14 @@ export default function LoginPage() {
   const handleOpenForgot = () => {
     setShowForgotModal(true);
     setForgotStep(1);
-    setForgotIdentifier(username.trim() || "");
+    const cleanUser = username.trim() || "";
+    setForgotIdentifier(cleanUser);
+    if (cleanUser) {
+      const acc = findAccountByIdentifier(cleanUser);
+      if (acc?.preferredAuthMethod) {
+        setForgotMethod(acc.preferredAuthMethod);
+      }
+    }
     setForgotOtp("");
     setForgotNewPass("");
     setForgotConfirmPass("");
@@ -216,6 +225,8 @@ export default function LoginPage() {
     setMaskedTarget(res.maskedTarget || "");
     setForgotStep(2);
     setCountdown(60);
+    const code = getActiveOtpCode();
+    if (code) setActiveOtp(code);
   };
 
   // Bước 2: Xác nhận OTP
@@ -534,30 +545,41 @@ export default function LoginPage() {
                 <form onSubmit={handleSendOtp} className="space-y-4">
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                      Chọn kênh nhận mã xác thực OTP:
+                      Chọn kênh nhận mã xác thực OTP (1 trong 2 hoặc cả hai):
                     </label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       <button
                         type="button"
                         onClick={() => setForgotMethod("phone")}
-                        className={`flex items-center justify-center gap-2 py-2 px-3 rounded border text-xs font-medium transition-all ${
+                        className={`flex flex-col items-center justify-center gap-1 py-2 px-2 rounded border text-[11px] font-medium transition-all ${
                           forgotMethod === "phone"
-                            ? "border-[#3c8dbc] bg-blue-50 text-[#3c8dbc] ring-1 ring-[#3c8dbc]"
+                            ? "border-[#3c8dbc] bg-blue-50 text-[#3c8dbc] ring-1 ring-[#3c8dbc] font-bold"
                             : "border-gray-300 text-gray-600 hover:bg-gray-50"
                         }`}
                       >
-                        <Phone size={15} /> Qua SMS Điện thoại
+                        <Phone size={15} /> Qua SMS
                       </button>
                       <button
                         type="button"
                         onClick={() => setForgotMethod("email")}
-                        className={`flex items-center justify-center gap-2 py-2 px-3 rounded border text-xs font-medium transition-all ${
+                        className={`flex flex-col items-center justify-center gap-1 py-2 px-2 rounded border text-[11px] font-medium transition-all ${
                           forgotMethod === "email"
-                            ? "border-[#3c8dbc] bg-blue-50 text-[#3c8dbc] ring-1 ring-[#3c8dbc]"
+                            ? "border-[#3c8dbc] bg-blue-50 text-[#3c8dbc] ring-1 ring-[#3c8dbc] font-bold"
                             : "border-gray-300 text-gray-600 hover:bg-gray-50"
                         }`}
                       >
-                        <Mail size={15} /> Qua Hòm thư Email
+                        <Mail size={15} /> Qua Email
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForgotMethod("both")}
+                        className={`flex flex-col items-center justify-center gap-1 py-2 px-2 rounded border text-[11px] font-medium transition-all ${
+                          forgotMethod === "both"
+                            ? "border-emerald-600 bg-emerald-50 text-emerald-800 ring-1 ring-emerald-600 font-bold"
+                            : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        <ShieldCheck size={16} className="text-emerald-600" /> Cả hai kênh
                       </button>
                     </div>
                   </div>

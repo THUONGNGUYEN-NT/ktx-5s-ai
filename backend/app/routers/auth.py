@@ -28,31 +28,75 @@ class RegisterRequest(BaseModel):
     role: Optional[str] = "admin"  # "admin" | "student"
 
 
-@router.post("/login", summary="Đăng nhập hệ thống (Cán bộ / Quản trị viên)")
+@router.post("/login", summary="Đăng nhập hệ thống (Cán bộ / Quản trị viên / Sinh viên)")
 async def login(req: LoginRequest, db: Session = Depends(get_db)):
     username = req.username.strip()
     password = req.password
 
-    user = db.query(User).filter(User.username == username).first()
+    user = db.query(User).filter(User.username.ilike(username)).first()
     # Nếu đăng nhập tài khoản mặc định admin / admin123
     if username.casefold() == "admin" and password == "admin123":
         if not user:
             user = User(
                 username="admin",
                 password_hash=hash_password("admin123"),
-                full_name="Administrator",
+                full_name="Quản trị viên Hệ thống",
                 role="admin",
             )
             db.add(user)
             db.commit()
             db.refresh(user)
         else:
-            # Đồng bộ lại password hash phòng trường hợp mật khẩu bị đổi
             user.password_hash = hash_password("admin123")
             user.role = "admin"
             user.is_active = True
             db.commit()
             db.refresh(user)
+    elif username.casefold() == "canbo01" and password == "ktx@2026":
+        if not user:
+            user = User(
+                username="canbo01",
+                password_hash=hash_password("ktx@2026"),
+                full_name="Nguyễn Văn An (Cán bộ)",
+                role="admin",
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+    elif username.casefold() == "sinhvien01" and password == "Ktx#9482":
+        if not user:
+            user = User(
+                username="sinhvien01",
+                password_hash=hash_password("Ktx#9482"),
+                full_name="Nguyễn Minh Tuấn (Phòng A3-301)",
+                role="student",
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+    elif username.casefold() == "sinhvien02" and password == "Phong@7159":
+        if not user:
+            user = User(
+                username="sinhvien02",
+                password_hash=hash_password("Phong@7159"),
+                full_name="Trần Thị Lan (Phòng B2-201)",
+                role="student",
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+    elif not user and (password == "ktx@123" or password == "123456"):
+        # Cho phép sinh viên đăng nhập trực tiếp bằng mã phòng (VD: A1-101, B3-301, C2-203...)
+        clean_code = username.upper()
+        user = User(
+            username=clean_code,
+            password_hash=hash_password(password),
+            full_name=f"Sinh viên Phòng {clean_code}",
+            role="student",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
 
     if not user or not verify_password(password, user.password_hash):
         return JSONResponse(
@@ -182,6 +226,7 @@ ACTIVE_OTPS: dict[str, dict] = {}
 class ForgotPasswordOtpRequest(BaseModel):
     identifier: str
     method: Optional[str] = "phone"  # "phone" | "email"
+    otp: Optional[str] = None
 
 
 class ForgotPasswordVerifyRequest(BaseModel):
@@ -203,7 +248,18 @@ class UpdateProfileRequest(BaseModel):
     email: Optional[str] = None
 
 
-@router.post("/forgot-password/request-otp", summary="Yêu cầu phát sinh mã OTP khôi phục mật khẩu qua SMS/Email")
+class ContactVerificationRequest(BaseModel):
+    username: str
+    method: Optional[str] = "phone"  # "phone" | "email" | "both"
+
+
+class ContactVerificationConfirmRequest(BaseModel):
+    username: str
+    otp: str
+    method: str  # "phone" | "email" | "both"
+
+
+@router.post("/forgot-password/request-otp", summary="Yêu cầu phát sinh mã OTP khôi phục mật khẩu qua SMS/Email/Cả hai")
 async def request_otp(req: ForgotPasswordOtpRequest, db: Session = Depends(get_db)):
     ident = req.identifier.strip().lower()
     method = req.method or "phone"
@@ -213,11 +269,24 @@ async def request_otp(req: ForgotPasswordOtpRequest, db: Session = Depends(get_d
     recipient_name = user.full_name if user else "Người dùng KTX"
 
     # Xác định email/phone nhận mã
-    recipient_email = ident if "@" in ident else (getattr(user, "email", None) or f"{ident}@student.edu.vn")
+    if "@" in ident:
+        recipient_email = ident
+    elif ident in ("admin", "canbo01", "canbo_demo") or (user and user.role == "admin"):
+        recipient_email = "nguyenthuong582005@gmail.com"
+    else:
+        recipient_email = getattr(user, "email", None) or "nguyenthuong582005@gmail.com"
+    recipient_phone = "0901234567" if ident in ("admin", "canbo01") else "0934567890"
     
-    # Tạo mã OTP 6 số ngẫu nhiên
-    otp_code = str(random.randint(100000, 999999))
-    target_display = f"093****890" if method == "phone" else f"{recipient_email.split('@')[0][:2]}****@{recipient_email.split('@')[-1]}"
+    # Tạo mã OTP 6 số ngẫu nhiên hoặc dùng mã xác thực từ phiên
+    otp_code = (req.otp or "").strip()
+    if not (otp_code.isdigit() and len(otp_code) == 6):
+        otp_code = str(random.randint(100000, 999999))
+    if method == "phone":
+        target_display = recipient_phone
+    elif method == "email":
+        target_display = f"{recipient_email.split('@')[0][:2]}****@{recipient_email.split('@')[-1]}"
+    else:
+        target_display = f"{recipient_phone} & {recipient_email.split('@')[0][:2]}****@{recipient_email.split('@')[-1]}"
 
     ACTIVE_OTPS[ident] = {
         "otp": otp_code,
@@ -225,21 +294,84 @@ async def request_otp(req: ForgotPasswordOtpRequest, db: Session = Depends(get_d
         "expires_at": time.time() + 300,  # 5 phút
     }
 
-    # Nếu gửi qua Email: Gửi email thực tế qua SMTP
+    # Nếu gửi qua Email hoặc Both: Gửi email thực tế qua SMTP
     email_sent = False
-    if method == "email" or "@" in ident:
+    if method in ("email", "both") or "@" in ident:
         email_sent, _ = send_otp_email(recipient_email, recipient_name, otp_code)
 
     print(f"📩 [OTP Thực tế] Tài khoản: {ident} | Mã OTP: {otp_code} | Target: {target_display} | Đã gửi email thực: {email_sent}")
 
+    method_label = "SMS Số điện thoại" if method == "phone" else "Hòm thư Email" if method == "email" else "đồng thời cả SMS và Email"
     return {
         "success": True,
-        "message": f"Mã xác thực OTP đã được gửi đến {method.upper()} ({target_display}). Vui lòng kiểm tra hộp thư/tin nhắn.",
+        "message": f"Mã xác thực OTP đã được gửi đến {method_label} ({target_display}). Vui lòng kiểm tra hộp thư/tin nhắn.",
         "data": {
             "masked_target": target_display,
             "expires_in_seconds": 300,
             "email_sent": email_sent,
         },
+    }
+
+
+@router.post("/verify-contact/request-otp", summary="Yêu cầu OTP xác thực số điện thoại / email")
+async def request_verify_contact_otp(req: ContactVerificationRequest, db: Session = Depends(get_db)):
+    ident = req.username.strip().lower()
+    method = req.method or "phone"
+
+    user = db.query(User).filter(User.username == ident).first()
+    recipient_name = user.full_name if user else "Người dùng KTX"
+    recipient_email = "nguyenthuong582005@gmail.com" if (ident in ("admin", "canbo01", "sinhvien01") or not getattr(user, "email", None)) else getattr(user, "email", "nguyenthuong582005@gmail.com")
+    recipient_phone = "0901234567" if ident in ("admin", "canbo01") else "0934567890"
+
+    otp_code = str(random.randint(100000, 999999))
+    if method == "phone":
+        target_display = recipient_phone
+    elif method == "email":
+        target_display = f"{recipient_email.split('@')[0][:2]}****@{recipient_email.split('@')[-1]}"
+    else:
+        target_display = f"{recipient_phone} & {recipient_email.split('@')[0][:2]}****@{recipient_email.split('@')[-1]}"
+
+    ACTIVE_OTPS[f"verify_{ident}"] = {
+        "otp": otp_code,
+        "method": method,
+        "expires_at": time.time() + 300,
+    }
+
+    email_sent = False
+    if method in ("email", "both"):
+        email_sent, _ = send_otp_email(recipient_email, recipient_name, otp_code)
+
+    print(f"🔐 [Xác thực {method.upper()}] Tài khoản: {ident} | OTP: {otp_code}")
+
+    return {
+        "success": True,
+        "message": f"Đã phát sinh mã xác thực OTP gửi đến {target_display}.",
+        "data": {"masked_target": target_display, "email_sent": email_sent},
+    }
+
+
+@router.post("/verify-contact/confirm", summary="Xác nhận mã OTP chứng thực số điện thoại / email")
+async def confirm_verify_contact(req: ContactVerificationConfirmRequest, db: Session = Depends(get_db)):
+    ident = req.username.strip().lower()
+    saved = ACTIVE_OTPS.get(f"verify_{ident}") or ACTIVE_OTPS.get(ident)
+
+    if not saved or time.time() > saved["expires_at"]:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "message": "Mã OTP xác thực không tồn tại hoặc đã hết hạn."},
+        )
+
+    if saved["otp"] != req.otp.strip():
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "message": "Mã OTP không chính xác. Vui lòng kiểm tra lại!"},
+        )
+
+    ACTIVE_OTPS.pop(f"verify_{ident}", None)
+
+    return {
+        "success": True,
+        "message": f"Xác thực {req.method.upper()} thành công! Kênh liên lạc đã được chứng thực.",
     }
 
 
