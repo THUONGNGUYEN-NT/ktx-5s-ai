@@ -455,7 +455,7 @@ export async function requestPasswordResetOtp(
         fetch(`${apiHost}/api/auth/forgot-password/request-otp`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ identifier: acc.email || acc.username, method: method }),
+          body: JSON.stringify({ identifier: acc.email || acc.username, method: method, otp: otp }),
         }).catch(() => {});
       }
     } catch {}
@@ -527,7 +527,7 @@ export async function requestContactVerificationOtp(
         fetch(`${apiHost}/api/auth/forgot-password/request-otp`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ identifier: acc.username, method: "email" }),
+          body: JSON.stringify({ identifier: acc.email || acc.username, method: "email", otp: otp }),
         }).catch(() => {});
       }
     } catch {}

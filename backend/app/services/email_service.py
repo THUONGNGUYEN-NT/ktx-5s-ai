@@ -11,10 +11,11 @@ def send_otp_email(recipient_email: str, recipient_name: str, otp_code: str) -> 
     Gửi email chứa mã OTP thực tế qua giao thức SMTP (Gmail hoặc Mail Server trường).
     Trả về (success, message).
     """
-    smtp_email = settings.SMTP_EMAIL.strip()
-    smtp_password = settings.SMTP_PASSWORD.strip()
-    smtp_server = settings.SMTP_SERVER.strip() or "smtp.gmail.com"
-    smtp_port = settings.SMTP_PORT or 587
+    current_settings = Settings()
+    smtp_email = current_settings.SMTP_EMAIL.strip()
+    smtp_password = current_settings.SMTP_PASSWORD.strip()
+    smtp_server = current_settings.SMTP_SERVER.strip() or "smtp.gmail.com"
+    smtp_port = current_settings.SMTP_PORT or 587
 
     # Nếu người dùng chưa cấu hình thông tin SMTP trong file .env
     if not smtp_email or not smtp_password:
