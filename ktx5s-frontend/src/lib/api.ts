@@ -74,16 +74,52 @@ function writeLocalLiveRecords(all: Record<string, LiveRecord>) {
   }
 }
 
+function normalizeAiResult(raw: any): AIResult {
+  const c = raw?.checklist || {};
+  return {
+    status: raw?.status || "Sạch",
+    score: typeof raw?.score === "number" ? raw.score : 8.5,
+    is_valid_room_photo: raw?.is_valid_room_photo ?? true,
+    checklist: {
+      bed_tidy: Boolean(c.bed_tidy ?? c.giuong_gon ?? c.giuong_gon_gang ?? true),
+      floor_clean: Boolean(c.floor_clean ?? c.san_sach ?? c.san_nha_sach_se ?? true),
+      shoes_arranged: Boolean(c.shoes_arranged ?? c.ke_giay_ngan_nap ?? c.giay_dep_ngan_nap ?? true),
+      desk_organized: Boolean(c.desk_organized ?? c.ban_hoc_gon ?? c.ban_hoc_gon_gang ?? true),
+    },
+    issues_detected: Array.isArray(raw?.issues_detected)
+      ? raw.issues_detected
+      : Array.isArray(raw?.detected_issues)
+      ? raw.detected_issues
+      : [],
+    positive_notes: Array.isArray(raw?.positive_notes) ? raw.positive_notes : [],
+    recommendations:
+      raw?.recommendations ||
+      "Cả 4 khu vực trong phòng đều rất gọn gàng, sạch sẽ. Hãy tiếp tục duy trì chuẩn 5S!",
+  };
+}
+
 /**
  * Tải & hợp nhất dữ liệu nộp ảnh giữa LocalStorage của máy hiện tại và Cloudinary Cloud
  */
 async function syncLiveRecordsFromCloud(): Promise<Record<string, LiveRecord>> {
   const local = loadLiveRecords();
+  for (const k of Object.keys(local)) {
+    if (local[k]?.ai_result) {
+      local[k].ai_result = normalizeAiResult(local[k].ai_result);
+    }
+  }
   try {
     const remote = await fetchCloudLiveRecords<Record<string, LiveRecord>>();
     if (remote && typeof remote === "object") {
-      // Hợp nhất: ưu tiên bản ghi mới hơn theo submitted_at hoặc có is_overridden
-      const merged: Record<string, LiveRecord> = { ...remote };
+      const merged: Record<string, LiveRecord> = {};
+      for (const [k, rec] of Object.entries(remote)) {
+        if (rec && rec.room_code) {
+          merged[k] = {
+            ...rec,
+            ai_result: normalizeAiResult(rec.ai_result),
+          };
+        }
+      }
       for (const [key, localRec] of Object.entries(local)) {
         const remoteRec = merged[key];
         if (!remoteRec) {
@@ -102,6 +138,7 @@ async function syncLiveRecordsFromCloud(): Promise<Record<string, LiveRecord>> {
   } catch {
     // fallback local
   }
+  writeLocalLiveRecords(local);
   return local;
 }
 
@@ -266,20 +303,20 @@ export async function getRoomHistory(roomCode: string) {
 
   const history: HistorySubmission[] = live
     ? [
-        {
-          submission_id: live.submission_id,
-          week: live.week,
-          submitted_at: live.submitted_at,
-          image_url: live.area_images.bed,
-          area_images: live.area_images,
-          ai_result: live.ai_result,
-          status: live.ai_result.status,
-          score: live.ai_result.score,
-          is_overridden: live.is_overridden,
-          override_note: live.override_note,
-        },
-        ...baseHistory,
-      ]
+      {
+        submission_id: live.submission_id,
+        week: live.week,
+        submitted_at: live.submitted_at,
+        image_url: live.area_images.bed,
+        area_images: live.area_images,
+        ai_result: live.ai_result,
+        status: live.ai_result.status,
+        score: live.ai_result.score,
+        is_overridden: live.is_overridden,
+        override_note: live.override_note,
+      },
+      ...baseHistory,
+    ]
     : baseHistory;
 
   return {
@@ -458,10 +495,10 @@ export async function getSubmissionDetail(
           ai_result: d.ai_result,
           override: d.override_info?.is_overridden
             ? {
-                new_status: d.override_info.final_status,
-                new_score: d.override_info.final_score,
-                note: d.override_info.override_note ?? "",
-              }
+              new_status: d.override_info.final_status,
+              new_score: d.override_info.final_score,
+              note: d.override_info.override_note ?? "",
+            }
             : null,
         },
       };
@@ -486,10 +523,10 @@ export async function getSubmissionDetail(
         ai_result: live.ai_result,
         override: live.is_overridden
           ? {
-              new_status: live.ai_result.status,
-              new_score: live.ai_result.score,
-              note: live.override_note ?? "",
-            }
+            new_status: live.ai_result.status,
+            new_score: live.ai_result.score,
+            note: live.override_note ?? "",
+          }
           : null,
       },
     };

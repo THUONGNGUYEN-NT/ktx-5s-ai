@@ -195,11 +195,10 @@ export default function AppShell({
                 key={item.href}
                 href={item.href}
                 title={item.label}
-                className={`flex items-center gap-3 px-4 py-3 border-l-[3px] transition-colors ${
-                  active
-                    ? "bg-[#1e282c] text-white border-[#3c8dbc]"
-                    : "border-transparent hover:bg-[#1e282c] hover:text-white"
-                }`}
+                className={`flex items-center gap-3 px-4 py-3 border-l-[3px] transition-colors ${active
+                  ? "bg-[#1e282c] text-white border-[#3c8dbc]"
+                  : "border-transparent hover:bg-[#1e282c] hover:text-white"
+                  }`}
               >
                 <Icon size={16} className="shrink-0" />
                 {!collapsed && <span className="flex-1">{item.label}</span>}
