@@ -738,19 +738,64 @@ export async function submitCaptureSession(
   captures: Record<string, { file: File; preview: string }>
 ) {
   if (session.is_offline_fallback) {
-    const bedFile = captures["B01"]?.file;
-    const floorFile = captures["C02_FLOOR"]?.file;
-    const shoesFile = captures["C04_SHOES"]?.file;
-    const deskFile = captures["C03_DESK"]?.file;
-    if (!bedFile || !floorFile || !shoesFile || !deskFile) {
-      throw new Error("Thiếu ảnh khu vực bắt buộc.");
+    const orderedSlots = session.slots.filter((s) => Boolean(captures[s.slot_code]?.file));
+    const form = new FormData();
+    form.append("room_code", session.room_code);
+    form.append("captured_at", new Date().toISOString());
+    form.append("bed_count", String(session.bed_count));
+    form.append("slot_codes", JSON.stringify(orderedSlots.map((s) => s.slot_code)));
+    form.append("slot_labels", JSON.stringify(orderedSlots.map((s) => s.slot_label)));
+    for (const s of orderedSlots) {
+      form.append("image", captures[s.slot_code].file);
     }
-    return submitPhotos(session.room_code, {
-      bed: bedFile,
-      floor: floorFile,
-      shoes: shoesFile,
-      desk: deskFile,
-    });
+
+    try {
+      const res = await api.post("/ai/evaluate", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const payload = res.data;
+      if (payload?.success && payload?.data) {
+        const urls: string[] = (payload.data.image_urls ?? []).map(resolveImageUrl);
+        await saveLiveRecord({
+          submission_id: payload.data.submission_id || `sub_${session.week}_${session.room_code}`,
+          room_code: session.room_code,
+          week: session.week,
+          submitted_at: payload.data.submitted_at || new Date().toISOString(),
+          area_images: {
+            bed: urls[0] || captures["B01"]?.preview || "",
+            floor: captures["C02_FLOOR"]?.preview || urls[1] || "",
+            desk: captures["C03_DESK"]?.preview || urls[2] || "",
+            shoes: captures["C04_SHOES"]?.preview || urls[3] || "",
+          },
+          ai_result: payload.data.ai_result,
+          is_overridden: false,
+          override_note: null,
+        });
+      }
+      return payload;
+    } catch (err) {
+      const axErr = err as AxiosError<{ message?: string; detail?: string }>;
+      if (axErr.response?.data) {
+        throw new Error(
+          axErr.response.data.message ||
+            axErr.response.data.detail ||
+            "AI không thể phân tích bộ ảnh này. Vui lòng chụp lại."
+        );
+      }
+      const bedFile = captures["B01"]?.file;
+      const floorFile = captures["C02_FLOOR"]?.file;
+      const shoesFile = captures["C04_SHOES"]?.file;
+      const deskFile = captures["C03_DESK"]?.file;
+      if (!bedFile || !floorFile || !shoesFile || !deskFile) {
+        throw new Error("Thiếu ảnh khu vực bắt buộc.");
+      }
+      return submitPhotos(session.room_code, {
+        bed: bedFile,
+        floor: floorFile,
+        shoes: shoesFile,
+        desk: deskFile,
+      });
+    }
   }
 
   try {

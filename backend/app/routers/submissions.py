@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from fastapi.responses import JSONResponse
@@ -9,6 +10,7 @@ from app.database import get_db, SessionLocal
 from app.models import Room, Submission, SubmissionPhoto, AiEvaluation, User
 from app.services.auth_service import get_current_user, get_student_room, require_room_access
 from app.services import process_and_compress_image, save_image, evaluate_room_image
+from app.services.ai_service import evaluate_room_session
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -353,21 +355,38 @@ async def get_room_history(
     }
 
 
-@router.post("/ai/evaluate", summary="Chấm điểm 4 ảnh phòng bằng AI Gemini Vision (kết nối trực tiếp Frontend)")
+@router.post("/ai/evaluate", summary="Chấm điểm bộ ảnh phòng bằng AI Gemini Vision (kết nối trực tiếp Frontend)")
 async def evaluate_four_photos(
     room_code: str = Form(..., description="Mã phòng, VD: A3-301"),
     captured_at: str = Form(..., description="Thời gian chụp ISO 8601"),
-    image: list[UploadFile] = File(..., description="Bắt buộc 4 ảnh: Giường, Sàn nhà, Kệ giày dép, Bàn học"),
+    image: list[UploadFile] = File(..., description="Danh sách ảnh phòng"),
+    slot_codes: Optional[str] = Form(None, description="JSON array mã từng góc chụp"),
+    slot_labels: Optional[str] = Form(None, description="JSON array tên từng góc chụp"),
+    bed_count: Optional[int] = Form(None, description="Số người của phòng (2, 4, 6, 8)"),
 ):
-    """Nhận 4 ảnh từ giao diện Sinh viên B, nén ảnh, gọi AI Gemini Vision của Sinh viên A và trả kết quả chuẩn."""
+    """Nhận bộ ảnh từ Frontend, nén ảnh, gọi AI Vision và trả kết quả nhận xét đầy đủ tất cả ảnh."""
     clean_room_code = room_code.strip().upper()
-    if len(image) != 4:
+    parsed_codes: list[str] = []
+    parsed_labels: list[str] = []
+    if slot_codes:
+        try:
+            parsed_codes = json.loads(slot_codes)
+        except Exception:
+            parsed_codes = []
+    if slot_labels:
+        try:
+            parsed_labels = json.loads(slot_labels)
+        except Exception:
+            parsed_labels = []
+
+    is_session_batch = len(parsed_codes) == len(image) and len(image) >= 4
+    if not is_session_batch and len(image) != 4:
         return JSONResponse(
             status_code=400,
             content={
                 "success": False,
                 "data": None,
-                "message": f"Bắt buộc chụp đủ 4 ảnh (Giường, Sàn nhà, Kệ giày dép, Bàn học). Hiện mới nhận {len(image)} ảnh.",
+                "message": f"Bắt buộc chụp đủ bộ ảnh phòng. Hiện mới nhận {len(image)} ảnh.",
                 "error_code": "INVALID_IMAGE",
             },
         )
@@ -396,9 +415,27 @@ async def evaluate_four_photos(
         compressed_images.append(compressed)
         size_kb += photo_size_kb
 
-    # Gọi AI Gemini Vision của Sinh viên A
+    # Gọi AI Vision: nếu gửi kèm slot_codes thì chấm toàn bộ tất cả ảnh theo phiên
     try:
-        ai_result = evaluate_room_image(compressed_images)
+        if is_session_batch:
+            slot_items = []
+            for idx, comp_bytes in enumerate(compressed_images):
+                code = parsed_codes[idx]
+                lbl = parsed_labels[idx] if idx < len(parsed_labels) else code
+                grp = "bed" if code.startswith("B") else "challenge" if code.startswith("CH") else "common"
+                slot_items.append({
+                    "slot_code": code,
+                    "slot_group": grp,
+                    "slot_label": lbl,
+                    "bytes": comp_bytes,
+                })
+            ai_result = evaluate_room_session(
+                slot_items=slot_items,
+                room_code=clean_room_code,
+                bed_count=bed_count or 4,
+            )
+        else:
+            ai_result = evaluate_room_image(compressed_images)
     except Exception as exc:
         logger.exception("Lỗi gọi Gemini Vision API cho phòng %s", clean_room_code)
         return JSONResponse(

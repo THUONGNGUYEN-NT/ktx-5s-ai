@@ -403,7 +403,7 @@ Submitted photos in this capture session:
 {slots_desc}
 
 === 1. SLOT-BY-SLOT VERIFICATION ===
-Inspect EVERY submitted image independently:
+IMPORTANT: Inspect EVERY SINGLE submitted image independently ({len(slot_items)} images total). NEVER stop after finding the first invalid photo! You MUST output one entry in `slot_checks` for EVERY single image using its exact `slot_code` ({', '.join(item['slot_code'] for item in slot_items)}).
 - Sleeping positions (B01..B{max(1, (bed_count + 1) // 2):02d}): Each photo represents one bunk bed unit showing BOTH the upper bunk and lower bunk clearly in the same frame (blankets, pillows, mattresses, no clutter/storage).
 - C01_OVERVIEW: Wide view from the doorway showing overall layout of beds, desks, and walkway.
 - C02_FLOOR: Angled 30-45° view of floor and walkway (trash, dust, obstacles).
@@ -533,16 +533,41 @@ def _apply_session_scoring(
         result["is_valid_room_photo"] = False
         result["score"] = 0.0
         result["status"] = "Không hợp lệ (Gian lận)" if has_fraud_signal else "Không hợp lệ"
-        reasons = [f"• {r['slot_label']}: {r['reason']}" for r in retake_requests]
-        if not reasons and consistency.get("inconsistencies"):
-            reasons = [f"• {x}" for x in consistency["inconsistencies"]]
-        result["issues_detected"] = reasons or [result.get("recommendations") or "Cần chụp bổ sung ảnh."]
-        if not result.get("recommendations"):
-            result["recommendations"] = (
-                "Cán bộ quản lý sẽ xác minh trường hợp nghi ngờ gian lận."
-                if has_fraud_signal
-                else "Vui lòng chụp bổ sung các góc ảnh chưa đạt yêu cầu."
-            )
+
+        summary_parts: list[str] = []
+        if has_fraud_signal and consistency.get("inconsistencies"):
+            inc_lines = [f"• {x}" for x in consistency["inconsistencies"]]
+            summary_parts.append("Phát hiện dấu hiệu không đồng nhất / ngoài KTX:\n" + "\n".join(inc_lines))
+
+        all_slot_lines: list[str] = []
+        checked_map = {
+            str(chk.get("slot_code") or ""): chk
+            for chk in slot_checks
+            if isinstance(chk, dict)
+        }
+        for item in slot_items:
+            code = item["slot_code"]
+            lbl = item["slot_label"]
+            chk = checked_map.get(code)
+            if chk:
+                st = str(chk.get("status") or "passed")
+                issue = str(chk.get("issue") or "").strip()
+                detected = str(chk.get("detected_object") or "").strip()
+                if st != "passed":
+                    all_slot_lines.append(f"• {lbl}: {issue or detected or 'Chưa đạt yêu cầu'}")
+                else:
+                    all_slot_lines.append(f"• {lbl}: Đạt ({detected or 'Hợp lệ'})")
+            else:
+                all_slot_lines.append(f"• {lbl}: Chưa có nhận xét chi tiết")
+
+        if all_slot_lines:
+            summary_parts.append(f"Nhận xét chi tiết toàn bộ {len(slot_items)} ảnh:\n" + "\n".join(all_slot_lines))
+
+        full_msg = "\n\n".join(summary_parts) if summary_parts else (
+            result.get("recommendations") or "Cần chụp bổ sung ảnh."
+        )
+        result["issues_detected"] = [full_msg]
+        result["recommendations"] = full_msg
         return result
 
     # Tổng hợp điểm theo 4 nhóm L1..L4
