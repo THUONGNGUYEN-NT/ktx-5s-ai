@@ -557,12 +557,19 @@ def _apply_session_scoring(
 
     # Tự đối chiếu thêm từ per_image_bunk_counts để không phụ thuộc vào boolean của AI
     per_img_counts = cap_check.get("per_image_bunk_counts") or []
+    capacity_violating_slots: dict[str, str] = {}
     for entry in per_img_counts:
         if isinstance(entry, dict):
             cnt = entry.get("visible_bunk_beds")
-            if isinstance(cnt, (int, float)) and cnt > observed_bunks:
-                observed_bunks = int(cnt)
-                ev_slot = str(entry.get("slot_code") or ev_slot)
+            s_code = str(entry.get("slot_code") or "")
+            if isinstance(cnt, (int, float)) and cnt > expected_bunks:
+                if s_code in slot_label_map:
+                    capacity_violating_slots[s_code] = (
+                        f"Không đạt (Ảnh cho thấy {int(cnt)} giường tầng, vượt mức phòng {bed_count} người chỉ có {expected_bunks} giường tầng)"
+                    )
+                if cnt > observed_bunks:
+                    observed_bunks = int(cnt)
+                    ev_slot = s_code or ev_slot
 
     capacity_mismatch = cap_check.get("matches_declared_room") is False or (
         isinstance(observed_bunks, (int, float)) and observed_bunks > expected_bunks
@@ -577,12 +584,23 @@ def _apply_session_scoring(
         capacity_reason = str(cap_check.get("reason") or "").strip() or (
             f"Phòng khai báo {bed_count} người ({expected_bunks} giường tầng) nhưng {ev_slot} cho thấy {observed_bunks} giường tầng ({obs_cap} chỗ ngủ)."
         )
-        retake_requests.append({
-            "slot_code": ev_slot if ev_slot in slot_label_map else "CAPACITY_MISMATCH",
-            "slot_label": slot_label_map.get(ev_slot, "Đối chiếu quy mô phòng"),
-            "status": "suspected_fraud",
-            "reason": capacity_reason,
-        })
+        if capacity_violating_slots:
+            for v_code, v_reason in capacity_violating_slots.items():
+                retake_requests.append({
+                    "slot_code": v_code,
+                    "slot_label": slot_label_map.get(v_code, v_code),
+                    "status": "suspected_fraud",
+                    "reason": v_reason,
+                })
+        else:
+            if ev_slot in slot_label_map:
+                capacity_violating_slots[ev_slot] = f"Không đạt ({capacity_reason})"
+            retake_requests.append({
+                "slot_code": ev_slot if ev_slot in slot_label_map else "CAPACITY_MISMATCH",
+                "slot_label": slot_label_map.get(ev_slot, "Đối chiếu quy mô phòng"),
+                "status": "suspected_fraud",
+                "reason": capacity_reason,
+            })
 
     if has_fraud_signal:
         category = "Nghi ngờ gian lận"
@@ -620,6 +638,9 @@ def _apply_session_scoring(
         for item in slot_items:
             code = item["slot_code"]
             lbl = item["slot_label"]
+            if code in capacity_violating_slots:
+                all_slot_lines.append(f"• {lbl}: {capacity_violating_slots[code]}")
+                continue
             chk = checked_map.get(code)
             if chk:
                 st = str(chk.get("status") or "passed")
