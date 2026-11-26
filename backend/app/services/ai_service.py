@@ -435,9 +435,10 @@ Photos are taken in a shared student dorm room (2, 4, 6, or 8 students) where di
 Compare the beds in `B01..B{bunk_count:02d}` against the beds visible in wide-angle context photos (`C02_FLOOR`, `CH01`):
 - Inspect the EXACT colors and patterns of **bed sheets (ga trải giường), blankets (chăn), pillows (gối), bed frame color, and bedside items (fan, lamp, plushies)** in `B01..B{bunk_count:02d}`.
 - Verify that these SAME bed sheets/blankets/pillows and frame colors actually appear in the wide-angle context photos (`C02_FLOOR`, `CH01`).
-- If a bed photo (`B01..`) shows bed sheets/blankets/pillows or bunk frame that DO NOT match any bed visible in `C02_FLOOR` / `CH01` (e.g. `B01` has plain light-blue sheets, while context photos only show plaid/red/yellow sheets, or different floor tiles/curtains/wall colors):
-  * Set `room_consistency.bedding_matches_context = false` and `room_consistency.is_same_room = false`.
-  * Describe the exact mismatch in Vietnamese in `room_consistency.bedding_mismatches` and mark the mismatching slot(s) in `slot_checks` as `suspected_fraud`.
+- Compare `CH01` (if present) directly against `C02_FLOOR` and `B01..B{bunk_count:02d}`! Check:
+  (1) **Bed architecture**: traditional metal bunk beds vs integrated loft/bunk beds with built-in desks/drawers.
+  (2) **Wall color, doorway layout, curtains, AC, water jugs, plastic shelves, and bedding colors/mattresses**.
+  (3) If `CH01` shows a DIFFERENT room layout, different bed design, or different bedding/wall colors compared to `B01..` / `C02_FLOOR` -> set `challenge_consistency.ch01_matches_beds_and_floor = false`, `room_consistency.is_same_room = false`, list all differences in `challenge_consistency.ch01_differences`, and mark `CH01` as `suspected_fraud` in `slot_checks`!
 
 === 2. TARGET AREA & ANGLE REQUIREMENTS (REASONABLE) ===
 Ensure photos capture the intended target area without overly pedantic angle rejections:
@@ -488,6 +489,10 @@ Deductions per group: minor (-0.5pt) | moderate (-1.5pt) | severe (-2.5pt).
     "confidence": "high|medium|low",
     "bedding_mismatches": ["Vietnamese description if bed sheets/blankets/pillows do not match context photos"],
     "inconsistencies": ["Vietnamese description if any"]
+  }},
+  "challenge_consistency": {{
+    "ch01_matches_beds_and_floor": true,
+    "ch01_differences": ["Vietnamese description if CH01 shows a different room/bed style/wall/doorway from B01.. or C02_FLOOR"]
   }},
   "room_capacity_check": {{
     "per_image_bunk_counts": [
@@ -569,6 +574,12 @@ def _apply_session_scoring(
         str(x).strip() for x in (consistency.get("bedding_mismatches") or []) if str(x).strip()
     ]
     if is_same_room is False or is_authentic_dorm is False or bedding_matches is False or bedding_mismatches:
+        has_fraud_signal = True
+
+    ch_cons = result.get("challenge_consistency") or {}
+    ch_matches = ch_cons.get("ch01_matches_beds_and_floor", True)
+    ch_diffs = [str(x).strip() for x in (ch_cons.get("ch01_differences") or []) if str(x).strip()]
+    if ch_matches is False or ch_diffs:
         has_fraud_signal = True
 
     cap_check = result.get("room_capacity_check") or {}
@@ -655,6 +666,17 @@ def _apply_session_scoring(
                 "• Ga trải giường, chăn gối trong ảnh giường không khớp với ảnh bối cảnh chung (Sàn nhà / Góc thử thách)."
             ]
             summary_parts.append("Ga trải giường không khớp với bối cảnh phòng:\n" + "\n".join(bm_lines))
+        if ch_diffs or ch_matches is False:
+            ch_msg = "; ".join(ch_diffs) if ch_diffs else "Ảnh góc chụp thử thách (CH01) không khớp kiểu giường, ga giường hoặc bố cục phòng với các ảnh còn lại."
+            if "CH01" in slot_label_map:
+                capacity_violating_slots["CH01"] = f"Không đạt ({ch_msg})"
+                retake_requests.append({
+                    "slot_code": "CH01",
+                    "slot_label": slot_label_map["CH01"],
+                    "status": "suspected_fraud",
+                    "reason": ch_msg,
+                })
+            summary_parts.append("Góc chụp thử thách (CH01) không khớp phòng:\n• " + ch_msg)
         if has_fraud_signal and consistency.get("inconsistencies"):
             inc_lines = [f"• {x}" for x in consistency["inconsistencies"]]
             summary_parts.append("Phát hiện dấu hiệu không đồng nhất / ngoài KTX:\n" + "\n".join(inc_lines))
