@@ -387,7 +387,8 @@ def evaluate_room_image(image_bytes: bytes | list[bytes]) -> dict[str, Any]:
 
 
 def build_session_prompt(slot_items: list[dict[str, Any]], room_code: str, bed_count: int) -> str:
-    """Tạo prompt AI động theo từng giường tầng (trên & dưới) + 4 khu vực chung và 4 nhóm lỗi L1–L4."""
+    """Tạo prompt AI động theo từng giường tầng (trên & dưới) + 3 khu vực chung và 4 nhóm lỗi L1–L4."""
+    bunk_count = max(1, (bed_count + 1) // 2)
     slot_lines = []
     for idx, item in enumerate(slot_items, start=1):
         slot_lines.append(
@@ -397,18 +398,26 @@ def build_session_prompt(slot_items: list[dict[str, Any]], room_code: str, bed_c
 
     return f"""
 You are a senior Computer Vision 5S Inspector and Anti-Fraud Investigator for VNU-HCM Dormitory (KTX ĐHQG-HCM).
-Room: {room_code} | Bunk bed units: {max(1, (bed_count + 1) // 2)} | Common areas: 3 (+ optional random challenge).
+Room: {room_code} | Declared room capacity: {bed_count} students ({bunk_count} bunk bed unit(s), 2 tiers per bunk) | Common areas: 3 (+ optional random challenge).
 
 Submitted photos in this capture session:
 {slots_desc}
 
+=== 0. ROOM CAPACITY & BUNK BED COUNT VERIFICATION (CRUCIAL) ===
+You MUST count the actual number of bunk beds / sleeping spots visible in wide-angle photos (especially CH01, C02_FLOOR, and B01..B{bunk_count:02d}) and compare with the declared room ({bed_count} students = {bunk_count} bunk bed unit(s)):
+- 2-person room: max 1 bunk bed unit (2 spots).
+- 4-person room: max 2 bunk bed units (4 spots). If ANY photo shows a row of 3 bunk beds (6 spots) or 4 bunk beds (8 spots) -> `matches_declared_room = false`!
+- 6-person room: max 3 bunk bed units (6 spots). If ANY photo shows 4 bunk beds (8 spots) or clearly only 1-2 bunk beds of a different room -> `matches_declared_room = false`!
+- 8-person room: 4 bunk bed units (8 spots).
+If `matches_declared_room = false`, mark the mismatching photo(s) in `slot_checks` as `suspected_fraud` and explain clearly in Vietnamese (e.g., "Phòng khai báo 4 người (2 giường tầng) nhưng ảnh chụp cho thấy dãy 3 giường tầng (phòng 6 người)").
+
 === 1. SLOT-BY-SLOT VERIFICATION ===
 IMPORTANT: Inspect EVERY SINGLE submitted image independently ({len(slot_items)} images total). NEVER stop after finding the first invalid photo! You MUST output one entry in `slot_checks` for EVERY single image using its exact `slot_code` ({', '.join(item['slot_code'] for item in slot_items)}).
-- Sleeping positions (B01..B{max(1, (bed_count + 1) // 2):02d}): Each photo represents one bunk bed unit showing BOTH the upper bunk and lower bunk clearly in the same frame (blankets, pillows, mattresses, no clutter/storage).
-- C02_FLOOR: Angled 30-45° view of floor and walkway (trash, dust, obstacles).
-- C03_DESK: Direct/30° view of study desk surface and items.
-- C04_SHOES: Direct view of shoe rack, hanging clothes, and personal storage.
-- CH01 (if present): Random challenge angle matching its description.
+- Sleeping positions (B01..B{bunk_count:02d}): Each photo represents one bunk bed unit showing BOTH the upper bunk and lower bunk clearly in the same frame (blankets, pillows, mattresses, no clutter/storage).
+- C02_FLOOR: MUST clearly show the dormitory floor and walkway (angled 30-45°). If it only shows a desk/laptop top without the floor walkway -> mark `needs_retake`.
+- C03_DESK: MUST clearly show the study desk surface and items. If it only shows beds/floor without a study desk -> mark `needs_retake`.
+- C04_SHOES: MUST clearly show the shoe rack, hanging clothes, and personal storage.
+- CH01 (if present): Random challenge angle matching its description AND consistent with the declared {bed_count}-person room.
 
 === 2. DISTINGUISH PHOTO ISSUES VS SUSPECTED FRAUD ===
 Do NOT jump to "fraud" for simple quality issues. Classify each problematic slot into one of:
@@ -448,6 +457,15 @@ Deductions per group: minor (-0.5pt) | moderate (-1.5pt) | severe (-2.5pt).
     "confidence": "high|medium|low",
     "inconsistencies": ["Vietnamese description if any"]
   }},
+  "room_capacity_check": {{
+    "declared_students": {bed_count},
+    "declared_bunk_units": {bunk_count},
+    "observed_bunk_units": {bunk_count},
+    "observed_capacity": {bed_count},
+    "matches_declared_room": true,
+    "evidence_slot": "string or empty",
+    "reason": "Vietnamese explanation if mismatch, else empty string"
+  }},
   "assessment_category": "Đạt yêu cầu|Ảnh không đạt yêu cầu|Ảnh thiếu bằng chứng|Ảnh có dấu hiệu bất thường|Nghi ngờ gian lận",
   "checklist": {{
     "bed_tidy": true,
@@ -468,6 +486,7 @@ def _apply_session_scoring(
     result: dict[str, Any],
     slot_items: list[dict[str, Any]],
     duplicate_errors: list[str] | None = None,
+    bed_count: int = 4,
 ) -> dict[str, Any]:
     slot_label_map = {item["slot_code"]: item["slot_label"] for item in slot_items}
     retake_requests: list[dict[str, str]] = []
@@ -513,6 +532,29 @@ def _apply_session_scoring(
     if is_same_room is False or is_authentic_dorm is False:
         has_fraud_signal = True
 
+    cap_check = result.get("room_capacity_check") or {}
+    expected_bunks = max(1, (bed_count + 1) // 2)
+    observed_bunks = cap_check.get("observed_bunk_units")
+    capacity_mismatch = cap_check.get("matches_declared_room") is False or (
+        isinstance(observed_bunks, (int, float)) and observed_bunks > expected_bunks
+    )
+    capacity_reason = ""
+    if capacity_mismatch:
+        has_fraud_signal = True
+        ev_slot = str(cap_check.get("evidence_slot") or "ảnh toàn phòng")
+        obs_cap = cap_check.get("observed_capacity") or (
+            int(observed_bunks) * 2 if isinstance(observed_bunks, (int, float)) else "khác"
+        )
+        capacity_reason = str(cap_check.get("reason") or "").strip() or (
+            f"Phòng khai báo {bed_count} người ({expected_bunks} giường tầng) nhưng {ev_slot} cho thấy {observed_bunks} giường tầng ({obs_cap} chỗ ngủ)."
+        )
+        retake_requests.append({
+            "slot_code": ev_slot if ev_slot in slot_label_map else "CAPACITY_MISMATCH",
+            "slot_label": slot_label_map.get(ev_slot, "Đối chiếu quy mô phòng"),
+            "status": "suspected_fraud",
+            "reason": capacity_reason,
+        })
+
     if has_fraud_signal:
         category = "Nghi ngờ gian lận"
     elif has_insufficient:
@@ -534,6 +576,8 @@ def _apply_session_scoring(
         result["status"] = "Không hợp lệ (Gian lận)" if has_fraud_signal else "Không hợp lệ"
 
         summary_parts: list[str] = []
+        if capacity_reason:
+            summary_parts.append(f"Không khớp loại phòng đã khai báo:\n• {capacity_reason}")
         if has_fraud_signal and consistency.get("inconsistencies"):
             inc_lines = [f"• {x}" for x in consistency["inconsistencies"]]
             summary_parts.append("Phát hiện dấu hiệu không đồng nhất / ngoài KTX:\n" + "\n".join(inc_lines))
@@ -673,7 +717,7 @@ def evaluate_room_session(
                 if "{" in raw_text and "}" in raw_text:
                     raw_text = raw_text[raw_text.find("{"):raw_text.rfind("}") + 1]
                 result = json.loads(raw_text)
-                _apply_session_scoring(result, slot_items, duplicate_errors=duplicate_errors)
+                _apply_session_scoring(result, slot_items, duplicate_errors=duplicate_errors, bed_count=bed_count)
                 result["ai_response_time_ms"] = duration_ms
                 return result
             except Exception as e:
