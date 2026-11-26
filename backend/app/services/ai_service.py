@@ -405,7 +405,12 @@ Submitted photos in this capture session:
 
 === 0. ROOM CAPACITY & BUNK BED COUNT VERIFICATION (CRUCIAL) ===
 You MUST visually count the ACTUAL number of bunk beds (giường tầng) in EVERY photo, especially wide-angle photos (C02_FLOOR, CH01, B01..B{bunk_count:02d}):
-- Count along BOTH walls AND along the DEPTH (foreground + background)! In VNU-HCM dormitories, bunk beds are often placed END-TO-END (nối tiếp nhau dọc theo tường). Look carefully for separate vertical steel posts, separate ladders, and mattress gaps along the depth of each wall:
+- Count along BOTH walls AND along the DEPTH (foreground + background)! In VNU-HCM dormitories, bunk beds are often placed END-TO-END or in an L-SHAPE on the SAME wall.
+- CRITICAL: Two bunk beds placed end-to-end or in an L-shape on the SAME wall MUST be counted as **2 bunk beds**, NEVER 1! Count separate bunk beds by checking:
+  (1) Separate upper-bunk safety rails / guardrails (2 thanh chắn tầng trên riêng biệt = 2 giường tầng),
+  (2) Separate upper shelves/headboards or double vertical steel posts where two frames meet,
+  (3) A desk/cabinet placed between two bed frames, or 2 separate sleeping boards/mattresses on the lower tier.
+  * Example: 2 bunk beds end-to-end on the same wall (even with a desk between them) = 2 bunk beds (4-person room, INVALID for a 2-person room!).
   * Example: 2 bunk beds end-to-end on the left wall + 1 bunk bed on the right wall = 3 bunk beds total (6-person room!).
   * Example: 2 bunk beds end-to-end on the left wall + 2 bunk beds end-to-end on the right wall = 4 bunk beds total (8-person room!).
 - For each photo in `per_image_bunk_counts`, count `left_bunk_beds` and `right_bunk_beds` separately, then sum them into `visible_bunk_beds`.
