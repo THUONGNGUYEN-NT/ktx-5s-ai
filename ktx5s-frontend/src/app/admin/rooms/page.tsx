@@ -19,7 +19,7 @@ export default function SubmissionDetailPage() {
 function Detail() {
   const id = useSearchParams().get("id") ?? "";
   const [data, setData] = useState<SubmissionDetail | null>(null);
-  const [activeArea, setActiveArea] = useState<AreaKey>("bed");
+  const [activeIndex, setActiveIndex] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ new_status: "Sạch", new_score: "8.0", note: "" });
   const [saving, setSaving] = useState(false);
@@ -61,64 +61,89 @@ function Detail() {
         <Panel title="Không tìm thấy">Lượt nộp không tồn tại hoặc phòng chưa nộp ảnh.</Panel>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-          {/* Cột trái: 4 ảnh khu vực của phòng */}
-          <Panel title={`Bộ 4 ảnh khu vực — Phòng ${data.room_code}`} className="lg:col-span-3">
-            {/* Ảnh đang chọn phóng to */}
-            <div className="relative rounded-sm overflow-hidden border border-gray-200 bg-gray-100">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={data.area_images?.[activeArea] ?? data.image_url}
-                alt={`Phòng ${data.room_code}`}
-                className="w-full aspect-video object-contain bg-slate-900"
-              />
-              <span className="absolute top-2.5 left-2.5 bg-black/70 text-white text-xs px-3 py-1 rounded-sm font-semibold">
-                {AREAS.find((a) => a.key === activeArea)?.emoji}{" "}
-                {AREAS.find((a) => a.key === activeArea)?.label}
-              </span>
-            </div>
+          {/* Cột trái: Toàn bộ ảnh đã nộp của phòng */}
+          {(() => {
+            const photoList =
+              data.photos && data.photos.length > 0
+                ? data.photos.map((p) => {
+                    const ck = p.checklist_key as keyof typeof data.ai_result.checklist | undefined;
+                    const ok =
+                      ck && ck in data.ai_result.checklist
+                        ? Boolean(data.ai_result.checklist[ck])
+                        : true;
+                    return {
+                      key: p.slot_code,
+                      label: p.slot_label,
+                      url: p.image_url || data.image_url,
+                      ok,
+                    };
+                  })
+                : AREAS.map((a) => ({
+                    key: a.key,
+                    label: `${a.emoji} ${a.label}`,
+                    url: data.area_images?.[a.key] ?? data.image_url,
+                    ok: data.ai_result.checklist[a.checklistKey],
+                  }));
+            const currentPhoto = photoList[activeIndex] ?? photoList[0];
 
-            {/* Lưới 4 ảnh thu nhỏ để chuyển nhanh */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-3">
-              {AREAS.map((a) => {
-                const ok = data.ai_result.checklist[a.checklistKey];
-                const isSelected = activeArea === a.key;
-                return (
-                  <button
-                    key={a.key}
-                    type="button"
-                    onClick={() => setActiveArea(a.key)}
-                    className={`border rounded-sm overflow-hidden text-left transition ${
-                      isSelected ? "ring-2 ring-[#3c8dbc] border-[#3c8dbc]" : "border-gray-200 hover:opacity-90"
-                    }`}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={data.area_images?.[a.key] ?? data.image_url}
-                      alt={a.label}
-                      className="w-full aspect-video object-contain bg-slate-900"
-                    />
-                    <div className="px-2 py-1.5 flex items-center justify-between text-xs bg-white">
-                      <span className="font-semibold truncate">
-                        {a.emoji} {a.label}
-                      </span>
-                      <span className={ok ? "text-[#00a65a] font-bold" : "text-[#dd4b39] font-bold"}>
-                        {ok ? "✓ Đạt" : "✗ Lỗi"}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+            return (
+              <Panel title={`Bộ ${photoList.length} ảnh đã nộp — Phòng ${data.room_code}`} className="lg:col-span-3">
+                {/* Ảnh đang chọn phóng to */}
+                <div className="relative rounded-sm overflow-hidden border border-gray-200 bg-gray-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={currentPhoto?.url ?? data.image_url}
+                    alt={`Phòng ${data.room_code}`}
+                    className="w-full aspect-video object-contain bg-slate-900"
+                  />
+                  <span className="absolute top-2.5 left-2.5 bg-black/70 text-white text-xs px-3 py-1 rounded-sm font-semibold">
+                    {currentPhoto?.label}
+                  </span>
+                </div>
 
-            <div className="flex justify-between text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
-              <span>
-                Mã lượt nộp: <b>{data.submission_id}</b>
-              </span>
-              <span>
-                Nộp lúc: <b>{formatDateTime(data.submitted_at)}</b>
-              </span>
-            </div>
-          </Panel>
+                {/* Lưới tất cả ảnh thu nhỏ để chuyển nhanh */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-3">
+                  {photoList.map((p, idx) => {
+                    const isSelected = idx === activeIndex;
+                    return (
+                      <button
+                        key={`${p.key}_${idx}`}
+                        type="button"
+                        onClick={() => setActiveIndex(idx)}
+                        className={`border rounded-sm overflow-hidden text-left transition ${
+                          isSelected ? "ring-2 ring-[#3c8dbc] border-[#3c8dbc]" : "border-gray-200 hover:opacity-90"
+                        }`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={p.url}
+                          alt={p.label}
+                          className="w-full aspect-video object-contain bg-slate-900"
+                        />
+                        <div className="px-2 py-1.5 flex items-center justify-between gap-1 text-xs bg-white">
+                          <span className="font-semibold truncate" title={p.label}>
+                            {p.label}
+                          </span>
+                          <span className={p.ok ? "text-[#00a65a] font-bold shrink-0" : "text-[#dd4b39] font-bold shrink-0"}>
+                            {p.ok ? "✓ Đạt" : "✗ Lỗi"}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex justify-between text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
+                  <span>
+                    Mã lượt nộp: <b>{data.submission_id}</b>
+                  </span>
+                  <span>
+                    Nộp lúc: <b>{formatDateTime(data.submitted_at)}</b>
+                  </span>
+                </div>
+              </Panel>
+            );
+          })()}
 
           {/* Cột phải: Kết quả AI + Form duyệt đè */}
           <div className="lg:col-span-2 flex flex-col gap-5">

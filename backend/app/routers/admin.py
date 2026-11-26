@@ -299,6 +299,14 @@ async def get_submission_detail(
             "image_urls": [photo.image_url for photo in sub.photos] or (
                 [sub.image_url] if sub.image_url else []
             ),
+            "photos": [
+                {
+                    "slot_code": photo.slot_code or f"PHOTO_{photo.position}",
+                    "slot_label": photo.slot_label or f"Ảnh {photo.position}",
+                    "image_url": photo.image_url,
+                }
+                for photo in sub.photos
+            ],
             "ai_result": {
                 "status": ai_eval.status if ai_eval else "Chưa chấm",
                 "score": round(ai_eval.score, 1) if ai_eval else 0.0,

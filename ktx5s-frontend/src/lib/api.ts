@@ -484,6 +484,7 @@ export type SubmissionDetail = {
   submitted_at: string;
   image_url: string;
   area_images: Record<AreaKey, string>;
+  photos?: SubmittedPhotoItem[];
   ai_result: AIResult;
   override: null | { new_status: string; new_score: number; note: string };
 };
@@ -498,6 +499,17 @@ export async function getSubmissionDetail(
       const d = res.data.data;
       const rawUrls: string[] = d.image_urls && d.image_urls.length ? d.image_urls : [d.image_url];
       const urls = rawUrls.map(resolveImageUrl);
+      const serverPhotos: SubmittedPhotoItem[] = Array.isArray(d.photos) && d.photos.length
+        ? d.photos.map((p: any, idx: number) => ({
+            slot_code: p.slot_code || `PHOTO_${idx + 1}`,
+            slot_label: p.slot_label || `Ảnh ${idx + 1}`,
+            image_url: resolveImageUrl(p.image_url || urls[idx] || d.image_url),
+          }))
+        : urls.map((u, idx) => ({
+            slot_code: `PHOTO_${idx + 1}`,
+            slot_label: `Ảnh ${idx + 1}`,
+            image_url: u,
+          }));
       return {
         success: true,
         data: {
@@ -511,6 +523,7 @@ export async function getSubmissionDetail(
             shoes: urls[2] || urls[0] || resolveImageUrl(d.image_url),
             desk: urls[3] || urls[0] || resolveImageUrl(d.image_url),
           },
+          photos: serverPhotos,
           ai_result: d.ai_result,
           override: d.override_info?.is_overridden
             ? {
@@ -537,8 +550,9 @@ export async function getSubmissionDetail(
         submission_id: live.submission_id,
         room_code: live.room_code,
         submitted_at: live.submitted_at,
-        image_url: live.area_images.bed,
+        image_url: live.photos?.[0]?.image_url || live.area_images.bed,
         area_images: live.area_images,
+        photos: live.photos,
         ai_result: live.ai_result,
         override: live.is_overridden
           ? {
