@@ -435,10 +435,11 @@ Photos are taken in a shared student dorm room (2, 4, 6, or 8 students) where di
 Compare the beds in `B01..B{bunk_count:02d}` against the beds visible in wide-angle context photos (`C02_FLOOR`, `CH01`):
 - Inspect the EXACT colors and patterns of **bed sheets (ga trải giường), blankets (chăn), pillows (gối), bed frame color, and bedside items (fan, lamp, plushies)** in `B01..B{bunk_count:02d}`.
 - Verify that these SAME bed sheets/blankets/pillows and frame colors actually appear in the wide-angle context photos (`C02_FLOOR`, `CH01`).
-- Compare `CH01` (if present) directly against `C02_FLOOR` and `B01..B{bunk_count:02d}`! Check:
-  (1) **Bed architecture**: traditional metal bunk beds vs integrated loft/bunk beds with built-in desks/drawers.
-  (2) **Wall color, doorway layout, curtains, AC, water jugs, plastic shelves, and bedding colors/mattresses**.
-  (3) If `CH01` shows a DIFFERENT room layout, different bed design, or different bedding/wall colors compared to `B01..` / `C02_FLOOR` -> set `challenge_consistency.ch01_matches_beds_and_floor = false`, `room_consistency.is_same_room = false`, list all differences in `challenge_consistency.ch01_differences`, and mark `CH01` as `suspected_fraud` in `slot_checks`!
+- Evaluate `CH01` (if present) fairly according to its requested angle!
+  * IMPORTANT: `CH01` is often a close-up or specific-angle shot (e.g., personal lockers/cabinets, wall hooks, shoe rack area, desk underside, bookshelf, or a corner view) — it does NOT need to show bunk beds, floor, or the doorway unless its angle naturally includes them!
+  * NEVER reject `CH01` simply because beds/floor/doorway are not visible in a close-up of lockers, shelves, or another corner.
+  * Check overall room consistency (matching wall paint tone, lighting, authentic VNU-HCM dorm furniture such as grey/blue metal lockers, wooden/metal dorm desks, white/cream floor tiles).
+  * ONLY set `ch01_matches_beds_and_floor = false` when there is an **ACTIVE CONTRADICTION** proving `CH01` is from a DIFFERENT room or non-dorm space (for example: `CH01` shows a completely different bunk bed architecture like orange built-in loft beds vs traditional metal bunks in `B01..`, or shows different floor tiles, luxury apartment furniture, or a stock/catalog photo).
 
 === 2. TARGET AREA & ANGLE REQUIREMENTS (REASONABLE) ===
 Ensure photos capture the intended target area without overly pedantic angle rejections:
@@ -492,7 +493,7 @@ Deductions per group: minor (-0.5pt) | moderate (-1.5pt) | severe (-2.5pt).
   }},
   "challenge_consistency": {{
     "ch01_matches_beds_and_floor": true,
-    "ch01_differences": ["Vietnamese description if CH01 shows a different room/bed style/wall/doorway from B01.. or C02_FLOOR"]
+    "ch01_differences": ["Only list ACTIVE contradictions proving CH01 is a different room/non-dorm; leave empty [] if CH01 is a valid close-up/corner of the same dorm room"]
   }},
   "room_capacity_check": {{
     "per_image_bunk_counts": [
