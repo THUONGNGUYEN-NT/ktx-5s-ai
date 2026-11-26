@@ -8,7 +8,14 @@ import {
   type AIResult,
 } from "./mock-api";
 import { analyzeFourRoomPhotos } from "./vision-analyzer";
-import { CURRENT_WEEK, type AreaKey, type Room, type RoomStatus } from "@/components/status";
+import {
+  CURRENT_WEEK,
+  buildLocalCaptureSlots,
+  type AreaKey,
+  type CaptureSlot,
+  type Room,
+  type RoomStatus,
+} from "@/components/status";
 import {
   uploadAllFourAreasToCloudinary,
   fetchCloudLiveRecords,
@@ -601,4 +608,193 @@ export async function overrideSubmission(
   }
 
   return { success: true, message: "Đã cập nhật kết quả duyệt lại và đồng bộ lên Cloud!" };
+}
+
+// ============================================================================
+// PHIÊN CHỤP 7 LỚP CHỐNG GIAN LẬN (N = P + 4)
+// ============================================================================
+export type CaptureSessionInfo = {
+  session_id: string;
+  room_code: string;
+  week: string;
+  bed_count: number;
+  common_count: number;
+  total_required: number;
+  total_with_challenge: number;
+  qr_verified: boolean;
+  audit_required: boolean;
+  challenge_prompt: string;
+  server_timestamp: string;
+  expires_at: string;
+  slots: CaptureSlot[];
+  is_offline_fallback?: boolean;
+};
+
+export type SessionPhotoCheckResult = {
+  success: boolean;
+  data: {
+    slot_code: string;
+    slot_label: string;
+    image_url: string;
+    width: number;
+    height: number;
+    brightness: number;
+    blur_score: number;
+    validation_status: string;
+    issues: string[];
+  };
+  message: string;
+};
+
+export async function startCaptureSession(
+  roomCode: string,
+  bedCount: number,
+  qrCode?: string
+): Promise<CaptureSessionInfo> {
+  const cleanCode = roomCode.trim().toUpperCase();
+  try {
+    const res = await api.post("/capture-sessions/start", {
+      room_code: cleanCode,
+      bed_count: bedCount,
+      qr_code: qrCode?.trim() || undefined,
+    });
+    if (res.data?.success && res.data?.data) {
+      return res.data.data as CaptureSessionInfo;
+    }
+    throw new Error(res.data?.message || "Không thể khởi tạo phiên chụp.");
+  } catch (err) {
+    const axErr = err as AxiosError<{ message?: string; detail?: string }>;
+    if (axErr.response?.status === 403 || axErr.response?.status === 400) {
+      throw new Error(
+        axErr.response.data?.message ||
+          axErr.response.data?.detail ||
+          "Xác thực phòng / mã QR không hợp lệ."
+      );
+    }
+    if (!USE_MOCK) {
+      throw new Error(
+        axErr.response?.data?.message || "Không thể kết nối máy chủ để khởi tạo phiên chụp."
+      );
+    }
+    const challengePrompt = "Chụp chếch từ góc cuối phòng hướng về phía cửa ra vào.";
+    const slots = buildLocalCaptureSlots(bedCount, challengePrompt);
+    const now = new Date();
+    return {
+      session_id: `local_${cleanCode}_${Date.now()}`,
+      room_code: cleanCode,
+      week: `2026-W${CURRENT_WEEK}`,
+      bed_count: bedCount,
+      common_count: 4,
+      total_required: bedCount + 4,
+      total_with_challenge: slots.length,
+      qr_verified: Boolean(qrCode && qrCode.toUpperCase().includes(cleanCode)),
+      audit_required: false,
+      challenge_prompt: challengePrompt,
+      server_timestamp: now.toISOString(),
+      expires_at: new Date(now.getTime() + 30 * 60000).toISOString(),
+      slots,
+      is_offline_fallback: true,
+    };
+  }
+}
+
+export async function uploadSessionPhoto(
+  sessionId: string,
+  slotCode: string,
+  file: File,
+  isOfflineFallback = false,
+  captureSource: "camera" | "desktop_test" = "camera"
+): Promise<SessionPhotoCheckResult> {
+  if (isOfflineFallback) {
+    return {
+      success: true,
+      data: {
+        slot_code: slotCode,
+        slot_label: slotCode,
+        image_url: await fileToDataUrl(file),
+        width: 1280,
+        height: 720,
+        brightness: 140,
+        blur_score: 20,
+        validation_status: "passed",
+        issues: [],
+      },
+      message: "Ảnh đạt chuẩn chất lượng.",
+    };
+  }
+  const form = new FormData();
+  form.append("slot_code", slotCode);
+  form.append("captured_via_camera", "true");
+  form.append("capture_source", captureSource);
+  form.append("image", file);
+  const res = await api.post(`/capture-sessions/${sessionId}/photos`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res.data as SessionPhotoCheckResult;
+}
+
+export async function submitCaptureSession(
+  session: CaptureSessionInfo,
+  captures: Record<string, { file: File; preview: string }>
+) {
+  if (session.is_offline_fallback) {
+    const bedFile = captures["B01"]?.file;
+    const floorFile = captures["C02_FLOOR"]?.file;
+    const shoesFile = captures["C04_SHOES"]?.file;
+    const deskFile = captures["C03_DESK"]?.file;
+    if (!bedFile || !floorFile || !shoesFile || !deskFile) {
+      throw new Error("Thiếu ảnh khu vực bắt buộc.");
+    }
+    return submitPhotos(session.room_code, {
+      bed: bedFile,
+      floor: floorFile,
+      shoes: shoesFile,
+      desk: deskFile,
+    });
+  }
+
+  try {
+    const res = await api.post(`/capture-sessions/${session.session_id}/submit`);
+    const payload = res.data;
+    if (payload?.success && payload?.data) {
+      const urls: string[] = (payload.data.image_urls ?? []).map(resolveImageUrl);
+      const photos = (payload.data.photos ?? []) as Array<{ slot_code: string; image_url: string }>;
+      const byCode = new Map(photos.map((p) => [p.slot_code, resolveImageUrl(p.image_url)]));
+      await saveLiveRecord({
+        submission_id: payload.data.submission_id,
+        room_code: session.room_code,
+        week: session.week,
+        submitted_at: payload.data.submitted_at || new Date().toISOString(),
+        area_images: {
+          bed: byCode.get("B01") || urls[0] || captures["B01"]?.preview || "",
+          floor: byCode.get("C02_FLOOR") || urls[1] || captures["C02_FLOOR"]?.preview || "",
+          desk: byCode.get("C03_DESK") || urls[2] || captures["C03_DESK"]?.preview || "",
+          shoes: byCode.get("C04_SHOES") || urls[3] || captures["C04_SHOES"]?.preview || "",
+        },
+        ai_result: payload.data.ai_result,
+        is_overridden: false,
+        override_note: null,
+      });
+    }
+    return payload;
+  } catch (err) {
+    const axErr = err as AxiosError<{
+      message?: string;
+      error_code?: string;
+      data?: {
+        assessment_category?: string;
+        retake_requests?: Array<{ slot_code: string; slot_label: string; reason: string }>;
+      };
+    }>;
+    if (axErr.response?.data) {
+      const errObj = new Error(axErr.response.data.message || "Cần chụp bổ sung ảnh.") as Error & {
+        retakeRequests?: Array<{ slot_code: string; slot_label: string; reason: string }>;
+        assessmentCategory?: string;
+      };
+      errObj.retakeRequests = axErr.response.data.data?.retake_requests;
+      errObj.assessmentCategory = axErr.response.data.data?.assessment_category;
+      throw errObj;
+    }
+    throw err;
+  }
 }

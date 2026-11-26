@@ -35,7 +35,8 @@ class Room(Base):
     building: Mapped[str] = mapped_column(String(10), nullable=False)                # VD: "A"
     floor: Mapped[int] = mapped_column(Integer, nullable=False)                      # VD: 3
     room_number: Mapped[str] = mapped_column(String(10), nullable=False)             # VD: "205"
-    capacity: Mapped[int] = mapped_column(Integer, default=4)                        # Số chỗ tối đa
+    capacity: Mapped[int] = mapped_column(Integer, default=4)                        # Số chỗ tối đa (2, 4, 6, 8)
+    bed_count: Mapped[int] = mapped_column(Integer, nullable=True)                   # Số vị trí ngủ thực tế P (mặc định = capacity)
     qr_code_url: Mapped[str] = mapped_column(String(500), nullable=True)             # URL ảnh QR dán ở phòng
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -76,6 +77,10 @@ class Submission(Base):
     image_size_kb: Mapped[int] = mapped_column(Integer, nullable=True)  # Dung lượng sau nén (KB)
     captured_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)   # Thời gian chụp từ client
     submitted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    capture_session_id: Mapped[str] = mapped_column(String(36), nullable=True)
+    student_code: Mapped[str] = mapped_column(String(20), nullable=True)
+    fraud_flag: Mapped[bool] = mapped_column(Boolean, default=False)
+    assessment_category: Mapped[str] = mapped_column(Unicode(60), nullable=True)
 
     # Duyệt đè bởi cán bộ
     is_overridden: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -99,6 +104,60 @@ class SubmissionPhoto(Base):
     )
     position: Mapped[int] = mapped_column(Integer, primary_key=True)
     image_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    slot_code: Mapped[str] = mapped_column(String(32), nullable=True)
+    slot_label: Mapped[str] = mapped_column(Unicode(120), nullable=True)
+    image_hash: Mapped[str] = mapped_column(String(64), nullable=True)
+
+
+# =============================================
+# BẢNG 3B: capture_sessions — Phiên chụp ảnh kiểm tra 5S (chống gian lận 7 lớp)
+# =============================================
+class CaptureSession(Base):
+    __tablename__ = "capture_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    room_id: Mapped[str] = mapped_column(String(36), ForeignKey("rooms.id"), nullable=False)
+    room_code: Mapped[str] = mapped_column(String(20), nullable=False)
+    student_code: Mapped[str] = mapped_column(String(50), nullable=True)
+    week: Mapped[str] = mapped_column(String(10), nullable=False)
+    bed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
+    total_required: Mapped[int] = mapped_column(Integer, nullable=False, default=8)  # N = P + 4
+    qr_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    qr_token: Mapped[str] = mapped_column(String(100), nullable=True)
+    challenge_slot_code: Mapped[str] = mapped_column(String(32), nullable=True)
+    challenge_prompt: Mapped[str] = mapped_column(UnicodeText, nullable=True)
+    audit_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(30), default="in_progress")  # in_progress | needs_retake | submitted | flagged
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    photos: Mapped[list["CaptureSessionPhoto"]] = relationship(
+        "CaptureSessionPhoto", back_populates="session", cascade="all, delete-orphan"
+    )
+
+
+class CaptureSessionPhoto(Base):
+    __tablename__ = "capture_session_photos"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("capture_sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    slot_code: Mapped[str] = mapped_column(String(32), nullable=False)  # B01..B08, C01_OVERVIEW..C04_SHOES, CH01
+    slot_group: Mapped[str] = mapped_column(String(20), nullable=False)  # bed | common | challenge
+    slot_label: Mapped[str] = mapped_column(Unicode(120), nullable=False)
+    image_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    image_hash: Mapped[str] = mapped_column(String(64), nullable=True)
+    width: Mapped[int] = mapped_column(Integer, nullable=True)
+    height: Mapped[int] = mapped_column(Integer, nullable=True)
+    brightness: Mapped[float] = mapped_column(Float, nullable=True)
+    blur_score: Mapped[float] = mapped_column(Float, nullable=True)
+    captured_via_camera: Mapped[bool] = mapped_column(Boolean, default=True)
+    captured_at_server: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    validation_status: Mapped[str] = mapped_column(String(30), default="passed")  # passed | needs_retake | insufficient_evidence | anomalous | suspected_fraud
+    validation_reason: Mapped[str] = mapped_column(UnicodeText, nullable=True)
+
+    session: Mapped["CaptureSession"] = relationship("CaptureSession", back_populates="photos")
 
 
 # =============================================
@@ -126,6 +185,9 @@ class AiEvaluation(Base):
     positive_notes: Mapped[str] = mapped_column(UnicodeText, nullable=True)
     recommendations: Mapped[str] = mapped_column(UnicodeText, nullable=True)
     deductions: Mapped[str] = mapped_column(UnicodeText, nullable=True)  # JSON string của các khoản trừ
+    l1_l4_summary: Mapped[str] = mapped_column(UnicodeText, nullable=True)  # JSON tổng hợp L1..L4
+    bed_details: Mapped[str] = mapped_column(UnicodeText, nullable=True)    # JSON chi tiết từng vị trí B01..BP
+    retake_requests: Mapped[str] = mapped_column(UnicodeText, nullable=True)  # JSON yêu cầu chụp bổ sung
 
     # Kết quả sau khi cán bộ duyệt đè (nếu có)
     final_status: Mapped[str] = mapped_column(Unicode(50), nullable=True)  # Dùng cái này để hiển thị

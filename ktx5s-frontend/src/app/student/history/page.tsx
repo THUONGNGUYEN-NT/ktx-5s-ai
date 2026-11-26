@@ -32,10 +32,10 @@ const AREAS: {
   emoji: string;
   checklistKey: keyof AIResult["checklist"];
 }[] = [
-  { key: "bed", label: "Giường ngủ", emoji: "🛏️", checklistKey: "bed_tidy" },
-  { key: "floor", label: "Sàn nhà", emoji: "🧹", checklistKey: "floor_clean" },
-  { key: "shoes", label: "Kệ giày dép", emoji: "👟", checklistKey: "shoes_arranged" },
-  { key: "desk", label: "Bàn học", emoji: "📚", checklistKey: "desk_organized" },
+  { key: "bed", label: "L1 · Giường ngủ (tổng hợp B01..BP)", emoji: "🛏️", checklistKey: "bed_tidy" },
+  { key: "floor", label: "L2 · Sàn nhà và lối đi", emoji: "🧹", checklistKey: "floor_clean" },
+  { key: "desk", label: "L3 · Bàn học và kệ", emoji: "📚", checklistKey: "desk_organized" },
+  { key: "shoes", label: "L4 · Đồ đạc và kệ giày dép", emoji: "👟", checklistKey: "shoes_arranged" },
 ];
 
 export default function HistoryPage() {

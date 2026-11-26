@@ -46,16 +46,101 @@ export function tileKeyOf(room: Pick<Room, "status" | "is_overridden">): TileKey
   return statusToKey(room.status);
 }
 
-// ===== 4 KHU VỰC BẮT BUỘC CHỤP =====
+// ===== 4 KHU VỰC BẮT BUỘC CHỤP (KHU VỰC CHUNG) & CÔNG THỨC N = P + 4 =====
 export type AreaKey = "bed" | "floor" | "shoes" | "desk";
 export type ChecklistKey = "bed_tidy" | "floor_clean" | "shoes_arranged" | "desk_organized";
 
 export const AREAS: { key: AreaKey; label: string; emoji: string; hint: string; checklistKey: ChecklistKey }[] = [
-  { key: "bed",   label: "Giường ngủ",  emoji: "🛏️", hint: "Chụp toàn bộ giường, thấy rõ chăn, gối, màn",  checklistKey: "bed_tidy" },
-  { key: "floor", label: "Sàn nhà",     emoji: "🧹", hint: "Đứng ở cửa, chụp lối đi và gầm giường",         checklistKey: "floor_clean" },
-  { key: "shoes", label: "Kệ giày dép", emoji: "👟", hint: "Chụp kệ giày và khu vực cửa ra vào",            checklistKey: "shoes_arranged" },
-  { key: "desk",  label: "Bàn học",     emoji: "📚", hint: "Chụp toàn bộ mặt bàn và giá sách",              checklistKey: "desk_organized" },
+  { key: "bed",   label: "L1 · Giường ngủ (B01..BP)",       emoji: "🛏️", hint: "Chụp từng vị trí ngủ (tầng trên & dưới riêng), thấy rõ chăn, ga, gối", checklistKey: "bed_tidy" },
+  { key: "floor", label: "L2 · Sàn nhà & lối đi",           emoji: "🧹", hint: "Chụp chếch 30–45°, thấy rõ mặt sàn và các lối di chuyển",               checklistKey: "floor_clean" },
+  { key: "desk",  label: "L3 · Bàn học & khu vực học tập",  emoji: "📚", hint: "Chụp chính diện hoặc chếch 30°, thấy rõ mặt bàn và sách vở",             checklistKey: "desk_organized" },
+  { key: "shoes", label: "L4 · Kệ giày dép & đồ đạc",       emoji: "👟", hint: "Chụp chính diện kệ giày dép, móc treo quần áo và khu vực để đồ",         checklistKey: "shoes_arranged" },
 ];
+
+export type RoomBedPreset = {
+  bedCount: number;
+  label: string;
+  totalPhotos: number;
+  description: string;
+};
+
+export const ROOM_BED_PRESETS: RoomBedPreset[] = [
+  { bedCount: 2, label: "Phòng 2 người", totalPhotos: 5, description: "1 ảnh giường tầng (trên & dưới) + 4 khu vực chung" },
+  { bedCount: 4, label: "Phòng 4 người", totalPhotos: 6, description: "2 ảnh giường tầng (trên & dưới) + 4 khu vực chung" },
+  { bedCount: 6, label: "Phòng 6 người", totalPhotos: 7, description: "3 ảnh giường tầng (trên & dưới) + 4 khu vực chung" },
+  { bedCount: 8, label: "Phòng 8 người", totalPhotos: 8, description: "4 ảnh giường tầng (trên & dưới) + 4 khu vực chung" },
+];
+
+export type CaptureSlot = {
+  slot_code: string;
+  slot_group: "bed" | "common" | "challenge";
+  slot_label: string;
+  angle_hint: string;
+  checklist_key: string;
+  required: boolean;
+};
+
+export function buildLocalCaptureSlots(bedCount: number, challengePrompt?: string): CaptureSlot[] {
+  const p = Math.min(12, Math.max(1, bedCount || 4));
+  const bunkCount = Math.max(1, Math.ceil(p / 2));
+  const slots: CaptureSlot[] = [];
+  for (let i = 1; i <= bunkCount; i++) {
+    const code = `B${String(i).padStart(2, "0")}`;
+    slots.push({
+      slot_code: code,
+      slot_group: "bed",
+      slot_label: `${code} · Giường tầng ${i} (Tầng trên & dưới)`,
+      angle_hint: `Chụp chính diện hoặc chếch 30–45° giường tầng ${i}, thấy rõ cả tầng trên và tầng dưới trong cùng 1 ảnh.`,
+      checklist_key: "bed_tidy",
+      required: true,
+    });
+  }
+  slots.push(
+    {
+      slot_code: "C01_OVERVIEW",
+      slot_group: "common",
+      slot_label: "Toàn cảnh phòng từ cửa ra vào",
+      angle_hint: "Đứng tại cửa ra vào hướng vào trong, thấy tổng thể giường, bàn học và lối đi.",
+      checklist_key: "overview",
+      required: true,
+    },
+    {
+      slot_code: "C02_FLOOR",
+      slot_group: "common",
+      slot_label: "Sàn nhà và lối đi",
+      angle_hint: "Chụp chếch xuống 30–45°, thấy rõ mặt sàn và các lối di chuyển.",
+      checklist_key: "floor_clean",
+      required: true,
+    },
+    {
+      slot_code: "C03_DESK",
+      slot_group: "common",
+      slot_label: "Bàn học và khu vực học tập",
+      angle_hint: "Chụp chính diện hoặc chếch 30°, thấy rõ mặt bàn, sách vở và vật dụng.",
+      checklist_key: "desk_organized",
+      required: true,
+    },
+    {
+      slot_code: "C04_SHOES",
+      slot_group: "common",
+      slot_label: "Kệ giày dép và khu vực để đồ",
+      angle_hint: "Chụp chính diện kệ giày dép và khu vực treo móc đồ cá nhân xung quanh.",
+      checklist_key: "shoes_arranged",
+      required: true,
+    }
+  );
+  if (challengePrompt) {
+    slots.push({
+      slot_code: "CH01",
+      slot_group: "challenge",
+      slot_label: "Góc chụp thử thách ngẫu nhiên",
+      angle_hint: challengePrompt,
+      checklist_key: "challenge",
+      required: true,
+    });
+  }
+  return slots;
+}
 
 // ===== QUY MÔ KTX (dữ liệu mẫu) =====
 export const BUILDINGS = ["A", "B", "C", "D"];

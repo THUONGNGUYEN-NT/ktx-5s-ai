@@ -7,10 +7,10 @@ from app.config import settings
 from app.database import engine, Base
 
 # Import models để SQLAlchemy nhận diện khi tạo bảng
-from app.models import User, Room, Student, Submission, AiEvaluation  # noqa
+from app.models import User, Room, Student, Submission, AiEvaluation, CaptureSession, CaptureSessionPhoto  # noqa
 
 # Import routers
-from app.routers import auth, submissions, rooms, admin
+from app.routers import auth, submissions, rooms, admin, capture_sessions
 
 # =============================================
 # Khởi tạo ứng dụng FastAPI
@@ -53,10 +53,11 @@ app.mount("/uploads", StaticFiles(directory=str(upload_dir)), name="uploads")
 # =============================================
 # Đăng ký các Router
 # =============================================
-app.include_router(auth.router,        prefix="/api/auth", tags=["Auth — Đăng nhập & Phân quyền"])
-app.include_router(submissions.router, prefix="/api", tags=["Submissions — Sinh viên nộp ảnh"])
-app.include_router(rooms.router,       prefix="/api", tags=["Rooms — Thông tin phòng"])
-app.include_router(admin.router,       prefix="/api/admin", tags=["Admin — Cán bộ KTX"])
+app.include_router(auth.router,             prefix="/api/auth", tags=["Auth — Đăng nhập & Phân quyền"])
+app.include_router(submissions.router,      prefix="/api", tags=["Submissions — Sinh viên nộp ảnh"])
+app.include_router(capture_sessions.router, prefix="/api", tags=["Capture Sessions — Phiên chụp 7 lớp"])
+app.include_router(rooms.router,            prefix="/api", tags=["Rooms — Thông tin phòng"])
+app.include_router(admin.router,            prefix="/api/admin", tags=["Admin — Cán bộ KTX"])
 
 
 # =============================================

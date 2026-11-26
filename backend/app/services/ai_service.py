@@ -384,3 +384,304 @@ def evaluate_room_image(image_bytes: bytes | list[bytes]) -> dict[str, Any]:
             continue
 
     raise RuntimeError(f"Lỗi khi gọi Gemini Vision API: {last_error}")
+
+
+def build_session_prompt(slot_items: list[dict[str, Any]], room_code: str, bed_count: int) -> str:
+    """Tạo prompt AI động theo công thức N = P + 4 và 4 nhóm lỗi L1–L4."""
+    slot_lines = []
+    for idx, item in enumerate(slot_items, start=1):
+        slot_lines.append(
+            f"- Image {idx} [{item['slot_code']}] ({item['slot_group']}): {item['slot_label']}"
+        )
+    slots_desc = "\n".join(slot_lines)
+
+    return f"""
+You are a senior Computer Vision 5S Inspector and Anti-Fraud Investigator for VNU-HCM Dormitory (KTX ĐHQG-HCM).
+Room: {room_code} | Required sleeping positions (P): {bed_count} | Formula: N = P + 4 (+ optional random challenge).
+
+Submitted photos in this capture session:
+{slots_desc}
+
+=== 1. SLOT-BY-SLOT VERIFICATION ===
+Inspect EVERY submitted image independently:
+- Sleeping positions (B01..B{max(1, (bed_count + 1) // 2):02d}): Each photo represents one bunk bed unit showing BOTH the upper bunk and lower bunk clearly in the same frame (blankets, pillows, mattresses, no clutter/storage).
+- C01_OVERVIEW: Wide view from the doorway showing overall layout of beds, desks, and walkway.
+- C02_FLOOR: Angled 30-45° view of floor and walkway (trash, dust, obstacles).
+- C03_DESK: Direct/30° view of study desk surface and items.
+- C04_SHOES: Direct view of shoe rack, hanging clothes, and personal storage.
+- CH01 (if present): Random challenge angle matching its description.
+
+=== 2. DISTINGUISH PHOTO ISSUES VS SUSPECTED FRAUD ===
+Do NOT jump to "fraud" for simple quality issues. Classify each problematic slot into one of:
+- "needs_retake": Blurry, dark, backlit, wrong angle, or partially obscured.
+- "insufficient_evidence": Cannot observe the target area clearly (e.g. upper bunk hidden, desk surface blocked).
+- "anomalous": Minor inconsistency or duplicate image that requires re-capture.
+- "suspected_fraud": Clearly spliced from different rooms, private non-dorm apartment/studio, stock/catalog image, or someone intentionally holding objects to hide mess.
+
+=== 3. AGGREGATED 5S SCORING (L1 - L4) ===
+DO NOT score each photo in isolation. Aggregate across the whole room:
+- L1 (bed_tidy - Giường): Evaluate ALL beds B01..B{bed_count:02d} together. If ANY bed is messy or used as storage -> L1 fails.
+- L2 (floor_clean - Sàn nhà và lối đi): Evaluate C02_FLOOR + C01_OVERVIEW.
+- L3 (desk_organized - Bàn học và kệ): Evaluate C03_DESK.
+- L4 (shoes_arranged - Đồ đạc và treo móc): Evaluate C04_SHOES + hanging items/clutter.
+Deductions per group: minor (-0.5pt) | moderate (-1.5pt) | severe (-2.5pt).
+
+=== OUTPUT: Pure JSON only, no markdown ===
+{{
+  "slot_checks": [
+    {{
+      "slot_code": "string",
+      "status": "passed|needs_retake|insufficient_evidence|anomalous|suspected_fraud",
+      "detected_object": "short Vietnamese description",
+      "issue": "Vietnamese reason if not passed, else empty string"
+    }}
+  ],
+  "bed_details": [
+    {{
+      "slot_code": "B01",
+      "is_tidy": true,
+      "note": "Vietnamese observation"
+    }}
+  ],
+  "room_consistency": {{
+    "is_same_room": true,
+    "is_authentic_dorm": true,
+    "confidence": "high|medium|low",
+    "inconsistencies": ["Vietnamese description if any"]
+  }},
+  "assessment_category": "Đạt yêu cầu|Ảnh không đạt yêu cầu|Ảnh thiếu bằng chứng|Ảnh có dấu hiệu bất thường|Nghi ngờ gian lận",
+  "checklist": {{
+    "bed_tidy": true,
+    "floor_clean": true,
+    "desk_organized": true,
+    "shoes_arranged": true
+  }},
+  "deductions": [
+    {{"criterion": "bed_tidy|floor_clean|desk_organized|shoes_arranged", "severity": "minor|moderate|severe", "reason": "Vietnamese reason"}}
+  ],
+  "positive_notes": ["Vietnamese positive observation"],
+  "recommendations": "Vietnamese summary and actionable advice"
+}}
+"""
+
+
+def _apply_session_scoring(
+    result: dict[str, Any],
+    slot_items: list[dict[str, Any]],
+    duplicate_errors: list[str] | None = None,
+) -> dict[str, Any]:
+    slot_label_map = {item["slot_code"]: item["slot_label"] for item in slot_items}
+    retake_requests: list[dict[str, str]] = []
+
+    slot_checks = result.get("slot_checks") or []
+    has_fraud_signal = False
+    has_insufficient = False
+    has_anomalous = False
+
+    if duplicate_errors:
+        has_anomalous = True
+        for msg in duplicate_errors:
+            retake_requests.append({
+                "slot_code": "DUPLICATE",
+                "slot_label": "Ảnh trùng lặp",
+                "status": "anomalous",
+                "reason": msg,
+            })
+
+    for chk in slot_checks:
+        if not isinstance(chk, dict):
+            continue
+        code = str(chk.get("slot_code") or "")
+        st = str(chk.get("status") or "passed")
+        issue = str(chk.get("issue") or "").strip()
+        if st != "passed":
+            if st == "suspected_fraud":
+                has_fraud_signal = True
+            elif st == "insufficient_evidence":
+                has_insufficient = True
+            elif st == "anomalous":
+                has_anomalous = True
+            retake_requests.append({
+                "slot_code": code,
+                "slot_label": slot_label_map.get(code, code),
+                "status": st,
+                "reason": issue or "Ảnh chưa đủ điều kiện đánh giá, vui lòng chụp bổ sung.",
+            })
+
+    consistency = result.get("room_consistency") or {}
+    is_same_room = consistency.get("is_same_room", True)
+    is_authentic_dorm = consistency.get("is_authentic_dorm", True)
+    if is_same_room is False or is_authentic_dorm is False:
+        has_fraud_signal = True
+
+    if has_fraud_signal:
+        category = "Nghi ngờ gian lận"
+    elif has_insufficient:
+        category = "Ảnh thiếu bằng chứng"
+    elif has_anomalous:
+        category = "Ảnh có dấu hiệu bất thường"
+    elif retake_requests:
+        category = "Ảnh không đạt yêu cầu"
+    else:
+        category = "Đạt yêu cầu"
+
+    result["assessment_category"] = category
+    result["retake_requests"] = retake_requests
+    result["fraud_flag"] = has_fraud_signal
+
+    if retake_requests or has_fraud_signal:
+        result["is_valid_room_photo"] = False
+        result["score"] = 0.0
+        result["status"] = "Không hợp lệ (Gian lận)" if has_fraud_signal else "Không hợp lệ"
+        reasons = [f"• {r['slot_label']}: {r['reason']}" for r in retake_requests]
+        if not reasons and consistency.get("inconsistencies"):
+            reasons = [f"• {x}" for x in consistency["inconsistencies"]]
+        result["issues_detected"] = reasons or [result.get("recommendations") or "Cần chụp bổ sung ảnh."]
+        if not result.get("recommendations"):
+            result["recommendations"] = (
+                "Cán bộ quản lý sẽ xác minh trường hợp nghi ngờ gian lận."
+                if has_fraud_signal
+                else "Vui lòng chụp bổ sung các góc ảnh chưa đạt yêu cầu."
+            )
+        return result
+
+    # Tổng hợp điểm theo 4 nhóm L1..L4
+    checklist = result.get("checklist") or {}
+    bed_details = result.get("bed_details") or []
+    if bed_details and any(b.get("is_tidy") is False for b in bed_details if isinstance(b, dict)):
+        checklist["bed_tidy"] = False
+
+    for k in CRITERIA:
+        if k not in checklist or not isinstance(checklist[k], bool):
+            checklist[k] = True
+    result["checklist"] = checklist
+
+    deductions = result.get("deductions") or []
+    issues = []
+    seen = set()
+    score = 10.0
+    for item in deductions:
+        if not isinstance(item, dict):
+            continue
+        criterion = item.get("criterion")
+        if criterion not in CRITERIA:
+            continue
+        severity = item.get("severity", "minor")
+        points = DEDUCTION_POINTS.get(severity, 0.5)
+        reason = str(item.get("reason", "")).strip() or f"Chưa đảm bảo tiêu chuẩn {CRITERIA[criterion]}"
+        if criterion not in seen:
+            seen.add(criterion)
+            score -= points
+            display_points = f"{points:.1f}".replace(".", ",")
+            issues.append(f"−{display_points} điểm · {CRITERIA[criterion]} · {reason}")
+
+    for criterion, ok in checklist.items():
+        if ok is False and criterion not in seen:
+            score -= 1.0
+            issues.append(f"−1,0 điểm · {CRITERIA[criterion]} · Chưa đạt tiêu chuẩn ngăn nắp")
+
+    score = max(0.0, round(score, 1))
+    result["is_valid_room_photo"] = True
+    result["score"] = score
+    result["status"] = "Sạch" if score >= 8.0 else "Hơi bừa bộn" if score >= 5.0 else "Bừa bộn"
+    result["issues_detected"] = issues
+    result["l1_l4_summary"] = {
+        "L1_giuong": checklist["bed_tidy"],
+        "L2_san_nha": checklist["floor_clean"],
+        "L3_ban_hoc": checklist["desk_organized"],
+        "L4_do_dac": checklist["shoes_arranged"],
+    }
+    return result
+
+
+def evaluate_room_session(
+    slot_items: list[dict[str, Any]],
+    room_code: str,
+    bed_count: int,
+    duplicate_errors: list[str] | None = None,
+) -> dict[str, Any]:
+    """Chấm điểm 5S tổng hợp cho bộ ảnh N = P + 4 (và thử thách nếu có)."""
+    if not slot_items:
+        raise ValueError("Cần ít nhất một ảnh trong phiên chụp.")
+
+    processed_buffers: list[bytes] = []
+    processed_images: list[Image.Image] = []
+    for item in slot_items:
+        with Image.open(io.BytesIO(item["bytes"])) as img:
+            img = ImageOps.exif_transpose(img)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            max_side = max(img.size)
+            if max_side > 512:
+                scale = 512 / max_side
+                img = img.resize((int(img.width * scale), int(img.height * scale)), Image.Resampling.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=75, optimize=True)
+            b = buf.getvalue()
+            processed_buffers.append(b)
+            processed_images.append(Image.open(io.BytesIO(b)))
+
+    prompt = build_session_prompt(slot_items, room_code=room_code, bed_count=bed_count)
+    start_time = time.time()
+
+    if getattr(settings, "AI_PROVIDER", "").lower() == "nvidia" and getattr(settings, "NVIDIA_API_KEY", ""):
+        if OpenAI is not None:
+            try:
+                client = OpenAI(
+                    base_url="https://integrate.api.nvidia.com/v1",
+                    api_key=settings.NVIDIA_API_KEY.strip(),
+                )
+                content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+                for item, buf_data in zip(slot_items, processed_buffers):
+                    b64 = base64.b64encode(buf_data).decode("utf-8")
+                    content.append({"type": "text", "text": f"\n\n---\n[{item['slot_code']}] {item['slot_label']}:"})
+                    content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
+
+                response = client.chat.completions.create(
+                    model="nvidia/nemotron-3.5-super-vl-120b-a12b",
+                    messages=[{"role": "user", "content": content}],
+                    temperature=0.1,
+                    max_tokens=2000,
+                    extra_body={"chat_template_kwargs": {"thinking": False}},
+                )
+                duration_ms = int((time.time() - start_time) * 1000)
+                raw_text = (getattr(response.choices[0].message, "content", None) or "").strip()
+                if "{" in raw_text and "}" in raw_text:
+                    raw_text = raw_text[raw_text.find("{"):raw_text.rfind("}") + 1]
+                result = json.loads(raw_text)
+                _apply_session_scoring(result, slot_items, duplicate_errors=duplicate_errors)
+                result["ai_response_time_ms"] = duration_ms
+                return result
+            except Exception as e:
+                print(f"[WARN] NVIDIA session eval fallback to Gemini: {e}")
+
+    if not settings.GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY chưa được thiết lập trong file .env")
+
+    genai.configure(api_key=settings.GEMINI_API_KEY)
+    generation_config = {
+        "response_mime_type": "application/json",
+        "temperature": 0,
+        "max_output_tokens": 2000,
+    }
+    last_error = None
+    for model_name in DEFAULT_MODELS:
+        try:
+            model = genai.GenerativeModel(model_name=model_name, generation_config=generation_config)
+            content = [prompt]
+            for item, img in zip(slot_items, processed_images):
+                content.extend([f"[{item['slot_code']}] {item['slot_label']}", img])
+            response = model.generate_content(content)
+            duration_ms = int((time.time() - start_time) * 1000)
+            raw_text = response.text.strip()
+            if "{" in raw_text and "}" in raw_text:
+                raw_text = raw_text[raw_text.find("{"):raw_text.rfind("}") + 1]
+            result = json.loads(raw_text)
+            _apply_session_scoring(result, slot_items, duplicate_errors=duplicate_errors)
+            result["ai_response_time_ms"] = duration_ms
+            return result
+        except Exception as e:
+            last_error = e
+            continue
+
+    raise RuntimeError(f"Lỗi khi gọi Gemini Vision API: {last_error}")

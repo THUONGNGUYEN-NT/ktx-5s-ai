@@ -55,17 +55,17 @@ export default function StudentHome() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <Panel title="Nộp bộ 4 ảnh vệ sinh phòng tuần này" className="lg:col-span-2">
+        <Panel title="Nộp bộ ảnh kiểm tra 5S tuần này (N = P + 4)" className="lg:col-span-2">
           <div className="flex flex-col md:flex-row gap-6 items-center">
             <div className="flex-1">
               <p className="text-gray-600 leading-relaxed">
-                Mỗi tuần, phòng bắt buộc chụp đủ <b>4 ảnh khu vực</b> (<b>Giường ngủ, Sàn nhà, Kệ giày dép, Bàn học</b>) trước <b>21:00 Chủ nhật</b>. AI sẽ đối chiếu cả 4 góc và chấm điểm ngay theo tiêu chuẩn 5S:{" "}
+                Mỗi tuần, phòng thực hiện kiểm tra 5S qua <b>Camera trực tiếp</b> theo công thức <b>N = P + 4</b> (đủ từng vị trí ngủ <b>B01..BP</b> kể cả giường tầng trên/dưới + <b>4 khu vực chung</b>: Toàn cảnh từ cửa, Sàn nhà, Bàn học, Kệ giày dép + 1 góc thử thách) trước <b>21:00 Chủ nhật</b>. AI chấm tổng hợp theo 4 nhóm <b>L1–L4</b>:{" "}
                 <span className="text-[#00a65a] font-semibold">Sạch</span> –{" "}
                 <span className="text-[#f39c12] font-semibold">Hơi bừa bộn</span> –{" "}
                 <span className="text-[#dd4b39] font-semibold">Bừa bộn</span>.
               </p>
               <button onClick={() => router.push("/student/camera")} className="mt-5 flex items-center gap-2 bg-[#00a65a] hover:bg-[#008d4c] text-white px-6 py-3 rounded-sm text-[15px] font-semibold shadow">
-                <Camera size={18} /> Chụp 4 ảnh phòng ngay
+                <Camera size={18} /> Bắt đầu phiên chụp kiểm tra 5S
               </button>
             </div>
             <div className="w-full md:w-64 bg-gray-50 border border-gray-200 rounded-sm p-4">
