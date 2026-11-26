@@ -411,20 +411,34 @@ You MUST count the actual number of bunk beds / sleeping spots visible in wide-a
 - 8-person room: 4 bunk bed units (8 spots).
 If `matches_declared_room = false`, mark the mismatching photo(s) in `slot_checks` as `suspected_fraud` and explain clearly in Vietnamese (e.g., "Phòng khai báo 4 người (2 giường tầng) nhưng ảnh chụp cho thấy dãy 3 giường tầng (phòng 6 người)").
 
-=== 1. SLOT-BY-SLOT VERIFICATION ===
-IMPORTANT: Inspect EVERY SINGLE submitted image independently ({len(slot_items)} images total). NEVER stop after finding the first invalid photo! You MUST output one entry in `slot_checks` for EVERY single image using its exact `slot_code` ({', '.join(item['slot_code'] for item in slot_items)}).
-- Sleeping positions (B01..B{bunk_count:02d}): Each photo represents one bunk bed unit showing BOTH the upper bunk and lower bunk clearly in the same frame (blankets, pillows, mattresses, no clutter/storage).
-- C02_FLOOR: MUST clearly show the dormitory floor and walkway (angled 30-45°). If it only shows a desk/laptop top without the floor walkway -> mark `needs_retake`.
-- C03_DESK: MUST clearly show the study desk surface and items. If it only shows beds/floor without a study desk -> mark `needs_retake`.
-- C04_SHOES: MUST clearly show the shoe rack, hanging clothes, and personal storage.
-- CH01 (if present): Random challenge angle matching its description AND consistent with the declared {bed_count}-person room.
+=== 1. REALISTIC DORMITORY ROOM CONSISTENCY GUIDELINES ===
+Photos are taken in a shared student dorm room (2, 4, 6, or 8 students) where different students naturally use DIFFERENT bedding (drap/chiếu trúc/chăn nệm cá nhân khác màu nhau giữa các giường), và các góc chụp ở các thời điểm hoặc vị trí khác nhau trong phòng.
+- ACCEPT normal real-life student dorm room variations:
+  * Mỗi giường của từng sinh viên có thể dùng chiếu trúc, nệm hoặc chăn gối màu sắc khác nhau -> ĐÂY LÀ ĐIỀU BÌNH THƯỜNG TRONG KTX, KHÔNG ĐƯỢC COI LÀ GIAN LẬN!
+  * Ánh sáng các góc chụp (gần cửa sổ vs trong góc) có thể chênh lệch sáng/tối -> HỢP LỆ.
+  * Góc chụp rộng có thể nhìn thấy giường khác hoặc bàn học ở hậu cảnh -> HỢP LỆ.
+- ONLY flag `suspected_fraud` IF EXTREMELY OBVIOUS:
+  * Ảnh phòng trọ chung cư cao cấp bên ngoài với giường đôi gỗ gia đình sang trọng (không phải KTX).
+  * Ảnh tải từ mạng / Shopee / catalog sản phẩm.
+  * Hoặc cố tình nộp cùng một ảnh cho 2 khu vực khác nhau.
 
-=== 2. DISTINGUISH PHOTO ISSUES VS SUSPECTED FRAUD ===
-Do NOT jump to "fraud" for simple quality issues. Classify each problematic slot into one of:
-- "needs_retake": Blurry, dark, backlit, wrong angle, or partially obscured.
-- "insufficient_evidence": Cannot observe the target area clearly (e.g. upper bunk hidden, desk surface blocked).
-- "anomalous": Minor inconsistency or duplicate image that requires re-capture.
-- "suspected_fraud": Clearly spliced from different rooms, private non-dorm apartment/studio, stock/catalog image, or someone intentionally holding objects to hide mess.
+=== 2. TARGET AREA & ANGLE REQUIREMENTS (REASONABLE) ===
+Ensure photos capture the intended target area without overly pedantic angle rejections:
+- Sleeping positions (B01..B{bunk_count:02d}): Shows student bunk bed or dorm bed area (gọn gàng, ngăn nắp, chăn gối xếp ngay ngắn).
+- C02_FLOOR (Sàn nhà và lối đi):
+  * Must show the dormitory floor / walkway area.
+  * If the floor is visible in the frame (even if a desk, chair, or bed is partially in frame as context), that is ACCEPTABLE.
+  * Only mark `needs_retake` if the floor is completely hidden/blocked (e.g. extreme close-up of a screen or ceiling only).
+- C03_DESK (Bàn học và kệ): Shows the study desk surface and area.
+- C04_SHOES (Kệ giày dép và móc treo): Shows the shoe rack or footwear neatly arranged.
+- CH01 (Góc chụp thử thách nếu có): Wide-angle or context view of the room.
+
+=== 3. BALANCED CLASSIFICATION & 5S SCORING ===
+- "passed": The photo shows the required area and satisfies 5S cleanliness guidelines.
+- "needs_retake": Only for unusable photos (completely blurry, completely dark, or completely missing the target subject).
+- If a photo has some minor clutter (e.g. books unstacked, 1-2 pairs of shoes askew), do NOT reject the photo! Instead mark as "passed" and make a minor deduction (-0.5pt to -1.0pt) according to 5S criteria.
+
+
 
 === 3. AGGREGATED 5S SCORING (L1 - L4) ===
 DO NOT score each photo in isolation. Aggregate across the whole room:

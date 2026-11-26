@@ -454,25 +454,14 @@ async def evaluate_four_photos(
         url = await save_image(compressed, room_code=clean_room_code, filename_prefix=f"area_{position}")
         image_urls.append(url)
 
-    if not ai_result.get("is_valid_room_photo", True):
-        invalid_msg = (
-            ai_result.get("invalid_reason")
-            or ai_result.get("recommendations")
-            or "Ảnh chụp không đúng góc quy định hoặc bị phát hiện gian lận. Vui lòng chụp lại đúng các khu vực trong phòng."
-        )
-        return JSONResponse(
-            status_code=400,
-            content={
-                "success": False,
-                "data": {"image_urls": image_urls},
-                "message": invalid_msg,
-                "error_code": "INVALID_IMAGE",
-            },
-        )
-
+    is_valid = bool(ai_result.get("is_valid_room_photo", True))
     checklist = ai_result.get("checklist", {})
     clean_status = normalize_status(ai_result.get("status", "Bừa bộn"))
     score = round(float(ai_result.get("score", 0.0)), 1)
+    if not is_valid:
+        score = 0.0
+        clean_status = "Không hợp lệ (Gian lận)"
+
     issues_list = ai_result.get("issues_detected", [])
     positive_list = ai_result.get("positive_notes", [])
     recommendations_text = ai_result.get("recommendations", "")
@@ -481,7 +470,7 @@ async def evaluate_four_photos(
     week_str = f"{now.year}-W{now.isocalendar()[1]:02d}"
     submission_id = f"sub_{week_str}_{clean_room_code}"
 
-    # Nếu SQL Server đang bật thì tự động lưu luôn vào CSDL của Sinh viên A
+    # Luôn lưu vào Database (SQL Server hoặc SQLite fallback) để Cán bộ và Sinh viên đều thấy trong lịch sử
     try:
         with SessionLocal() as db:
             room_obj = db.query(Room).filter(Room.room_code == clean_room_code).first()
@@ -534,7 +523,7 @@ async def evaluate_four_photos(
                 submission_id=sub.id,
                 status=clean_status,
                 score=score,
-                is_valid_room_photo=True,
+                is_valid_room_photo=is_valid,
                 bed_tidy=bool(checklist.get("bed_tidy")),
                 floor_clean=bool(checklist.get("floor_clean")),
                 desk_organized=bool(checklist.get("desk_organized")),
@@ -553,8 +542,25 @@ async def evaluate_four_photos(
                 lbl = parsed_labels[pos - 1] if is_session_batch and pos - 1 < len(parsed_labels) else None
                 db.add(SubmissionPhoto(submission_id=sub.id, position=pos, image_url=u, slot_code=code, slot_label=lbl))
             db.commit()
-    except Exception:
-        logger.warning("Bỏ qua lưu DB (SQL Server chưa kết nối), vẫn trả kết quả AI bình thường.")
+    except Exception as save_err:
+        logger.warning("Bỏ qua lỗi lưu DB (%s), vẫn tiếp tục phản hồi.", save_err)
+
+    if not is_valid:
+        invalid_msg = (
+            ai_result.get("invalid_reason")
+            or ai_result.get("recommendations")
+            or "Ảnh chụp không đúng góc quy định hoặc bị phát hiện gian lận. Vui lòng chụp lại đúng các khu vực trong phòng."
+        )
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "data": {"image_urls": image_urls},
+                "message": invalid_msg,
+                "error_code": "INVALID_IMAGE",
+            },
+        )
+
 
     photos_payload = [
         {

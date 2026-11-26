@@ -43,6 +43,8 @@ static/uploads/
 backend/static/uploads/
 uploads/
 test_ai.py
+*.db
+*.log
 
 # Visual Studio & SSMS temporary files
 .vs/

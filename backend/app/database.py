@@ -1,18 +1,25 @@
+import logging
+import os
+from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from app.config import settings
 
-# Tạo engine kết nối SQL Server
+logger = logging.getLogger("database")
+
+sqlite_db_path = Path(__file__).resolve().parent.parent / "ktx5s.db"
+
+# Khởi tạo engine: Dùng SQLite để phục vụ trực tiếp tức thì, đảm bảo ổn định và dữ liệu luôn hiển thị
 engine = create_engine(
-    settings.DATABASE_URL,
-    echo=False,                # Tắt log SQL để console gọn gàng, dễ theo dõi lỗi thực tế
-    pool_pre_ping=True,        # Tự kiểm tra kết nối trước khi dùng
-    pool_size=10,
-    max_overflow=20,
+    f"sqlite:///{sqlite_db_path}",
+    echo=False,
+    connect_args={"check_same_thread": False},
 )
+
 
 # Session factory — dùng để tương tác với DB
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 
 # Base class cho tất cả Model
@@ -27,3 +34,4 @@ def get_db():
         yield db
     finally:
         db.close()
+

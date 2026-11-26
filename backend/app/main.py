@@ -72,6 +72,20 @@ async def startup():
         from app.services.auth_service import hash_password
 
         with SessionLocal() as db:
+            # Khởi tạo tài khoản cán bộ mặc định (admin / admin123) nếu chưa có
+            admin_user = db.query(User).filter(User.username == "admin").first()
+            if not admin_user:
+                admin_user = User(
+                    username="admin",
+                    password_hash=hash_password("admin123"),
+                    full_name="Cán bộ Ký túc xá",
+                    role="admin",
+                    is_active=True,
+                )
+                db.add(admin_user)
+                db.commit()
+                print("✅ Đã khởi tạo tài khoản cán bộ admin / admin123")
+
             room_count = db.query(Room).count()
             if room_count < 200:
                 print(f"📦 Đang khởi tạo danh mục đầy đủ 200 phòng KTX (4 tòa A-D × 10 tầng)...")
