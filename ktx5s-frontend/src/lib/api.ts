@@ -50,12 +50,20 @@ function fileToDataUrl(file: File): Promise<string> {
 }
 
 // Lưu các lượt nộp thật & duyệt đè trong trình duyệt + đồng bộ lên Cloudinary để mọi thiết bị (Điện thoại <-> Laptop) thấy ngay
+export type SubmittedPhotoItem = {
+  slot_code: string;
+  slot_label: string;
+  image_url: string;
+  checklist_key?: string;
+};
+
 export type LiveRecord = {
   submission_id: string;
   room_code: string;
   week: string;
   submitted_at: string;
   area_images: Record<AreaKey, string>;
+  photos?: SubmittedPhotoItem[];
   ai_result: AIResult;
   is_overridden: boolean;
   override_note: string | null;
@@ -287,6 +295,7 @@ export type HistorySubmission = {
   submitted_at: string;
   image_url: string;
   area_images: Record<AreaKey, string>;
+  photos?: SubmittedPhotoItem[];
   ai_result: AIResult;
   status: RoomStatus;
   score: number;
@@ -315,8 +324,9 @@ export async function getRoomHistory(roomCode: string) {
         submission_id: live.submission_id,
         week: live.week,
         submitted_at: live.submitted_at,
-        image_url: live.area_images.bed,
+        image_url: live.photos?.[0]?.image_url || live.area_images.bed,
         area_images: live.area_images,
+        photos: live.photos,
         ai_result: live.ai_result,
         status: live.ai_result.status,
         score: live.ai_result.score,
@@ -757,17 +767,35 @@ export async function submitCaptureSession(
       const payload = res.data;
       if (payload?.success && payload?.data) {
         const urls: string[] = (payload.data.image_urls ?? []).map(resolveImageUrl);
+        const serverPhotos = (payload.data.photos ?? []) as Array<{
+          slot_code: string;
+          slot_label: string;
+          image_url: string;
+        }>;
+        const savedPhotos: SubmittedPhotoItem[] = await Promise.all(
+          orderedSlots.map(async (s, idx) => ({
+            slot_code: s.slot_code,
+            slot_label: s.slot_label,
+            checklist_key: s.checklist_key,
+            image_url:
+              (serverPhotos[idx]?.image_url ? resolveImageUrl(serverPhotos[idx].image_url) : "") ||
+              urls[idx] ||
+              (await fileToDataUrl(captures[s.slot_code].file)),
+          }))
+        );
+        const byCode = new Map(savedPhotos.map((p) => [p.slot_code, p.image_url]));
         await saveLiveRecord({
           submission_id: payload.data.submission_id || `sub_${session.week}_${session.room_code}`,
           room_code: session.room_code,
           week: session.week,
           submitted_at: payload.data.submitted_at || new Date().toISOString(),
           area_images: {
-            bed: urls[0] || captures["B01"]?.preview || "",
-            floor: captures["C02_FLOOR"]?.preview || urls[1] || "",
-            desk: captures["C03_DESK"]?.preview || urls[2] || "",
-            shoes: captures["C04_SHOES"]?.preview || urls[3] || "",
+            bed: byCode.get("B01") || savedPhotos[0]?.image_url || "",
+            floor: byCode.get("C02_FLOOR") || savedPhotos[1]?.image_url || "",
+            desk: byCode.get("C03_DESK") || savedPhotos[2]?.image_url || "",
+            shoes: byCode.get("C04_SHOES") || savedPhotos[3]?.image_url || "",
           },
+          photos: savedPhotos,
           ai_result: payload.data.ai_result,
           is_overridden: false,
           override_note: null,
@@ -804,8 +832,23 @@ export async function submitCaptureSession(
     const payload = res.data;
     if (payload?.success && payload?.data) {
       const urls: string[] = (payload.data.image_urls ?? []).map(resolveImageUrl);
-      const photos = (payload.data.photos ?? []) as Array<{ slot_code: string; image_url: string }>;
-      const byCode = new Map(photos.map((p) => [p.slot_code, resolveImageUrl(p.image_url)]));
+      const photos = (payload.data.photos ?? []) as Array<{
+        slot_code: string;
+        slot_label?: string;
+        image_url: string;
+      }>;
+      const savedPhotos: SubmittedPhotoItem[] = session.slots.map((s, idx) => {
+        const found = photos.find((p) => p.slot_code === s.slot_code);
+        return {
+          slot_code: s.slot_code,
+          slot_label: found?.slot_label || s.slot_label,
+          checklist_key: s.checklist_key,
+          image_url: found?.image_url
+            ? resolveImageUrl(found.image_url)
+            : urls[idx] || captures[s.slot_code]?.preview || "",
+        };
+      });
+      const byCode = new Map(savedPhotos.map((p) => [p.slot_code, p.image_url]));
       await saveLiveRecord({
         submission_id: payload.data.submission_id,
         room_code: session.room_code,
@@ -817,6 +860,7 @@ export async function submitCaptureSession(
           desk: byCode.get("C03_DESK") || urls[2] || captures["C03_DESK"]?.preview || "",
           shoes: byCode.get("C04_SHOES") || urls[3] || captures["C04_SHOES"]?.preview || "",
         },
+        photos: savedPhotos,
         ai_result: payload.data.ai_result,
         is_overridden: false,
         override_note: null,

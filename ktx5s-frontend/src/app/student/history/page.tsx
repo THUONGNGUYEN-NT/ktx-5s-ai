@@ -169,58 +169,105 @@ export default function HistoryPage() {
             </div>
 
             <div className="p-5 grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* CỘT TRÁI: 4 ẢNH CHỤP THỰC TẾ CỦA 4 KHU VỰC (lg:col-span-6) */}
+              {/* CỘT TRÁI: TOÀN BỘ ẢNH CHỤP THỰC TẾ ĐÃ NỘP (lg:col-span-6) */}
               <div className="lg:col-span-6 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <h4 className="font-bold text-xs uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
                     <Camera size={15} className="text-[#3c8dbc]" />
-                    Bộ 4 ảnh chụp phòng thực tế
+                    Bộ {selectedSubmission.photos?.length || AREAS.length} ảnh chụp phòng thực tế
                   </h4>
                   <span className="text-[11px] text-gray-400">Click ảnh để phóng to</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  {AREAS.map((a) => {
-                    const imgUrl =
-                      selectedSubmission.area_images?.[a.key] ||
-                      selectedSubmission.image_url;
-                    const isOk =
-                      selectedSubmission.ai_result?.checklist?.[a.checklistKey] ?? true;
+                  {selectedSubmission.photos && selectedSubmission.photos.length > 0
+                    ? selectedSubmission.photos.map((p, idx) => {
+                        const ck = p.checklist_key as keyof AIResult["checklist"] | undefined;
+                        const isOk =
+                          ck && ck in (selectedSubmission.ai_result?.checklist ?? {})
+                            ? Boolean(selectedSubmission.ai_result?.checklist?.[ck])
+                            : true;
 
-                    return (
-                      <div
-                        key={a.key}
-                        onClick={() => setZoomedImage({ url: imgUrl, title: `${a.emoji} ${a.label} - Phòng ${room}` })}
-                        className="group relative border border-gray-200 rounded overflow-hidden bg-slate-900 cursor-pointer shadow-xs hover:shadow-md transition-all"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={imgUrl}
-                          alt={a.label}
-                          className="w-full aspect-4/3 object-cover group-hover:scale-105 transition-transform duration-200"
-                        />
-                        <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                          <span className="bg-black/60 text-white text-[11px] px-2 py-1 rounded flex items-center gap-1 backdrop-blur-xs">
-                            <Maximize2 size={12} /> Phóng to
-                          </span>
-                        </div>
-                        <div className="p-2 bg-white flex items-center justify-between text-xs border-t border-gray-100">
-                          <span className="font-semibold text-gray-800">
-                            {a.emoji} {a.label}
-                          </span>
-                          <span
-                            className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
-                              isOk
-                                ? "bg-emerald-100 text-emerald-800"
-                                : "bg-red-100 text-red-800"
-                            }`}
+                        return (
+                          <div
+                            key={`${p.slot_code}_${idx}`}
+                            onClick={() =>
+                              setZoomedImage({
+                                url: p.image_url,
+                                title: `${p.slot_label} - Phòng ${room}`,
+                              })
+                            }
+                            className="group relative border border-gray-200 rounded overflow-hidden bg-slate-900 cursor-pointer shadow-xs hover:shadow-md transition-all"
                           >
-                            {isOk ? "✓ Đạt" : "✗ Lỗi"}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={p.image_url}
+                              alt={p.slot_label}
+                              className="w-full aspect-4/3 object-cover group-hover:scale-105 transition-transform duration-200"
+                            />
+                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                              <span className="bg-black/60 text-white text-[11px] px-2 py-1 rounded flex items-center gap-1 backdrop-blur-xs">
+                                <Maximize2 size={12} /> Phóng to
+                              </span>
+                            </div>
+                            <div className="p-2 bg-white flex items-center justify-between gap-1 text-xs border-t border-gray-100">
+                              <span className="font-semibold text-gray-800 truncate" title={p.slot_label}>
+                                {p.slot_label}
+                              </span>
+                              <span
+                                className={`text-[11px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                                  isOk
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : "bg-red-100 text-red-800"
+                                }`}
+                              >
+                                {isOk ? "✓ Đạt" : "✗ Lỗi"}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    : AREAS.map((a) => {
+                        const imgUrl =
+                          selectedSubmission.area_images?.[a.key] ||
+                          selectedSubmission.image_url;
+                        const isOk =
+                          selectedSubmission.ai_result?.checklist?.[a.checklistKey] ?? true;
+
+                        return (
+                          <div
+                            key={a.key}
+                            onClick={() => setZoomedImage({ url: imgUrl, title: `${a.emoji} ${a.label} - Phòng ${room}` })}
+                            className="group relative border border-gray-200 rounded overflow-hidden bg-slate-900 cursor-pointer shadow-xs hover:shadow-md transition-all"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={imgUrl}
+                              alt={a.label}
+                              className="w-full aspect-4/3 object-cover group-hover:scale-105 transition-transform duration-200"
+                            />
+                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                              <span className="bg-black/60 text-white text-[11px] px-2 py-1 rounded flex items-center gap-1 backdrop-blur-xs">
+                                <Maximize2 size={12} /> Phóng to
+                              </span>
+                            </div>
+                            <div className="p-2 bg-white flex items-center justify-between text-xs border-t border-gray-100">
+                              <span className="font-semibold text-gray-800">
+                                {a.emoji} {a.label}
+                              </span>
+                              <span
+                                className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                                  isOk
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : "bg-red-100 text-red-800"
+                                }`}
+                              >
+                                {isOk ? "✓ Đạt" : "✗ Lỗi"}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
                 </div>
               </div>
 

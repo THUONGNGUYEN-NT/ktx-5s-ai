@@ -549,10 +549,21 @@ async def evaluate_four_photos(
             )
             db.add(ai_eval)
             for pos, u in enumerate(image_urls, start=1):
-                db.add(SubmissionPhoto(submission_id=sub.id, position=pos, image_url=u))
+                code = parsed_codes[pos - 1] if is_session_batch and pos - 1 < len(parsed_codes) else None
+                lbl = parsed_labels[pos - 1] if is_session_batch and pos - 1 < len(parsed_labels) else None
+                db.add(SubmissionPhoto(submission_id=sub.id, position=pos, image_url=u, slot_code=code, slot_label=lbl))
             db.commit()
     except Exception:
         logger.warning("Bỏ qua lưu DB (SQL Server chưa kết nối), vẫn trả kết quả AI bình thường.")
+
+    photos_payload = [
+        {
+            "slot_code": parsed_codes[idx] if is_session_batch and idx < len(parsed_codes) else f"PHOTO_{idx + 1}",
+            "slot_label": parsed_labels[idx] if is_session_batch and idx < len(parsed_labels) else f"Ảnh {idx + 1}",
+            "image_url": u,
+        }
+        for idx, u in enumerate(image_urls)
+    ]
 
     return {
         "success": True,
@@ -562,6 +573,7 @@ async def evaluate_four_photos(
             "submitted_at": now.isoformat(),
             "image_url": image_urls[0],
             "image_urls": image_urls,
+            "photos": photos_payload,
             "ai_result": {
                 "status": clean_status,
                 "score": score,
