@@ -404,12 +404,13 @@ Submitted photos in this capture session:
 {slots_desc}
 
 === 0. ROOM CAPACITY & BUNK BED COUNT VERIFICATION (CRUCIAL) ===
-You MUST count the actual number of bunk beds / sleeping spots visible in wide-angle photos (especially CH01, C02_FLOOR, and B01..B{bunk_count:02d}) and compare with the declared room ({bed_count} students = {bunk_count} bunk bed unit(s)):
-- 2-person room: max 1 bunk bed unit (2 spots).
-- 4-person room: max 2 bunk bed units (4 spots). If ANY photo shows a row of 3 bunk beds (6 spots) or 4 bunk beds (8 spots) -> `matches_declared_room = false`!
-- 6-person room: max 3 bunk bed units (6 spots). If ANY photo shows 4 bunk beds (8 spots) or clearly only 1-2 bunk beds of a different room -> `matches_declared_room = false`!
-- 8-person room: 4 bunk bed units (8 spots).
-If `matches_declared_room = false`, mark the mismatching photo(s) in `slot_checks` as `suspected_fraud` and explain clearly in Vietnamese (e.g., "Phòng khai báo 4 người (2 giường tầng) nhưng ảnh chụp cho thấy dãy 3 giường tầng (phòng 6 người)").
+You MUST visually count the ACTUAL number of bunk beds (giường tầng) in EVERY photo, especially wide-angle photos (C02_FLOOR, CH01, B01..B{bunk_count:02d}):
+- Count BOTH left and right walls in wide-angle views (e.g., 1 bunk on the left + 1 bunk on the right = 2 bunk beds = 4-person room!).
+- 2-person room (`declared_bunk_units = 1`): ONLY 1 bunk bed in the entire room. If ANY photo shows 2 or more bunk beds (e.g. one on left and one on right, or a row of 2-3 bunks) -> `visible_bunk_beds >= 2` -> MISMATCH!
+- 4-person room (`declared_bunk_units = 2`): max 2 bunk beds. If ANY photo shows 3 or 4 bunk beds -> MISMATCH!
+- 6-person room (`declared_bunk_units = 3`): max 3 bunk beds. If ANY photo shows 4 bunk beds -> MISMATCH!
+- 8-person room (`declared_bunk_units = 4`): max 4 bunk beds.
+Record the exact count for every photo in `room_capacity_check.per_image_bunk_counts`. If `max_visible_bunk_units > {bunk_count}`, set `matches_declared_room = false`, mark the violating slot(s) in `slot_checks` as `suspected_fraud`, and explain clearly in Vietnamese.
 
 === 1. REALISTIC DORMITORY ROOM CONSISTENCY GUIDELINES ===
 Photos are taken in a shared student dorm room (2, 4, 6, or 8 students) where different students naturally use DIFFERENT bedding (drap/chiếu trúc/chăn nệm cá nhân khác màu nhau giữa các giường), và các góc chụp ở các thời điểm hoặc vị trí khác nhau trong phòng.
@@ -472,13 +473,16 @@ Deductions per group: minor (-0.5pt) | moderate (-1.5pt) | severe (-2.5pt).
     "inconsistencies": ["Vietnamese description if any"]
   }},
   "room_capacity_check": {{
+    "per_image_bunk_counts": [
+      {{"slot_code": "C02_FLOOR", "visible_bunk_beds": 0, "note": "Vietnamese count note"}}
+    ],
     "declared_students": {bed_count},
     "declared_bunk_units": {bunk_count},
-    "observed_bunk_units": {bunk_count},
-    "observed_capacity": {bed_count},
+    "observed_bunk_units": 0,
+    "observed_capacity": 0,
     "matches_declared_room": true,
-    "evidence_slot": "string or empty",
-    "reason": "Vietnamese explanation if mismatch, else empty string"
+    "evidence_slot": "",
+    "reason": ""
   }},
   "assessment_category": "Đạt yêu cầu|Ảnh không đạt yêu cầu|Ảnh thiếu bằng chứng|Ảnh có dấu hiệu bất thường|Nghi ngờ gian lận",
   "checklist": {{
@@ -548,16 +552,27 @@ def _apply_session_scoring(
 
     cap_check = result.get("room_capacity_check") or {}
     expected_bunks = max(1, (bed_count + 1) // 2)
-    observed_bunks = cap_check.get("observed_bunk_units")
+    observed_bunks = cap_check.get("observed_bunk_units") or 0
+    ev_slot = str(cap_check.get("evidence_slot") or "")
+
+    # Tự đối chiếu thêm từ per_image_bunk_counts để không phụ thuộc vào boolean của AI
+    per_img_counts = cap_check.get("per_image_bunk_counts") or []
+    for entry in per_img_counts:
+        if isinstance(entry, dict):
+            cnt = entry.get("visible_bunk_beds")
+            if isinstance(cnt, (int, float)) and cnt > observed_bunks:
+                observed_bunks = int(cnt)
+                ev_slot = str(entry.get("slot_code") or ev_slot)
+
     capacity_mismatch = cap_check.get("matches_declared_room") is False or (
         isinstance(observed_bunks, (int, float)) and observed_bunks > expected_bunks
     )
     capacity_reason = ""
     if capacity_mismatch:
         has_fraud_signal = True
-        ev_slot = str(cap_check.get("evidence_slot") or "ảnh toàn phòng")
+        ev_slot = ev_slot or "ảnh toàn phòng"
         obs_cap = cap_check.get("observed_capacity") or (
-            int(observed_bunks) * 2 if isinstance(observed_bunks, (int, float)) else "khác"
+            int(observed_bunks) * 2 if isinstance(observed_bunks, (int, float)) and observed_bunks > 0 else "khác"
         )
         capacity_reason = str(cap_check.get("reason") or "").strip() or (
             f"Phòng khai báo {bed_count} người ({expected_bunks} giường tầng) nhưng {ev_slot} cho thấy {observed_bunks} giường tầng ({obs_cap} chỗ ngủ)."
