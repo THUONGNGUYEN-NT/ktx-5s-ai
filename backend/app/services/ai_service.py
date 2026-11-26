@@ -405,8 +405,11 @@ Submitted photos in this capture session:
 
 === 0. ROOM CAPACITY & BUNK BED COUNT VERIFICATION (CRUCIAL) ===
 You MUST visually count the ACTUAL number of bunk beds (giường tầng) in EVERY photo, especially wide-angle photos (C02_FLOOR, CH01, B01..B{bunk_count:02d}):
-- Count BOTH left and right walls in wide-angle views (e.g., 1 bunk on the left + 1 bunk on the right = 2 bunk beds = 4-person room!).
-- 2-person room (`declared_bunk_units = 1`): ONLY 1 bunk bed in the entire room. If ANY photo shows 2 or more bunk beds (e.g. one on left and one on right, or a row of 2-3 bunks) -> `visible_bunk_beds >= 2` -> MISMATCH!
+- Count along BOTH walls AND along the DEPTH (foreground + background)! In VNU-HCM dormitories, bunk beds are often placed END-TO-END (nối tiếp nhau dọc theo tường). Look carefully for separate vertical steel posts, separate ladders, and mattress gaps along the depth of each wall:
+  * Example: 2 bunk beds end-to-end on the left wall + 1 bunk bed on the right wall = 3 bunk beds total (6-person room!).
+  * Example: 2 bunk beds end-to-end on the left wall + 2 bunk beds end-to-end on the right wall = 4 bunk beds total (8-person room!).
+- For each photo in `per_image_bunk_counts`, count `left_bunk_beds` and `right_bunk_beds` separately, then sum them into `visible_bunk_beds`.
+- 2-person room (`declared_bunk_units = 1`): ONLY 1 bunk bed in the entire room. If ANY photo shows 2 or more bunk beds -> MISMATCH!
 - 4-person room (`declared_bunk_units = 2`): max 2 bunk beds. If ANY photo shows 3 or 4 bunk beds -> MISMATCH!
 - 6-person room (`declared_bunk_units = 3`): max 3 bunk beds. If ANY photo shows 4 bunk beds -> MISMATCH!
 - 8-person room (`declared_bunk_units = 4`): max 4 bunk beds.
@@ -474,7 +477,7 @@ Deductions per group: minor (-0.5pt) | moderate (-1.5pt) | severe (-2.5pt).
   }},
   "room_capacity_check": {{
     "per_image_bunk_counts": [
-      {{"slot_code": "C02_FLOOR", "visible_bunk_beds": 0, "note": "Vietnamese count note"}}
+      {{"slot_code": "C02_FLOOR", "left_bunk_beds": 0, "right_bunk_beds": 0, "visible_bunk_beds": 0, "note": "Vietnamese count note"}}
     ],
     "declared_students": {bed_count},
     "declared_bunk_units": {bunk_count},
@@ -560,7 +563,11 @@ def _apply_session_scoring(
     capacity_violating_slots: dict[str, str] = {}
     for entry in per_img_counts:
         if isinstance(entry, dict):
-            cnt = entry.get("visible_bunk_beds")
+            cnt = entry.get("visible_bunk_beds") or 0
+            left_c = entry.get("left_bunk_beds") or 0
+            right_c = entry.get("right_bunk_beds") or 0
+            if isinstance(left_c, (int, float)) and isinstance(right_c, (int, float)):
+                cnt = max(cnt, int(left_c) + int(right_c))
             s_code = str(entry.get("slot_code") or "")
             if isinstance(cnt, (int, float)) and cnt > expected_bunks:
                 if s_code in slot_label_map:
@@ -730,11 +737,11 @@ def evaluate_room_session(
             if img.mode != "RGB":
                 img = img.convert("RGB")
             max_side = max(img.size)
-            if max_side > 512:
-                scale = 512 / max_side
+            if max_side > 896:
+                scale = 896 / max_side
                 img = img.resize((int(img.width * scale), int(img.height * scale)), Image.Resampling.LANCZOS)
             buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=75, optimize=True)
+            img.save(buf, format="JPEG", quality=80, optimize=True)
             b = buf.getvalue()
             processed_buffers.append(b)
             processed_images.append(Image.open(io.BytesIO(b)))
