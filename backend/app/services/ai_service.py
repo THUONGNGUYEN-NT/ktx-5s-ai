@@ -409,7 +409,7 @@ You MUST visually count the ACTUAL number of bunk beds (giường tầng) in EVE
 - CRITICAL: Two bunk beds placed end-to-end or in an L-shape on the SAME wall MUST be counted as **2 bunk beds**, NEVER 1! Count separate bunk beds by checking:
   (1) Separate upper-bunk safety rails / guardrails (2 thanh chắn tầng trên riêng biệt = 2 giường tầng),
   (2) Separate upper shelves/headboards or double vertical steel posts where two frames meet,
-  (3) A desk/cabinet placed between two bed frames, or 2 separate sleeping boards/mattresses on the lower tier.
+  (3) A desk/cabinet placed between two bed frames, or 2 separate sleeping boards/mattresses on the lower tier (count distinct sleeping bays: 2 upper sleeping bays + 2 lower sleeping bays = 2 bunk beds, NEVER 1!).
   * Example: 2 bunk beds end-to-end on the same wall (even with a desk between them) = 2 bunk beds (4-person room, INVALID for a 2-person room!).
   * Example: 2 bunk beds end-to-end on the left wall + 1 bunk bed on the right wall = 3 bunk beds total (6-person room!).
   * Example: 2 bunk beds end-to-end on the left wall + 2 bunk beds end-to-end on the right wall = 4 bunk beds total (8-person room!).
@@ -443,9 +443,8 @@ Compare the beds in `B01..B{bunk_count:02d}` against the beds visible in wide-an
 Ensure photos capture the intended target area without overly pedantic angle rejections:
 - Sleeping positions (B01..B{bunk_count:02d}): Shows student bunk bed or dorm bed area (gọn gàng, ngăn nắp, chăn gối xếp ngay ngắn).
 - C02_FLOOR (Sàn nhà và lối đi):
-  * Must show the dormitory floor / walkway area.
-  * If the floor is visible in the frame (even if a desk, chair, or bed is partially in frame as context), that is ACCEPTABLE.
-  * Only mark `needs_retake` if the floor is completely hidden/blocked (e.g. extreme close-up of a screen or ceiling only).
+  * Must clearly show the dormitory floor AND main walkway area (the floor/walkway must occupy a substantial, clearly observable portion of the frame — at least ~25% of the image — so trash, dust, and obstacles can be inspected).
+  * If the photo is aimed horizontally at beds/desks/walls and the floor/walkway is barely visible in a tiny corner (<15% of frame), it is NOT enough to grade floor cleanliness -> mark `insufficient_evidence` with Vietnamese issue: "Vùng hiển thị sàn nhà và lối đi quá ít, chưa đủ điều kiện đánh giá. Vui lòng chụp chếch xuống thấy rõ mặt sàn và lối đi."
 - C03_DESK (Bàn học và kệ): Shows the study desk surface and area.
 - C04_SHOES (Kệ giày dép và móc treo): Shows the shoe rack or footwear neatly arranged.
 - CH01 (Góc chụp thử thách nếu có): Wide-angle or context view of the room.
