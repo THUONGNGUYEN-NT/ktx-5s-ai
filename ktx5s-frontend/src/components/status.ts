@@ -46,7 +46,7 @@ export function tileKeyOf(room: Pick<Room, "status" | "is_overridden">): TileKey
   return statusToKey(room.status);
 }
 
-// ===== 4 KHU VỰC BẮT BUỘC CHỤP (KHU VỰC CHUNG) & CÔNG THỨC N = P + 4 =====
+// ===== 4 KHU VỰC BẮT BUỘC CHỤP (KHU VỰC CHUNG) & GIƯỜNG TẦNG =====
 export type AreaKey = "bed" | "floor" | "shoes" | "desk";
 export type ChecklistKey = "bed_tidy" | "floor_clean" | "shoes_arranged" | "desk_organized";
 

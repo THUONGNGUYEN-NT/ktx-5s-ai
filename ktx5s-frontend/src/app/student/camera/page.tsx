@@ -1,5 +1,5 @@
 "use client";
-// TRANG KIỂM TRA PHÒNG 5S — QUY TRÌNH 7 BƯỚC & CÔNG THỨC N = P + 4
+// TRANG KIỂM TRA PHÒNG 5S — QUY TRÌNH 7 BƯỚC (GIƯỜNG TẦNG + 4 KHU VỰC CHUNG)
 // Chụp trực tiếp qua WebRTC Camera (không cho tải ảnh từ thư viện)
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -319,7 +319,7 @@ export default function CameraPage() {
   };
 
   return (
-    <AppShell role="student" title="Kiểm tra phòng 5S (N = P + 4 · Camera trực tiếp)">
+    <AppShell role="student" title="Kiểm tra phòng 5S (Giường tầng & 4 khu vực chung)">
       {!session ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <Panel title={`Bước 1 & 2 · Xác thực phòng ${room} — Tuần ${CURRENT_WEEK}`} className="lg:col-span-2">
@@ -327,13 +327,13 @@ export default function CameraPage() {
               <div className="bg-blue-50 border border-blue-200 rounded-sm p-3 text-xs text-blue-900 flex items-start gap-2">
                 <Lock size={16} className="shrink-0 mt-0.5 text-[#3c8dbc]" />
                 <div>
-                  <b>Cơ chế chống gian lận 7 lớp:</b> Hệ thống chỉ cho phép chụp trực tiếp bằng camera trong ứng dụng, ghi nhận thời gian trên máy chủ và yêu cầu chụp đủ <b>N = P + 4</b> ảnh (từng vị trí ngủ kể cả tầng trên/dưới + 4 khu vực chung + 1 góc thử thách ngẫu nhiên).
+                  <b>Cơ chế chống gian lận 7 lớp:</b> Hệ thống ưu tiên chụp trực tiếp bằng camera trong ứng dụng, ghi nhận thời gian trên máy chủ và yêu cầu chụp đủ từng <b>giường tầng (cả tầng trên &amp; dưới trong 1 ảnh)</b> + <b>4 khu vực chung</b> + 1 góc thử thách ngẫu nhiên.
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  Chọn loại phòng thực tế (số vị trí ngủ P)
+                  Chọn loại phòng thực tế (số người / số giường tầng)
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   {ROOM_BED_PRESETS.map((preset) => (
@@ -393,9 +393,9 @@ export default function CameraPage() {
 
           <Panel title="Quy định chất lượng & riêng tư">
             <ul className="flex flex-col gap-2.5 text-xs text-gray-600">
-              <li>• <b>Công thức:</b> N = P + 4 (mỗi vị trí ngủ có mã định danh B01, B02...).</li>
-              <li>• <b>Giường tầng:</b> Tầng trên và tầng dưới phải có ảnh riêng, đứng cạnh giường chụp an toàn.</li>
-              <li>• <b>Độ phân giải:</b> Tối thiểu 1280×720 px, đủ sáng, không rung nhòe.</li>
+              <li>• <b>Số ảnh giường:</b> Mỗi giường tầng chụp <b>1 ảnh</b> thấy rõ cả tầng trên và tầng dưới (B01, B02...).</li>
+              <li>• <b>Khu vực chung:</b> Bắt buộc đủ 4 ảnh (Toàn cảnh từ cửa, Sàn nhà, Bàn học, Kệ giày dép).</li>
+              <li>• <b>Độ phân giải:</b> Tối thiểu 1280×720 px khi chụp camera, đủ sáng, không rung nhòe.</li>
               <li>• <b>Quyền riêng tư:</b> Không chụp mặt người, giấy tờ cá nhân hoặc màn hình điện thoại.</li>
             </ul>
           </Panel>

@@ -387,7 +387,7 @@ def evaluate_room_image(image_bytes: bytes | list[bytes]) -> dict[str, Any]:
 
 
 def build_session_prompt(slot_items: list[dict[str, Any]], room_code: str, bed_count: int) -> str:
-    """Tạo prompt AI động theo công thức N = P + 4 và 4 nhóm lỗi L1–L4."""
+    """Tạo prompt AI động theo từng giường tầng (trên & dưới) + 4 khu vực chung và 4 nhóm lỗi L1–L4."""
     slot_lines = []
     for idx, item in enumerate(slot_items, start=1):
         slot_lines.append(
@@ -397,7 +397,7 @@ def build_session_prompt(slot_items: list[dict[str, Any]], room_code: str, bed_c
 
     return f"""
 You are a senior Computer Vision 5S Inspector and Anti-Fraud Investigator for VNU-HCM Dormitory (KTX ĐHQG-HCM).
-Room: {room_code} | Required sleeping positions (P): {bed_count} | Formula: N = P + 4 (+ optional random challenge).
+Room: {room_code} | Bunk bed units: {max(1, (bed_count + 1) // 2)} | Common areas: 4 (+ optional random challenge).
 
 Submitted photos in this capture session:
 {slots_desc}
@@ -600,7 +600,7 @@ def evaluate_room_session(
     bed_count: int,
     duplicate_errors: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Chấm điểm 5S tổng hợp cho bộ ảnh N = P + 4 (và thử thách nếu có)."""
+    """Chấm điểm 5S tổng hợp cho bộ ảnh giường tầng + 4 khu vực chung (và thử thách nếu có)."""
     if not slot_items:
         raise ValueError("Cần ít nhất một ảnh trong phiên chụp.")
 

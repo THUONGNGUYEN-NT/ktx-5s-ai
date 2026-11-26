@@ -55,11 +55,11 @@ export default function StudentHome() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <Panel title="Nộp bộ ảnh kiểm tra 5S tuần này (N = P + 4)" className="lg:col-span-2">
+        <Panel title="Nộp bộ ảnh kiểm tra 5S tuần này" className="lg:col-span-2">
           <div className="flex flex-col md:flex-row gap-6 items-center">
             <div className="flex-1">
               <p className="text-gray-600 leading-relaxed">
-                Mỗi tuần, phòng thực hiện kiểm tra 5S qua <b>Camera trực tiếp</b> theo công thức <b>N = P + 4</b> (đủ từng vị trí ngủ <b>B01..BP</b> kể cả giường tầng trên/dưới + <b>4 khu vực chung</b>: Toàn cảnh từ cửa, Sàn nhà, Bàn học, Kệ giày dép + 1 góc thử thách) trước <b>21:00 Chủ nhật</b>. AI chấm tổng hợp theo 4 nhóm <b>L1–L4</b>:{" "}
+                Mỗi tuần, phòng thực hiện kiểm tra 5S qua <b>Camera trực tiếp</b> (mỗi giường tầng gồm cả tầng trên &amp; dưới là <b>1 ảnh</b> + <b>4 khu vực chung</b>: Toàn cảnh từ cửa, Sàn nhà, Bàn học, Kệ giày dép + 1 góc thử thách) trước <b>21:00 Chủ nhật</b>. AI chấm tổng hợp theo 4 nhóm <b>L1–L4</b>:{" "}
                 <span className="text-[#00a65a] font-semibold">Sạch</span> –{" "}
                 <span className="text-[#f39c12] font-semibold">Hơi bừa bộn</span> –{" "}
                 <span className="text-[#dd4b39] font-semibold">Bừa bộn</span>.

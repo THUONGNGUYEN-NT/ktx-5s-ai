@@ -80,14 +80,14 @@ def _resolve_room_for_session(
     return room
 
 
-@router.post("/capture-sessions/start", summary="Khởi tạo phiên chụp ảnh 5S theo N = P + 4")
+@router.post("/capture-sessions/start", summary="Khởi tạo phiên chụp ảnh 5S")
 async def start_capture_session(
     body: StartSessionRequest,
     db: Session = Depends(get_db),
 ):
     """
     Bước 1 & 2: Xác thực phòng + QR, khởi tạo phiên chụp mới trên server,
-    sinh danh sách N = P + 4 góc chụp bắt buộc + thử thách góc chụp ngẫu nhiên (Lớp 4).
+    sinh danh sách ảnh giường tầng (trên & dưới) + 4 khu vực chung + thử thách góc chụp ngẫu nhiên (Lớp 4).
     """
     room = _resolve_room_for_session(db, body.room_code)
 
@@ -329,7 +329,7 @@ async def submit_capture_session(
 ):
     """
     Bước 5 & 6:
-    - Kiểm tra đủ tất cả góc chụp bắt buộc (N = P + 4 + thử thách CH01)
+    - Kiểm tra đủ tất cả góc chụp bắt buộc (giường tầng + 4 khu vực chung + thử thách CH01)
     - Kiểm tra trùng lặp lần cuối
     - Gọi AI chấm tổng hợp theo 4 nhóm lỗi L1..L4
     - Nếu AI phát hiện ảnh thiếu bằng chứng / cần chụp bổ sung -> trả về retake_requests

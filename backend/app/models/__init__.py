@@ -121,7 +121,7 @@ class CaptureSession(Base):
     student_code: Mapped[str] = mapped_column(String(50), nullable=True)
     week: Mapped[str] = mapped_column(String(10), nullable=False)
     bed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
-    total_required: Mapped[int] = mapped_column(Integer, nullable=False, default=8)  # N = P + 4
+    total_required: Mapped[int] = mapped_column(Integer, nullable=False, default=6)  # Số giường tầng + 4 khu vực chung
     qr_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     qr_token: Mapped[str] = mapped_column(String(100), nullable=True)
     challenge_slot_code: Mapped[str] = mapped_column(String(32), nullable=True)

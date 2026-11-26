@@ -611,7 +611,7 @@ export async function overrideSubmission(
 }
 
 // ============================================================================
-// PHIÊN CHỤP 7 LỚP CHỐNG GIAN LẬN (N = P + 4)
+// PHIÊN CHỤP 7 LỚP CHỐNG GIAN LẬN (GIƯỜNG TẦNG + 4 KHU VỰC CHUNG)
 // ============================================================================
 export type CaptureSessionInfo = {
   session_id: string;

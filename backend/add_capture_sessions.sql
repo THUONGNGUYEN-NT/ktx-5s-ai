@@ -1,5 +1,5 @@
 -- =============================================
--- KTX 5S AI — Migration bổ sung bảng Capture Sessions & N = P + 4
+-- KTX 5S AI — Migration bổ sung bảng Capture Sessions & giường tầng + 4 khu vực chung
 -- Chạy script này trên SQL Server nếu DB đã tồn tại từ trước
 -- =============================================
 USE [ktx5s_db];
