@@ -426,6 +426,14 @@ Photos are taken in a shared student dorm room (2, 4, 6, or 8 students) where di
   * Ảnh tải từ mạng / Shopee / catalog sản phẩm.
   * Hoặc cố tình nộp cùng một ảnh cho 2 khu vực khác nhau.
 
+=== 1B. CROSS-PHOTO BEDDING & CONTEXT CONSISTENCY (CRUCIAL) ===
+Compare the beds in `B01..B{bunk_count:02d}` against the beds visible in wide-angle context photos (`C02_FLOOR`, `CH01`):
+- Inspect the EXACT colors and patterns of **bed sheets (ga trải giường), blankets (chăn), pillows (gối), bed frame color, and bedside items (fan, lamp, plushies)** in `B01..B{bunk_count:02d}`.
+- Verify that these SAME bed sheets/blankets/pillows and frame colors actually appear in the wide-angle context photos (`C02_FLOOR`, `CH01`).
+- If a bed photo (`B01..`) shows bed sheets/blankets/pillows or bunk frame that DO NOT match any bed visible in `C02_FLOOR` / `CH01` (e.g. `B01` has plain light-blue sheets, while context photos only show plaid/red/yellow sheets, or different floor tiles/curtains/wall colors):
+  * Set `room_consistency.bedding_matches_context = false` and `room_consistency.is_same_room = false`.
+  * Describe the exact mismatch in Vietnamese in `room_consistency.bedding_mismatches` and mark the mismatching slot(s) in `slot_checks` as `suspected_fraud`.
+
 === 2. TARGET AREA & ANGLE REQUIREMENTS (REASONABLE) ===
 Ensure photos capture the intended target area without overly pedantic angle rejections:
 - Sleeping positions (B01..B{bunk_count:02d}): Shows student bunk bed or dorm bed area (gọn gàng, ngăn nắp, chăn gối xếp ngay ngắn).
@@ -472,7 +480,9 @@ Deductions per group: minor (-0.5pt) | moderate (-1.5pt) | severe (-2.5pt).
   "room_consistency": {{
     "is_same_room": true,
     "is_authentic_dorm": true,
+    "bedding_matches_context": true,
     "confidence": "high|medium|low",
+    "bedding_mismatches": ["Vietnamese description if bed sheets/blankets/pillows do not match context photos"],
     "inconsistencies": ["Vietnamese description if any"]
   }},
   "room_capacity_check": {{
@@ -550,7 +560,11 @@ def _apply_session_scoring(
     consistency = result.get("room_consistency") or {}
     is_same_room = consistency.get("is_same_room", True)
     is_authentic_dorm = consistency.get("is_authentic_dorm", True)
-    if is_same_room is False or is_authentic_dorm is False:
+    bedding_matches = consistency.get("bedding_matches_context", True)
+    bedding_mismatches = [
+        str(x).strip() for x in (consistency.get("bedding_mismatches") or []) if str(x).strip()
+    ]
+    if is_same_room is False or is_authentic_dorm is False or bedding_matches is False or bedding_mismatches:
         has_fraud_signal = True
 
     cap_check = result.get("room_capacity_check") or {}
@@ -632,6 +646,11 @@ def _apply_session_scoring(
         summary_parts: list[str] = []
         if capacity_reason:
             summary_parts.append(f"Không khớp loại phòng đã khai báo:\n• {capacity_reason}")
+        if bedding_mismatches or bedding_matches is False:
+            bm_lines = [f"• {x}" for x in bedding_mismatches] or [
+                "• Ga trải giường, chăn gối trong ảnh giường không khớp với ảnh bối cảnh chung (Sàn nhà / Góc thử thách)."
+            ]
+            summary_parts.append("Ga trải giường không khớp với bối cảnh phòng:\n" + "\n".join(bm_lines))
         if has_fraud_signal and consistency.get("inconsistencies"):
             inc_lines = [f"• {x}" for x in consistency["inconsistencies"]]
             summary_parts.append("Phát hiện dấu hiệu không đồng nhất / ngoài KTX:\n" + "\n".join(inc_lines))
