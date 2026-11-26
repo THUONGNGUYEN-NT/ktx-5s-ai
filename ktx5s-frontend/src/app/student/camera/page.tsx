@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Camera,
-  QrCode,
   ShieldCheck,
   CheckCircle2,
   AlertTriangle,
@@ -46,7 +45,6 @@ export default function CameraPage() {
   const [isDesktop, setIsDesktop] = useState(false);
   const [room, setRoom] = useState("");
   const [bedCount, setBedCount] = useState<number>(4);
-  const [qrInput, setQrInput] = useState("");
   const [session, setSession] = useState<CaptureSessionInfo | null>(null);
   const [captures, setCaptures] = useState<Record<string, SlotCaptureState>>({});
   const [activeSlot, setActiveSlot] = useState<CaptureSlot | null>(null);
@@ -62,7 +60,6 @@ export default function CameraPage() {
     const s = getSession();
     if (s?.roomCode) {
       setRoom(s.roomCode);
-      setQrInput(s.roomCode);
     }
     const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
     const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
@@ -78,7 +75,7 @@ export default function CameraPage() {
     setError(null);
     setRetakeBanner(null);
     try {
-      const info = await startCaptureSession(room, bedCount, qrInput);
+      const info = await startCaptureSession(room, bedCount);
       setSession(info);
       setCaptures({});
     } catch (err) {
@@ -357,22 +354,6 @@ export default function CameraPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Mã QR định danh dán tại phòng (Lớp 3)
-                </label>
-                <div className="flex items-center gap-2">
-                  <QrCode size={18} className="text-gray-400 shrink-0" />
-                  <input
-                    type="text"
-                    value={qrInput}
-                    onChange={(e) => setQrInput(e.target.value)}
-                    placeholder={`Nhập hoặc quét mã QR phòng ${room}`}
-                    className="flex-1 border border-gray-300 rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-[#3c8dbc]"
-                  />
-                </div>
-              </div>
-
               {error && (
                 <div className="bg-red-50 border-l-4 border-[#dd4b39] text-[#dd4b39] px-3 py-2 text-xs">
                   {error}
@@ -406,11 +387,6 @@ export default function CameraPage() {
             title={`Phiên chụp phòng ${session.room_code} · ${passedCount}/${slots.length} ảnh đạt chuẩn`}
             actions={
               <div className="flex items-center gap-2">
-                {session.qr_verified && (
-                  <span className="px-2 py-1 rounded-sm text-[11px] font-semibold bg-emerald-100 text-emerald-800">
-                    ✓ Đã xác thực QR
-                  </span>
-                )}
                 {session.audit_required && (
                   <span className="px-2 py-1 rounded-sm text-[11px] font-semibold bg-purple-100 text-purple-800">
                     Lớp 7: Kiểm tra ngẫu nhiên
