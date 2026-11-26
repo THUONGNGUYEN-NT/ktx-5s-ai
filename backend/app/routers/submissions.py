@@ -1,7 +1,9 @@
 import json
 import logging
 from typing import Optional
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+
+VN_TZ = timezone(timedelta(hours=7))
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
@@ -466,8 +468,9 @@ async def evaluate_four_photos(
     positive_list = ai_result.get("positive_notes", [])
     recommendations_text = ai_result.get("recommendations", "")
 
-    now = datetime.now()
-    week_str = f"{now.year}-W{now.isocalendar()[1]:02d}"
+    now_vn = datetime.now(VN_TZ)
+    iso_year, iso_week, _ = now_vn.isocalendar()
+    week_str = f"{iso_year}-W{iso_week:02d}"
     submission_id = f"sub_{week_str}_{clean_room_code}"
 
     # Luôn lưu vào Database (SQL Server hoặc SQLite fallback) để Cán bộ và Sinh viên đều thấy trong lịch sử
@@ -576,7 +579,7 @@ async def evaluate_four_photos(
         "data": {
             "submission_id": submission_id,
             "room_code": clean_room_code,
-            "submitted_at": now.isoformat(),
+            "submitted_at": now_vn.isoformat(),
             "image_url": image_urls[0],
             "image_urls": image_urls,
             "photos": photos_payload,

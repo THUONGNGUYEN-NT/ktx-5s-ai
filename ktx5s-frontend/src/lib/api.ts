@@ -10,6 +10,7 @@ import {
 import { analyzeFourRoomPhotos } from "./vision-analyzer";
 import {
   CURRENT_WEEK,
+  CURRENT_WEEK_STR,
   buildLocalCaptureSlots,
   pickRandomChallenge,
   type AreaKey,
@@ -195,7 +196,7 @@ function mergeRoomsWithLive(
 // ---- SINH VIÊN: Nộp đủ 4 ảnh khu vực -> Gọi thẳng API AI của Sinh viên A hoặc chấm trên trình duyệt + đồng bộ Cloudinary ----
 export async function submitPhotos(roomCode: string, files: Record<AreaKey, File>) {
   const cleanCode = roomCode.trim().toUpperCase();
-  const week = `2026-W${CURRENT_WEEK}`;
+  const week = CURRENT_WEEK_STR;
 
   const form = new FormData();
   form.append("room_code", cleanCode);
@@ -306,7 +307,7 @@ export type HistorySubmission = {
 // ---- SINH VIÊN: Lịch sử ----  GET /rooms/{room_code}/history
 export async function getRoomHistory(roomCode: string) {
   const cleanCode = roomCode.trim().toUpperCase();
-  const week = `2026-W${CURRENT_WEEK}`;
+  const week = CURRENT_WEEK_STR;
   const allLive = await syncLiveRecordsFromCloud();
   const live = allLive[`${week}_${cleanCode}`];
 
@@ -349,7 +350,7 @@ export async function getRoomHistory(roomCode: string) {
 }
 
 // ---- CÁN BỘ: Dashboard tổng hợp 200 phòng theo tuần ----  GET /admin/dashboard
-export async function getDashboard(week = `2026-W${CURRENT_WEEK}`) {
+export async function getDashboard(week = CURRENT_WEEK_STR) {
   try {
     const res = await api.get("/admin/dashboard", { params: { week } });
     if (res.data?.success && res.data?.data) {
@@ -409,7 +410,7 @@ export async function getRooms(params?: {
   success: boolean;
   data: { rooms: Room[] };
 }> {
-  const week = params?.week ?? `2026-W${CURRENT_WEEK}`;
+  const week = params?.week ?? CURRENT_WEEK_STR;
   const baseRooms = generateRooms(week);
   const liveRecordsPromise = syncLiveRecordsFromCloud();
 
@@ -693,7 +694,7 @@ export async function startCaptureSession(
     return {
       session_id: `local_${cleanCode}_${Date.now()}`,
       room_code: cleanCode,
-      week: `2026-W${CURRENT_WEEK}`,
+      week: CURRENT_WEEK_STR,
       bed_count: bedCount,
       common_count: 3,
       total_required: Math.max(1, Math.ceil(bedCount / 2)) + 3,

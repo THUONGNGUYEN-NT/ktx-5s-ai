@@ -156,45 +156,69 @@ export const BUILDINGS = ["A", "B", "C", "D"];
 export const FLOORS = 10;
 export const ROOMS_PER_FLOOR = 5;
 
-// ===== DANH SÁCH TUẦN (tuần ISO năm 2026, tự động cập nhật theo thời gian thực) =====
+// ===== DANH SÁCH TUẦN (tính động theo chuẩn ISO-8601 & thời gian thực) =====
 const DAY = 86400000;
-const W1_MONDAY_2026 = Date.UTC(2025, 11, 29);
+
+function getVNDate(date = new Date()): Date {
+  // Chuyển sang mốc giờ Việt Nam (UTC+7) để không bị lệch ngày/tuần
+  return new Date(date.getTime() + 7 * 3600 * 1000);
+}
 
 // Tính tuần ISO-8601 tự động theo thời gian thực (real-time)
 export function getISOWeek(date = new Date()): number {
-  const target = new Date(date.valueOf());
-  const dayNr = (date.getDay() + 6) % 7; // Thứ 2 = 0, Chủ Nhật = 6
-  target.setDate(target.getDate() - dayNr + 3); // Thứ 5 của tuần này
-  const firstThursday = target.valueOf();
-  target.setMonth(0, 1);
-  if (target.getDay() !== 4) {
-    target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
-  }
-  return 1 + Math.ceil((firstThursday - target.valueOf()) / (7 * 86400000));
+  const vn = getVNDate(date);
+  const target = new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate()));
+  const dayNr = (target.getUTCDay() + 6) % 7; // Thứ 2 = 0, Chủ Nhật = 6
+  target.setUTCDate(target.getUTCDate() - dayNr + 3); // Thứ 5 của tuần này
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const firstDayNr = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNr + 3);
+  return 1 + Math.round((target.getTime() - firstThursday.getTime()) / (7 * DAY));
 }
 
-export const CURRENT_WEEK = getISOWeek();
+export function getISOWeekYear(date = new Date()): number {
+  const vn = getVNDate(date);
+  const target = new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate()));
+  const dayNr = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
+  return target.getUTCFullYear();
+}
 
-export function weekMonday(weekNum: number) {
-  return new Date(W1_MONDAY_2026 + (weekNum - 1) * 7 * DAY);
+export const CURRENT_YEAR = getISOWeekYear();
+export const CURRENT_WEEK = getISOWeek();
+export const CURRENT_WEEK_STR = `${CURRENT_YEAR}-W${String(CURRENT_WEEK).padStart(2, "0")}`;
+
+export function weekMonday(weekNum: number, year = CURRENT_YEAR) {
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = (jan4.getUTCDay() + 6) % 7;
+  const w1Monday = new Date(jan4.getTime() - jan4Day * DAY);
+  return new Date(w1Monday.getTime() + (weekNum - 1) * 7 * DAY);
 }
 
 const ddmm = (d: Date) => `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 
 export const WEEKS = Array.from({ length: 12 }, (_, i) => {
-  const w = CURRENT_WEEK - i;
-  const mon = weekMonday(w);
+  const ref = new Date(Date.now() - i * 7 * DAY);
+  const w = getISOWeek(ref);
+  const y = getISOWeekYear(ref);
+  const mon = weekMonday(w, y);
   const sun = new Date(mon.getTime() + 6 * DAY);
   return {
-    value: `2026-W${w}`,
-    label: `Tuần ${w} (${ddmm(mon)} – ${ddmm(sun)}/2026)${i === 0 ? " — hiện tại" : ""}`,
+    value: `${y}-W${String(w).padStart(2, "0")}`,
+    label: `Tuần ${w} (${ddmm(mon)} – ${ddmm(sun)}/${y})${i === 0 ? " — hiện tại" : ""}`,
   };
 });
 
 export function formatDateTime(iso: string) {
-  const parsed = new Date(iso).getTime();
-  const safeMs = Number.isNaN(parsed) ? Date.now() : Math.min(parsed, Date.now());
+  let normalized = iso?.trim() || "";
+  // Nếu chuỗi ISO chưa có múi giờ (Z hoặc +07:00), hiểu là UTC từ server
+  if (normalized && !/(Z|[+-]\d{2}:\d{2})$/i.test(normalized)) {
+    normalized += "Z";
+  }
+  const parsed = new Date(normalized).getTime();
+  const safeMs = Number.isNaN(parsed) ? Date.now() : parsed;
   return new Date(safeMs).toLocaleString("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
     hour: "2-digit",
     minute: "2-digit",
     day: "2-digit",

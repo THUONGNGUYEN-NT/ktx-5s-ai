@@ -121,20 +121,24 @@ export default function LiveCameraCapture({
       const scale = targetW / video.videoWidth;
       const w = video.videoWidth >= 1280 || video.videoHeight >= 1280 ? video.videoWidth : Math.round(video.videoWidth * scale);
       const h = video.videoWidth >= 1280 || video.videoHeight >= 1280 ? video.videoHeight : Math.round(video.videoHeight * scale);
+      const targetScale = Math.min(1, 1280 / Math.max(w, h));
+      const compressionScale = Math.min(w, h) * targetScale >= 720 ? targetScale : 1;
+      const outputWidth = Math.round(w * compressionScale);
+      const outputHeight = Math.round(h * compressionScale);
 
       const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
+      canvas.width = outputWidth;
+      canvas.height = outputHeight;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      ctx.drawImage(video, 0, 0, w, h);
+      ctx.drawImage(video, 0, 0, outputWidth, outputHeight);
 
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
       if (!blob) return;
 
       const file = new File([blob], `${roomCode}_${slotCode}_${Date.now()}.jpg`, { type: "image/jpeg" });
       const previewUrl = URL.createObjectURL(blob);
-      onCapture(file, previewUrl, { width: w, height: h });
+      onCapture(file, previewUrl, { width: outputWidth, height: outputHeight });
       onClose();
     } finally {
       setCapturing(false);

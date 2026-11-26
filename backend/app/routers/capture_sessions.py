@@ -1,8 +1,11 @@
+import asyncio
 import json
 import logging
 import random
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
+
+VN_TZ = timezone(timedelta(hours=7))
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
@@ -117,7 +120,9 @@ async def start_capture_session(
     audit_required = random.random() < 0.20
 
     now = datetime.utcnow()
-    week_str = f"{now.year}-W{now.isocalendar()[1]:02d}"
+    now_vn = datetime.now(VN_TZ)
+    iso_year, iso_week, _ = now_vn.isocalendar()
+    week_str = f"{iso_year}-W{iso_week:02d}"
     session = CaptureSession(
         room_id=room.id,
         room_code=room.room_code,
@@ -152,7 +157,7 @@ async def start_capture_session(
             "qr_verified": qr_verified,
             "audit_required": audit_required,
             "challenge_prompt": challenge_prompt,
-            "server_timestamp": now.isoformat() + "Z",
+            "server_timestamp": now_vn.isoformat(),
             "expires_at": session.expires_at.isoformat() + "Z",
             "slots": slots,
         },
@@ -227,22 +232,6 @@ async def upload_session_photo(
             duplicate_issues.append(
                 f"Ảnh trùng lặp với góc {existing.slot_label} trong cùng phiên."
             )
-
-    # Lớp 5: So sánh trùng lặp với ảnh các phiên trước của cùng phòng
-    prev_photos = (
-        db.query(SubmissionPhoto)
-        .join(Submission, SubmissionPhoto.submission_id == Submission.id)
-        .filter(Submission.room_id == session.room_id, SubmissionPhoto.image_hash.isnot(None))
-        .order_by(Submission.submitted_at.desc())
-        .limit(40)
-        .all()
-    )
-    for prev in prev_photos:
-        if hamming_distance_hex(quality["image_hash"], prev.image_hash) <= MAX_HASH_DISTANCE_DUPLICATE:
-            duplicate_issues.append(
-                "Ảnh có độ tương đồng rất cao với ảnh đã nộp ở lần kiểm tra trước."
-            )
-            break
 
     validation_status = quality["validation_status"]
     issues = list(quality["issues"])
@@ -383,22 +372,24 @@ async def submit_capture_session(
             if hamming_distance_hex(p1.image_hash, p2.image_hash) <= MAX_HASH_DISTANCE_DUPLICATE:
                 duplicate_errors.append(f"{p1.slot_label} trùng lặp với {p2.slot_label}")
 
-    slot_items = []
-    for p in photos_ordered:
+    async def load_slot_image(photo: CaptureSessionPhoto) -> dict[str, Any]:
         try:
-            raw_bytes = _load_image_bytes(p.image_url)
+            raw_bytes = await asyncio.to_thread(_load_image_bytes, photo.image_url)
         except Exception as exc:
-            logger.exception("Không đọc được ảnh %s", p.image_url)
-            raise HTTPException(500, f"Không thể đọc ảnh {p.slot_label} để phân tích.") from exc
-        slot_items.append({
-            "slot_code": p.slot_code,
-            "slot_group": p.slot_group,
-            "slot_label": p.slot_label,
+            logger.exception("Không đọc được ảnh %s", photo.image_url)
+            raise HTTPException(500, f"Không thể đọc ảnh {photo.slot_label} để phân tích.") from exc
+        return {
+            "slot_code": photo.slot_code,
+            "slot_group": photo.slot_group,
+            "slot_label": photo.slot_label,
             "bytes": raw_bytes,
-        })
+        }
+
+    slot_items = await asyncio.gather(*(load_slot_image(photo) for photo in photos_ordered))
 
     try:
-        ai_result = evaluate_room_session(
+        ai_result = await asyncio.to_thread(
+            evaluate_room_session,
             slot_items=slot_items,
             room_code=session.room_code,
             bed_count=session.bed_count,
@@ -458,6 +449,7 @@ async def submit_capture_session(
         db.flush()
 
     now = datetime.utcnow()
+    now_vn = datetime.now(VN_TZ)
     sub = Submission(
         room_id=session.room_id,
         week=session.week,
@@ -518,7 +510,7 @@ async def submit_capture_session(
             "session_id": session.id,
             "room_code": session.room_code,
             "week": session.week,
-            "submitted_at": now.isoformat(),
+            "submitted_at": now_vn.isoformat(),
             "audit_required": session.audit_required,
             "assessment_category": assessment_category,
             "image_url": photos_ordered[0].image_url,
