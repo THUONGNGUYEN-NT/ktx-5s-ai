@@ -109,7 +109,7 @@ async def start_capture_session(
 
     p_count = normalize_bed_count(body.bed_count or room.bed_count or room.capacity)
     bunk_count = max(1, (p_count + 1) // 2)
-    total_required = bunk_count + 4
+    total_required = bunk_count + 3
 
     # Lớp 4: Thử thách góc chụp ngẫu nhiên theo phiên
     challenge_prompt = pick_random_challenge()
@@ -146,7 +146,7 @@ async def start_capture_session(
             "room_code": room.room_code,
             "week": week_str,
             "bed_count": p_count,
-            "common_count": 4,
+            "common_count": 3,
             "total_required": total_required,
             "total_with_challenge": len(slots),
             "qr_verified": qr_verified,
@@ -156,7 +156,7 @@ async def start_capture_session(
             "expires_at": session.expires_at.isoformat() + "Z",
             "slots": slots,
         },
-        "message": f"Đã khởi tạo phiên chụp cho phòng {room.room_code} ({bunk_count} ảnh giường tầng trên & dưới + 4 khu vực chung + 1 góc thử thách).",
+        "message": f"Đã khởi tạo phiên chụp cho phòng {room.room_code} ({bunk_count} ảnh giường tầng trên & dưới + 3 khu vực chung + 1 góc thử thách).",
     }
 
 

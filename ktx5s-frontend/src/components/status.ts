@@ -65,11 +65,28 @@ export type RoomBedPreset = {
 };
 
 export const ROOM_BED_PRESETS: RoomBedPreset[] = [
-  { bedCount: 2, label: "Phòng 2 người", totalPhotos: 5, description: "1 ảnh giường tầng (trên & dưới) + 4 khu vực chung" },
-  { bedCount: 4, label: "Phòng 4 người", totalPhotos: 6, description: "2 ảnh giường tầng (trên & dưới) + 4 khu vực chung" },
-  { bedCount: 6, label: "Phòng 6 người", totalPhotos: 7, description: "3 ảnh giường tầng (trên & dưới) + 4 khu vực chung" },
-  { bedCount: 8, label: "Phòng 8 người", totalPhotos: 8, description: "4 ảnh giường tầng (trên & dưới) + 4 khu vực chung" },
+  { bedCount: 2, label: "Phòng 2 người", totalPhotos: 4, description: "1 ảnh giường tầng (trên & dưới) + 3 khu vực chung" },
+  { bedCount: 4, label: "Phòng 4 người", totalPhotos: 5, description: "2 ảnh giường tầng (trên & dưới) + 3 khu vực chung" },
+  { bedCount: 6, label: "Phòng 6 người", totalPhotos: 6, description: "3 ảnh giường tầng (trên & dưới) + 3 khu vực chung" },
+  { bedCount: 8, label: "Phòng 8 người", totalPhotos: 7, description: "4 ảnh giường tầng (trên & dưới) + 3 khu vực chung" },
 ];
+
+export const CHALLENGE_PROMPTS: string[] = [
+  "Chụp chếch từ góc cuối phòng hướng về phía cửa ra vào.",
+  "Chụp từ cửa ra vào hướng chéo vào góc tường đối diện.",
+  "Chụp lại khu vực bàn học từ hướng ngược lại (thấy rõ mặt bàn và gầm bàn).",
+  "Chụp góc nối giữa lối đi chính và chân giường tầng phía trong.",
+  "Chụp cận cảnh khu vực móc treo đồ, tủ cá nhân và khoảng trống cạnh kệ giày.",
+  "Chụp dọc theo mép tường bên trái từ đầu phòng đến cuối phòng.",
+  "Chụp góc cửa sổ / ban công và khoảng trống sát giường tầng gần cửa sổ.",
+  "Chụp chếch từ giữa phòng hướng về phía cửa ra vào và giá phơi/kệ dép.",
+  "Chụp gầm giường tầng đầu tiên và khu vực sàn tiếp giáp.",
+  "Chụp toàn bộ dãy tủ đồ / giá sách nhìn nghiêng 45 độ.",
+];
+
+export function pickRandomChallenge(): string {
+  return CHALLENGE_PROMPTS[Math.floor(Math.random() * CHALLENGE_PROMPTS.length)];
+}
 
 export type CaptureSlot = {
   slot_code: string;
@@ -97,18 +114,10 @@ export function buildLocalCaptureSlots(bedCount: number, challengePrompt?: strin
   }
   slots.push(
     {
-      slot_code: "C01_OVERVIEW",
-      slot_group: "common",
-      slot_label: "Toàn cảnh phòng từ cửa ra vào",
-      angle_hint: "Đứng tại cửa ra vào hướng vào trong, thấy tổng thể giường, bàn học và lối đi.",
-      checklist_key: "overview",
-      required: true,
-    },
-    {
       slot_code: "C02_FLOOR",
       slot_group: "common",
       slot_label: "Sàn nhà và lối đi",
-      angle_hint: "Chụp chếch xuống 30–45°, thấy rõ mặt sàn và các lối di chuyển.",
+      angle_hint: "Chụp chếch xuống 30–45°, thấy rõ mặt sàn và các lối di chuyển trong phòng.",
       checklist_key: "floor_clean",
       required: true,
     },

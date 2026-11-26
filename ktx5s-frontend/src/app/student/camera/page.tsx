@@ -319,7 +319,7 @@ export default function CameraPage() {
   };
 
   return (
-    <AppShell role="student" title="Kiểm tra phòng 5S (Giường tầng & 4 khu vực chung)">
+    <AppShell role="student" title="Kiểm tra phòng 5S (Giường tầng & 3 khu vực chung)">
       {!session ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <Panel title={`Bước 1 & 2 · Xác thực phòng ${room} — Tuần ${CURRENT_WEEK}`} className="lg:col-span-2">
@@ -327,7 +327,7 @@ export default function CameraPage() {
               <div className="bg-blue-50 border border-blue-200 rounded-sm p-3 text-xs text-blue-900 flex items-start gap-2">
                 <Lock size={16} className="shrink-0 mt-0.5 text-[#3c8dbc]" />
                 <div>
-                  <b>Cơ chế chống gian lận 7 lớp:</b> Hệ thống ưu tiên chụp trực tiếp bằng camera trong ứng dụng, ghi nhận thời gian trên máy chủ và yêu cầu chụp đủ từng <b>giường tầng (cả tầng trên &amp; dưới trong 1 ảnh)</b> + <b>4 khu vực chung</b> + 1 góc thử thách ngẫu nhiên.
+                  <b>Cơ chế chống gian lận 7 lớp:</b> Hệ thống ưu tiên chụp trực tiếp bằng camera trong ứng dụng, ghi nhận thời gian trên máy chủ và yêu cầu chụp đủ từng <b>giường tầng (cả tầng trên &amp; dưới trong 1 ảnh)</b> + <b>3 khu vực chung</b> (Sàn nhà &amp; lối đi, Bàn học, Kệ giày dép) + 1 góc thử thách ngẫu nhiên.
                 </div>
               </div>
 
@@ -386,7 +386,7 @@ export default function CameraPage() {
                 className="self-start flex items-center gap-2 bg-[#00a65a] hover:bg-[#008d4c] text-white px-6 py-2.5 rounded-sm font-semibold text-sm shadow disabled:opacity-50"
               >
                 <ShieldCheck size={17} />
-                {starting ? "Đang khởi tạo phiên..." : `Khởi tạo phiên chụp (${Math.ceil(bedCount / 2) + 4} ảnh + 1 thử thách)`}
+                {starting ? "Đang khởi tạo phiên..." : `Khởi tạo phiên chụp (${Math.ceil(bedCount / 2) + 3} ảnh + 1 thử thách)`}
               </button>
             </div>
           </Panel>
@@ -394,7 +394,7 @@ export default function CameraPage() {
           <Panel title="Quy định chất lượng & riêng tư">
             <ul className="flex flex-col gap-2.5 text-xs text-gray-600">
               <li>• <b>Số ảnh giường:</b> Mỗi giường tầng chụp <b>1 ảnh</b> thấy rõ cả tầng trên và tầng dưới (B01, B02...).</li>
-              <li>• <b>Khu vực chung:</b> Bắt buộc đủ 4 ảnh (Toàn cảnh từ cửa, Sàn nhà, Bàn học, Kệ giày dép).</li>
+              <li>• <b>Khu vực chung:</b> Bắt buộc đủ 3 ảnh (Sàn nhà &amp; lối đi, Bàn học, Kệ giày dép).</li>
               <li>• <b>Độ phân giải:</b> Tối thiểu 1280×720 px khi chụp camera, đủ sáng, không rung nhòe.</li>
               <li>• <b>Quyền riêng tư:</b> Không chụp mặt người, giấy tờ cá nhân hoặc màn hình điện thoại.</li>
             </ul>
@@ -464,13 +464,13 @@ export default function CameraPage() {
               </div>
             </div>
 
-            {/* Nhóm 2: 4 khu vực chung */}
+            {/* Nhóm 2: 3 khu vực chung */}
             <div className="mb-6">
               <h4 className="text-sm font-bold text-gray-800 mb-2.5 flex items-center gap-1.5">
                 <Layers size={16} className="text-[#00a65a]" />
-                Bước 4 · Chụp 4 khu vực chung bắt buộc
+                Bước 4 · Chụp 3 khu vực chung bắt buộc
               </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {commonSlots.map(renderSlotCard)}
               </div>
             </div>

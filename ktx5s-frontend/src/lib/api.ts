@@ -11,6 +11,7 @@ import { analyzeFourRoomPhotos } from "./vision-analyzer";
 import {
   CURRENT_WEEK,
   buildLocalCaptureSlots,
+  pickRandomChallenge,
   type AreaKey,
   type CaptureSlot,
   type Room,
@@ -676,7 +677,7 @@ export async function startCaptureSession(
         axErr.response?.data?.message || "Không thể kết nối máy chủ để khởi tạo phiên chụp."
       );
     }
-    const challengePrompt = "Chụp chếch từ góc cuối phòng hướng về phía cửa ra vào.";
+    const challengePrompt = pickRandomChallenge();
     const slots = buildLocalCaptureSlots(bedCount, challengePrompt);
     const now = new Date();
     return {
@@ -684,8 +685,8 @@ export async function startCaptureSession(
       room_code: cleanCode,
       week: `2026-W${CURRENT_WEEK}`,
       bed_count: bedCount,
-      common_count: 4,
-      total_required: bedCount + 4,
+      common_count: 3,
+      total_required: Math.max(1, Math.ceil(bedCount / 2)) + 3,
       total_with_challenge: slots.length,
       qr_verified: Boolean(qrCode && qrCode.toUpperCase().includes(cleanCode)),
       audit_required: false,

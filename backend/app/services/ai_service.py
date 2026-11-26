@@ -397,7 +397,7 @@ def build_session_prompt(slot_items: list[dict[str, Any]], room_code: str, bed_c
 
     return f"""
 You are a senior Computer Vision 5S Inspector and Anti-Fraud Investigator for VNU-HCM Dormitory (KTX ĐHQG-HCM).
-Room: {room_code} | Bunk bed units: {max(1, (bed_count + 1) // 2)} | Common areas: 4 (+ optional random challenge).
+Room: {room_code} | Bunk bed units: {max(1, (bed_count + 1) // 2)} | Common areas: 3 (+ optional random challenge).
 
 Submitted photos in this capture session:
 {slots_desc}
@@ -405,7 +405,6 @@ Submitted photos in this capture session:
 === 1. SLOT-BY-SLOT VERIFICATION ===
 IMPORTANT: Inspect EVERY SINGLE submitted image independently ({len(slot_items)} images total). NEVER stop after finding the first invalid photo! You MUST output one entry in `slot_checks` for EVERY single image using its exact `slot_code` ({', '.join(item['slot_code'] for item in slot_items)}).
 - Sleeping positions (B01..B{max(1, (bed_count + 1) // 2):02d}): Each photo represents one bunk bed unit showing BOTH the upper bunk and lower bunk clearly in the same frame (blankets, pillows, mattresses, no clutter/storage).
-- C01_OVERVIEW: Wide view from the doorway showing overall layout of beds, desks, and walkway.
 - C02_FLOOR: Angled 30-45° view of floor and walkway (trash, dust, obstacles).
 - C03_DESK: Direct/30° view of study desk surface and items.
 - C04_SHOES: Direct view of shoe rack, hanging clothes, and personal storage.
@@ -420,8 +419,8 @@ Do NOT jump to "fraud" for simple quality issues. Classify each problematic slot
 
 === 3. AGGREGATED 5S SCORING (L1 - L4) ===
 DO NOT score each photo in isolation. Aggregate across the whole room:
-- L1 (bed_tidy - Giường): Evaluate ALL beds B01..B{bed_count:02d} together. If ANY bed is messy or used as storage -> L1 fails.
-- L2 (floor_clean - Sàn nhà và lối đi): Evaluate C02_FLOOR + C01_OVERVIEW.
+- L1 (bed_tidy - Giường): Evaluate ALL beds B01..B{max(1, (bed_count + 1) // 2):02d} together. If ANY bed is messy or used as storage -> L1 fails.
+- L2 (floor_clean - Sàn nhà và lối đi): Evaluate C02_FLOOR.
 - L3 (desk_organized - Bàn học và kệ): Evaluate C03_DESK.
 - L4 (shoes_arranged - Đồ đạc và treo móc): Evaluate C04_SHOES + hanging items/clutter.
 Deductions per group: minor (-0.5pt) | moderate (-1.5pt) | severe (-2.5pt).

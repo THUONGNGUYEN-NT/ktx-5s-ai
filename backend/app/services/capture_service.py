@@ -13,24 +13,23 @@ MAX_HASH_DISTANCE_DUPLICATE = 6
 
 CHALLENGE_PROMPTS = [
     "Chụp chếch từ góc cuối phòng hướng về phía cửa ra vào.",
+    "Chụp từ cửa ra vào hướng chéo vào góc tường đối diện.",
     "Chụp lại khu vực bàn học từ hướng ngược lại (thấy rõ mặt bàn và gầm bàn).",
     "Chụp góc nối giữa lối đi chính và chân giường tầng phía trong.",
     "Chụp cận cảnh khu vực móc treo đồ, tủ cá nhân và khoảng trống cạnh kệ giày.",
+    "Chụp dọc theo mép tường bên trái từ đầu phòng đến cuối phòng.",
+    "Chụp góc cửa sổ / ban công và khoảng trống sát giường tầng gần cửa sổ.",
+    "Chụp chếch từ giữa phòng hướng về phía cửa ra vào và giá phơi/kệ dép.",
+    "Chụp gầm giường tầng đầu tiên và khu vực sàn tiếp giáp.",
+    "Chụp toàn bộ dãy tủ đồ / giá sách nhìn nghiêng 45 độ.",
 ]
 
 COMMON_SLOTS = [
     {
-        "slot_code": "C01_OVERVIEW",
-        "slot_group": "common",
-        "slot_label": "Toàn cảnh phòng từ cửa ra vào",
-        "angle_hint": "Đứng tại cửa ra vào hướng vào trong, thấy tổng thể giường, bàn học và lối đi.",
-        "checklist_key": "overview",
-    },
-    {
         "slot_code": "C02_FLOOR",
         "slot_group": "common",
         "slot_label": "Sàn nhà và lối đi",
-        "angle_hint": "Chụp chếch xuống 30–45°, thấy rõ mặt sàn và các lối di chuyển.",
+        "angle_hint": "Chụp chếch xuống 30–45°, thấy rõ mặt sàn và các lối di chuyển trong phòng.",
         "checklist_key": "floor_clean",
     },
     {
