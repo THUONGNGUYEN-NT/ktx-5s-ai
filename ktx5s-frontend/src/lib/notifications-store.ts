@@ -84,6 +84,22 @@ export function markOneAdminNotifRead(id: string): NotifItem[] {
   return updated;
 }
 
+export function deleteAdminNotif(id: string): NotifItem[] {
+  const updated = loadAdminNotifs().filter((n) => n.id !== id);
+  saveAdminNotifs(updated);
+  return updated;
+}
+
+export function clearAllAdminNotifs(): NotifItem[] {
+  saveAdminNotifs([]);
+  return [];
+}
+
+export function resetDefaultAdminNotifs(): NotifItem[] {
+  saveAdminNotifs(DEFAULT_ADMIN_NOTIFS);
+  return DEFAULT_ADMIN_NOTIFS;
+}
+
 export function getUnreadAdminNotifCount(): number {
   return loadAdminNotifs().filter((n) => !n.read).length;
 }

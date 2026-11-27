@@ -31,7 +31,7 @@ type MenuItem = {
   label: string;
   shortLabel: string;
   icon: ElementType;
-  badge?: number;
+  badge?: boolean | number;
 };
 
 const MENUS: Record<UserRole, MenuItem[]> = {
@@ -39,7 +39,7 @@ const MENUS: Record<UserRole, MenuItem[]> = {
     { href: "/admin", label: "Quản lý phòng", shortLabel: "Phòng", icon: Home },
     { href: "/admin/stats", label: "Thống kê tuần", shortLabel: "Thống kê", icon: BarChart3 },
     { href: "/admin/profile", label: "Hồ sơ & Đổi mật khẩu", shortLabel: "Cá nhân", icon: UserCog },
-    { href: "/admin/notifications", label: "Thông báo", shortLabel: "Thông báo", icon: Bell, badge: 3 },
+    { href: "/admin/notifications", label: "Thông báo", shortLabel: "Thông báo", icon: Bell, badge: true },
   ],
   student: [
     { href: "/student", label: "Trang chủ", shortLabel: "Trang chủ", icon: Home },
@@ -54,7 +54,7 @@ const MOBILE_BOTTOM_MENUS: Record<UserRole, MenuItem[]> = {
   admin: [
     { href: "/admin", label: "Quản lý phòng", shortLabel: "Phòng", icon: Home },
     { href: "/admin/stats", label: "Thống kê tuần", shortLabel: "Thống kê", icon: BarChart3 },
-    { href: "/admin/notifications", label: "Thông báo", shortLabel: "Thông báo", icon: Bell, badge: 3 },
+    { href: "/admin/notifications", label: "Thông báo", shortLabel: "Thông báo", icon: Bell, badge: true },
     { href: "/admin/profile", label: "Hồ sơ cá nhân", shortLabel: "Cá nhân", icon: UserCog },
   ],
   student: MENUS.student,
