@@ -326,14 +326,14 @@ export default function LoginPage() {
             <span>Trung tâm Quản lý Ký túc xá ĐHQG-HCM</span>
           </div>
 
-          {/* Ảnh toàn cảnh KTX ĐHQG-HCM làm mờ nhẹ + lớp phủ Navy-Blue đồng nhất giúp chữ trắng thanh thoát, rõ nét không cần đổ bóng đen */}
+          {/* Ảnh toàn cảnh KTX ĐHQG-HCM sáng rõ, làm mờ nhẹ tinh tế, không có ô viền đen hay đổ bóng */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/ktx-login-bg.jpg`}
             alt="Toàn cảnh Ký túc xá ĐHQG-HCM"
-            className="absolute inset-0 w-full h-full object-cover object-center blur-[2.5px] scale-105 opacity-85 pointer-events-none select-none"
+            className="absolute inset-0 w-full h-full object-cover object-center blur-[2px] scale-105 opacity-95 brightness-110 pointer-events-none select-none"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0f223d]/80 via-[#122645]/75 to-[#0b1930]/88 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#122645]/60 via-[#152d52]/45 to-[#0f223d]/70 pointer-events-none" />
         </section>
 
         {/* ===== CỘT PHẢI: FORM ĐĂNG NHẬP ===== */}

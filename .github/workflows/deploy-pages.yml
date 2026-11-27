@@ -36,6 +36,8 @@ jobs:
         working-directory: ktx5s-frontend
         env:
           NODE_ENV: production
+          NEXT_DIST_DIR: out
+          NEXT_BASE_PATH: /ktx-5s-ai
           NEXT_PUBLIC_API_URL: https://ktx-5s-ai-b3rk.onrender.com/api
         run: npm run build
 
