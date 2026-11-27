@@ -13,6 +13,7 @@ import {
   CURRENT_WEEK_STR,
   buildLocalCaptureSlots,
   getRoomMembersByCode,
+  pickRandomChallenge,
   type AreaKey,
   type CaptureSlot,
   type Room,
@@ -705,7 +706,6 @@ export async function startCaptureSession(
       return {
         ...serverData,
         bed_count: autoBedCount,
-        slots: (serverData.slots || []).filter((s) => s.slot_group !== "challenge"),
       };
     }
     throw new Error(res.data?.message || "Không thể khởi tạo phiên chụp.");
@@ -723,7 +723,8 @@ export async function startCaptureSession(
         axErr.response?.data?.message || "Không thể kết nối máy chủ để khởi tạo phiên chụp."
       );
     }
-    const slots = buildLocalCaptureSlots(autoBedCount);
+    const challengePrompt = pickRandomChallenge();
+    const slots = buildLocalCaptureSlots(autoBedCount, challengePrompt);
     const now = new Date();
     return {
       session_id: `local_${cleanCode}_${Date.now()}`,
@@ -731,11 +732,11 @@ export async function startCaptureSession(
       week: CURRENT_WEEK_STR,
       bed_count: autoBedCount,
       common_count: 3,
-      total_required: slots.length,
+      total_required: slots.length - 1,
       total_with_challenge: slots.length,
       qr_verified: true,
       audit_required: false,
-      challenge_prompt: "",
+      challenge_prompt: challengePrompt,
       server_timestamp: now.toISOString(),
       expires_at: new Date(now.getTime() + 30 * 60000).toISOString(),
       slots,

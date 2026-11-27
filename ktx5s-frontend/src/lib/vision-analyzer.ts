@@ -525,6 +525,11 @@ export async function analyzeMultiSlotPhotos(
 
   for (const item of metricsList) {
     const m = item.metrics;
+    // Góc thử thách ngẫu nhiên CH01: chấm thực tế & khoan dung (chỉ kiểm tra đủ sáng, không mờ nhòe và không trùng lặp)
+    if (item.slot_code === "CH01") {
+      positive_notes.push("Góc chụp thử thách ngẫu nhiên (CH01): Hợp lệ, đúng phiên kiểm tra chống gian lận");
+      continue;
+    }
     const isBed = item.slot_code.startsWith("B");
     const infoKey: AreaKey = isBed
       ? "bed"

@@ -158,8 +158,8 @@ export default function StudentHome() {
               <li className="flex items-center gap-2">
                 <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
                 <span>
-                  <b>{bunkCount} ảnh giường tầng</b> (mỗi ảnh gồm giường trên &amp; dưới),{" "}
-                  <b>3 ảnh khu vực chung</b> (Sàn, Bàn học, Kệ giày)
+                  <b>{bunkCount} ảnh giường tầng</b> (trên &amp; dưới),{" "}
+                  <b>3 ảnh khu vực chung</b> + <b>1 ảnh thử thách ngẫu nhiên</b> (phiên 30 phút)
                 </span>
               </li>
               <li className="flex items-center gap-2">

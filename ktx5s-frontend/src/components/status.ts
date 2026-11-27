@@ -128,16 +128,16 @@ export function getBunkCountForMembers(members: number = 8): 2 | 3 | 4 {
 }
 
 export function getRequiredPhotoCount(members: number = 8): number {
-  return getBunkCountForMembers(members) + 3;
+  return getBunkCountForMembers(members) + 3 + 1;
 }
 
 /**
- * Tạo danh sách các ô chụp ảnh bắt buộc theo số sinh viên của phòng:
- * - Phòng 8 SV -> 4 ảnh giường tầng (B01..B04) + 3 ảnh khu vực chung (Sàn, Bàn, Kệ dép) = 7 ảnh
- * - Phòng 6 SV -> 3 ảnh giường tầng (B01..B03) + 3 ảnh khu vực chung = 6 ảnh
- * - Phòng 4 SV -> 2 ảnh giường tầng (B01..B02) + 3 ảnh khu vực chung = 5 ảnh
+ * Tạo danh sách các ô chụp ảnh bắt buộc theo số sinh viên của phòng + 1 góc thử thách ngẫu nhiên (CH01):
+ * - Phòng 8 SV -> 4 ảnh giường tầng (B01..B04) + 3 khu vực chung + 1 thử thách ngẫu nhiên = 8 ảnh
+ * - Phòng 6 SV -> 3 ảnh giường tầng (B01..B03) + 3 khu vực chung + 1 thử thách ngẫu nhiên = 7 ảnh
+ * - Phòng 4 SV -> 2 ảnh giường tầng (B01..B02) + 3 khu vực chung + 1 thử thách ngẫu nhiên = 6 ảnh
  */
-export function buildLocalCaptureSlots(bedCount: number): CaptureSlot[] {
+export function buildLocalCaptureSlots(bedCount: number, challengePrompt?: string): CaptureSlot[] {
   const p = Math.min(12, Math.max(2, bedCount || 8));
   const bunkCount = Math.max(1, Math.ceil(p / 2));
   const slots: CaptureSlot[] = [];
@@ -180,6 +180,16 @@ export function buildLocalCaptureSlots(bedCount: number): CaptureSlot[] {
       required: true,
     }
   );
+  if (challengePrompt) {
+    slots.push({
+      slot_code: "CH01",
+      slot_group: "challenge",
+      slot_label: "Góc chụp thử thách ngẫu nhiên",
+      angle_hint: challengePrompt,
+      checklist_key: "challenge",
+      required: true,
+    });
+  }
   return slots;
 }
 
