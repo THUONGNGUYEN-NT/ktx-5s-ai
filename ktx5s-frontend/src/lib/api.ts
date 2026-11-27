@@ -717,9 +717,15 @@ export async function startCaptureSession(
     });
     if (res.data?.success && res.data?.data) {
       const serverData = res.data.data as CaptureSessionInfo;
+      const filteredSlots = (serverData.slots || []).filter(
+        (s) => s.slot_group !== "challenge" && s.slot_code !== "CH01"
+      );
       return {
         ...serverData,
         bed_count: autoBedCount,
+        total_required: filteredSlots.length,
+        total_with_challenge: filteredSlots.length,
+        slots: filteredSlots,
       };
     }
     throw new Error(res.data?.message || "Không thể khởi tạo phiên chụp.");
@@ -737,8 +743,7 @@ export async function startCaptureSession(
         axErr.response?.data?.message || "Không thể kết nối máy chủ để khởi tạo phiên chụp."
       );
     }
-    const challengePrompt = pickRandomChallenge();
-    const slots = buildLocalCaptureSlots(autoBedCount, challengePrompt);
+    const slots = buildLocalCaptureSlots(autoBedCount);
     const now = new Date();
     return {
       session_id: `local_${cleanCode}_${Date.now()}`,
@@ -746,11 +751,11 @@ export async function startCaptureSession(
       week: CURRENT_WEEK_STR,
       bed_count: autoBedCount,
       common_count: 3,
-      total_required: slots.length - 1,
+      total_required: slots.length,
       total_with_challenge: slots.length,
       qr_verified: true,
       audit_required: false,
-      challenge_prompt: challengePrompt,
+      challenge_prompt: "",
       server_timestamp: now.toISOString(),
       expires_at: new Date(now.getTime() + 30 * 60000).toISOString(),
       slots,
@@ -830,136 +835,21 @@ export async function submitCaptureSession(
     return serverAi;
   };
 
-  if (session.is_offline_fallback) {
-    const form = new FormData();
-    form.append("room_code", session.room_code);
-    form.append("captured_at", new Date().toISOString());
-    form.append("bed_count", String(session.bed_count));
-    form.append("slot_codes", JSON.stringify(orderedSlots.map((s) => s.slot_code)));
-    form.append("slot_labels", JSON.stringify(orderedSlots.map((s) => s.slot_label)));
-    for (const s of orderedSlots) {
-      form.append("image", captures[s.slot_code].file);
-    }
-
-    try {
-      const res = await api.post("/ai/evaluate", form, {
-        headers: { "Content-Type": "multipart/form-data" },
-        timeout: 4800,
-      });
-      const payload = res.data;
-      if (payload?.success && payload?.data) {
-        const strictLocal = await localAnalysisPromise;
-        payload.data.ai_result = calibrateStrictAiResult(payload.data.ai_result, strictLocal.aiResult);
-
-        const urls: string[] = (payload.data.image_urls ?? []).map(resolveImageUrl);
-        const serverPhotos = (payload.data.photos ?? []) as Array<{
-          slot_code: string;
-          slot_label: string;
-          image_url: string;
-        }>;
-        const savedPhotos: SubmittedPhotoItem[] = await Promise.all(
-          orderedSlots.map(async (s, idx) => ({
-            slot_code: s.slot_code,
-            slot_label: s.slot_label,
-            checklist_key: s.checklist_key,
-            image_url:
-              (serverPhotos[idx]?.image_url ? resolveImageUrl(serverPhotos[idx].image_url) : "") ||
-              urls[idx] ||
-              (await fileToDataUrl(captures[s.slot_code].file)),
-          }))
-        );
-        const byCode = new Map(savedPhotos.map((p) => [p.slot_code, p.image_url]));
-        // Lưu đồng bộ ngầm lên Cloud để không làm chậm phản hồi UI
-        void saveLiveRecord({
-          submission_id: payload.data.submission_id || `sub_${session.week}_${session.room_code}`,
-          room_code: session.room_code,
-          week: session.week,
-          submitted_at: payload.data.submitted_at || new Date().toISOString(),
-          area_images: {
-            bed: byCode.get("B01") || savedPhotos[0]?.image_url || "",
-            floor: byCode.get("C02_FLOOR") || savedPhotos[1]?.image_url || "",
-            desk: byCode.get("C03_DESK") || savedPhotos[2]?.image_url || "",
-            shoes: byCode.get("C04_SHOES") || savedPhotos[3]?.image_url || "",
-          },
-          photos: savedPhotos,
-          ai_result: payload.data.ai_result,
-          is_overridden: false,
-          override_note: null,
-        });
-      }
-      return payload;
-    } catch (err) {
-      const axErr = err as AxiosError<{ message?: string; detail?: string }>;
-      if (axErr.response?.data && axErr.response.status && axErr.response.status >= 400 && axErr.response.status < 500) {
-        throw new Error(
-          axErr.response.data.message ||
-            axErr.response.data.detail ||
-            "AI không thể phân tích bộ ảnh này. Vui lòng chụp lại."
-        );
-      }
-      // Phản hồi tức thì dưới 4 giây bằng bộ chấm 5S khắt khe + Cloudinary
-      const [cloudUrls, analysis] = await Promise.all([
-        Promise.race([
-          cloudUploadPromise,
-          new Promise<Record<string, string>>((r) => setTimeout(() => r({}), 3800)),
-        ]),
-        localAnalysisPromise,
-      ]);
-
-      if (!analysis.isValid) {
-        throw new Error(
-          analysis.invalidMessage || "Bộ ảnh chưa hợp lệ hoặc có ảnh trùng lặp. Vui lòng kiểm tra và chụp lại!"
-        );
-      }
-
-      const savedPhotos: SubmittedPhotoItem[] = await Promise.all(
-        orderedSlots.map(async (s) => ({
-          slot_code: s.slot_code,
-          slot_label: s.slot_label,
-          checklist_key: s.checklist_key,
-          image_url:
-            cloudUrls[s.slot_code] || (await fileToDataUrl(captures[s.slot_code].file)),
-        }))
-      );
-      const byCode = new Map(savedPhotos.map((p) => [p.slot_code, p.image_url]));
-      const submittedAt = new Date().toISOString();
-      const subId = `sub_${session.week}_${session.room_code}`;
-
-      void saveLiveRecord({
-        submission_id: subId,
-        room_code: session.room_code,
-        week: session.week,
-        submitted_at: submittedAt,
-        area_images: {
-          bed: byCode.get("B01") || savedPhotos[0]?.image_url || "",
-          floor: byCode.get("C02_FLOOR") || savedPhotos[1]?.image_url || "",
-          desk: byCode.get("C03_DESK") || savedPhotos[2]?.image_url || "",
-          shoes: byCode.get("C04_SHOES") || savedPhotos[3]?.image_url || "",
-        },
-        photos: savedPhotos,
-        ai_result: analysis.aiResult,
-        is_overridden: false,
-        override_note: null,
-      });
-
-      return {
-        success: true,
-        data: {
-          submission_id: subId,
-          room_code: session.room_code,
-          submitted_at: submittedAt,
-          image_url: savedPhotos[0]?.image_url || "",
-          photos: savedPhotos,
-          ai_result: analysis.aiResult,
-        },
-        message: `Nộp đủ ${savedPhotos.length} ảnh thành công! AI đã chấm điểm và đồng bộ lên Cloud.`,
-      };
-    }
+  // Sử dụng trực tiếp endpoint /ai/evaluate (nhận đúng danh sách ảnh giường tầng + 3 khu vực chung, không yêu cầu CH01)
+  const form = new FormData();
+  form.append("room_code", session.room_code);
+  form.append("captured_at", new Date().toISOString());
+  form.append("bed_count", String(session.bed_count));
+  form.append("slot_codes", JSON.stringify(orderedSlots.map((s) => s.slot_code)));
+  form.append("slot_labels", JSON.stringify(orderedSlots.map((s) => s.slot_label)));
+  for (const s of orderedSlots) {
+    form.append("image", captures[s.slot_code].file);
   }
 
   try {
-    const res = await api.post(`/capture-sessions/${session.session_id}/submit`, undefined, {
-      timeout: 5200,
+    const res = await api.post("/ai/evaluate", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 4800,
     });
     const payload = res.data;
     if (payload?.success && payload?.data) {
@@ -967,33 +857,33 @@ export async function submitCaptureSession(
       payload.data.ai_result = calibrateStrictAiResult(payload.data.ai_result, strictLocal.aiResult);
 
       const urls: string[] = (payload.data.image_urls ?? []).map(resolveImageUrl);
-      const photos = (payload.data.photos ?? []) as Array<{
+      const serverPhotos = (payload.data.photos ?? []) as Array<{
         slot_code: string;
-        slot_label?: string;
+        slot_label: string;
         image_url: string;
       }>;
-      const savedPhotos: SubmittedPhotoItem[] = session.slots.map((s, idx) => {
-        const found = photos.find((p) => p.slot_code === s.slot_code);
-        return {
+      const savedPhotos: SubmittedPhotoItem[] = await Promise.all(
+        orderedSlots.map(async (s, idx) => ({
           slot_code: s.slot_code,
-          slot_label: found?.slot_label || s.slot_label,
+          slot_label: s.slot_label,
           checklist_key: s.checklist_key,
-          image_url: found?.image_url
-            ? resolveImageUrl(found.image_url)
-            : urls[idx] || captures[s.slot_code]?.preview || "",
-        };
-      });
+          image_url:
+            (serverPhotos[idx]?.image_url ? resolveImageUrl(serverPhotos[idx].image_url) : "") ||
+            urls[idx] ||
+            (await fileToDataUrl(captures[s.slot_code].file)),
+        }))
+      );
       const byCode = new Map(savedPhotos.map((p) => [p.slot_code, p.image_url]));
       void saveLiveRecord({
-        submission_id: payload.data.submission_id,
+        submission_id: payload.data.submission_id || `sub_${session.week}_${session.room_code}`,
         room_code: session.room_code,
         week: session.week,
         submitted_at: payload.data.submitted_at || new Date().toISOString(),
         area_images: {
-          bed: byCode.get("B01") || urls[0] || captures["B01"]?.preview || "",
-          floor: byCode.get("C02_FLOOR") || urls[1] || captures["C02_FLOOR"]?.preview || "",
-          desk: byCode.get("C03_DESK") || urls[2] || captures["C03_DESK"]?.preview || "",
-          shoes: byCode.get("C04_SHOES") || urls[3] || captures["C04_SHOES"]?.preview || "",
+          bed: byCode.get("B01") || savedPhotos[0]?.image_url || "",
+          floor: byCode.get("C02_FLOOR") || savedPhotos[1]?.image_url || "",
+          desk: byCode.get("C03_DESK") || savedPhotos[2]?.image_url || "",
+          shoes: byCode.get("C04_SHOES") || savedPhotos[3]?.image_url || "",
         },
         photos: savedPhotos,
         ai_result: payload.data.ai_result,
@@ -1003,25 +893,15 @@ export async function submitCaptureSession(
     }
     return payload;
   } catch (err) {
-    const axErr = err as AxiosError<{
-      message?: string;
-      error_code?: string;
-      data?: {
-        assessment_category?: string;
-        retake_requests?: Array<{ slot_code: string; slot_label: string; reason: string }>;
-      };
-    }>;
+    const axErr = err as AxiosError<{ message?: string; detail?: string }>;
     if (axErr.response?.data && axErr.response.status && axErr.response.status >= 400 && axErr.response.status < 500) {
-      const errObj = new Error(axErr.response.data.message || "Cần chụp bổ sung ảnh.") as Error & {
-        retakeRequests?: Array<{ slot_code: string; slot_label: string; reason: string }>;
-        assessmentCategory?: string;
-      };
-      errObj.retakeRequests = axErr.response.data.data?.retake_requests;
-      errObj.assessmentCategory = axErr.response.data.data?.assessment_category;
-      throw errObj;
+      throw new Error(
+        axErr.response.data.message ||
+          axErr.response.data.detail ||
+          "AI không thể phân tích bộ ảnh này. Vui lòng chụp lại."
+      );
     }
-
-    // Nếu Backend vượt quá 5.2s (cold start hoặc LLM phản hồi chậm), trả về ngay kết quả chấm 5S khắt khe (< 6s)
+    // Phản hồi tức thì dưới 4 giây bằng bộ chấm 5S + Cloudinary
     const [cloudUrls, analysis] = await Promise.all([
       Promise.race([
         cloudUploadPromise,
@@ -1076,7 +956,7 @@ export async function submitCaptureSession(
         photos: savedPhotos,
         ai_result: analysis.aiResult,
       },
-      message: `Nộp đủ ${savedPhotos.length} ảnh thành công! AI đã chấm điểm trong dưới 6 giây.`,
+      message: `Nộp đủ ${savedPhotos.length} ảnh thành công! AI đã chấm điểm và đồng bộ lên Cloud.`,
     };
   }
 }

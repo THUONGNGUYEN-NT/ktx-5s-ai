@@ -82,16 +82,6 @@ def build_capture_slots(bed_count: int, challenge_prompt: str | None = None) -> 
     for item in COMMON_SLOTS:
         slots.append({**item, "required": True})
 
-    if challenge_prompt:
-        slots.append({
-            "slot_code": "CH01",
-            "slot_group": "challenge",
-            "slot_label": "Góc chụp thử thách ngẫu nhiên",
-            "angle_hint": challenge_prompt,
-            "checklist_key": "challenge",
-            "required": True,
-        })
-
     return slots
 
 

@@ -76,9 +76,8 @@ export default function CameraPage() {
     setRoom(roomCode);
     setMembers(roomCap);
 
-    // Tự động khởi tạo phiên chụp 30 phút kèm 1 góc thử thách ngẫu nhiên trong 10 kịch bản
-    const initialChallenge = pickRandomChallenge();
-    const immediateSlots = buildLocalCaptureSlots(roomCap, initialChallenge);
+    // Tự động khởi tạo phiên chụp 30 phút (Giường tầng + 3 khu vực chung)
+    const immediateSlots = buildLocalCaptureSlots(roomCap);
     const now = new Date();
     setSession({
       session_id: `local_${roomCode}_${Date.now()}`,
@@ -86,11 +85,11 @@ export default function CameraPage() {
       week: CURRENT_WEEK_STR,
       bed_count: roomCap,
       common_count: 3,
-      total_required: immediateSlots.length - 1,
+      total_required: immediateSlots.length,
       total_with_challenge: immediateSlots.length,
       qr_verified: true,
       audit_required: false,
-      challenge_prompt: initialChallenge,
+      challenge_prompt: "",
       server_timestamp: now.toISOString(),
       expires_at: new Date(now.getTime() + 30 * 60000).toISOString(),
       slots: immediateSlots,
@@ -100,9 +99,13 @@ export default function CameraPage() {
     startCaptureSession(roomCode, roomCap)
       .then((info) => {
         if (!info.is_offline_fallback && info.slots?.length) {
+          const filteredSlots = info.slots.filter((s) => s.slot_group !== "challenge" && s.slot_code !== "CH01");
           setSession({
             ...info,
             bed_count: roomCap,
+            total_required: filteredSlots.length,
+            total_with_challenge: filteredSlots.length,
+            slots: filteredSlots,
           });
         }
       })
@@ -375,7 +378,7 @@ export default function CameraPage() {
                 <span className="text-sm font-bold text-[#1d4ed8]">(Phòng {members} SV)</span>
               </h1>
               <p className="text-xs text-slate-500 mt-0.5">
-                {bunkCount} ảnh giường tầng (trên &amp; dưới) + 3 khu vực chung + 1 góc thử thách ngẫu nhiên
+                {bunkCount} ảnh giường tầng (trên &amp; dưới) + 3 khu vực chung (Sàn nhà · Bàn học · Kệ giày)
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -461,127 +464,6 @@ export default function CameraPage() {
           </div>
         </div>
 
-        {/* Mục 3: Khung ảnh thử thách ngẫu nhiên (Chống gian lận - Anti-Fraud) */}
-        {challengeSlots.map((slot) => {
-          const cap = captures[slot.slot_code];
-          const isPassed = cap?.validationStatus === "passed";
-          const isError =
-            cap && cap.validationStatus !== "passed" && cap.validationStatus !== "uploading";
-          const photoIndex = bedSlots.length + commonSlots.length + 1;
-
-          return (
-            <div key={slot.slot_code} className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-sm sm:text-base font-extrabold text-slate-800 flex items-center gap-2">
-                  <Sparkles size={18} className="text-indigo-600" />
-                  3. Khung ảnh thử thách ngẫu nhiên
-                </h2>
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full">
-                  <ShieldCheck size={13} /> Phiên 30 phút
-                </span>
-              </div>
-
-              <div
-                className={`bg-white rounded-2xl border-2 p-4 shadow-xs transition ${isPassed
-                  ? "border-emerald-400 bg-emerald-50/20"
-                  : isError
-                    ? "border-rose-400 bg-rose-50/20"
-                    : "border-indigo-200 bg-gradient-to-br from-white to-indigo-50/40"
-                  }`}
-              >
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                  {/* Hướng dẫn thử thách ngẫu nhiên */}
-                  <div className="md:col-span-7 space-y-2.5">
-                    <div className="flex items-center gap-2">
-                      <span className="bg-indigo-600 text-white text-xs font-extrabold px-2.5 py-0.5 rounded-full">
-                        Ảnh {photoIndex} · CH01
-                      </span>
-                      {isPassed ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600">
-                          <CheckCircle2 size={15} /> Đã hoàn thành
-                        </span>
-                      ) : (
-                        <span className="text-xs font-bold text-indigo-600">Bắt buộc trong phiên</span>
-                      )}
-                    </div>
-
-                    <div className="bg-indigo-50/90 border border-indigo-200/80 rounded-xl p-3.5">
-                      <p className="text-[11px] uppercase tracking-wider font-bold text-indigo-500 mb-1">
-                        Yêu cầu góc chụp ngẫu nhiên của phiên này:
-                      </p>
-                      <p className="text-sm sm:text-base font-extrabold text-slate-800 leading-snug">
-                        “{slot.angle_hint}”
-                      </p>
-                    </div>
-
-                    <p className="text-xs text-slate-500 leading-relaxed">
-                      Chụp trực tiếp góc ảnh theo yêu cầu ngẫu nhiên của phiên này để xác thực và hoàn tất bài nộp trong vòng 30 phút.
-                    </p>
-
-                    <div className="flex gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setActiveSlot(slot)}
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-bold shadow-xs transition"
-                      >
-                        {cap ? <RefreshCw size={15} /> : <Camera size={15} />}
-                        {cap ? "Chụp lại góc thử thách" : "Chụp góc thử thách ngay"}
-                      </button>
-
-                      <input
-                        ref={(el) => {
-                          fileInputRefs.current[slot.slot_code] = el;
-                        }}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => handleFilePick(slot, e)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRefs.current[slot.slot_code]?.click()}
-                        className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm font-semibold flex items-center gap-1.5"
-                        title="Chọn ảnh từ thiết bị"
-                      >
-                        <ImagePlus size={15} /> Tải ảnh
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Khung xem trước ảnh thử thách */}
-                  <div className="md:col-span-5">
-                    <div
-                      onClick={() => setActiveSlot(slot)}
-                      className="relative w-full aspect-4/3 rounded-xl border-2 border-dashed border-indigo-200 bg-white hover:border-indigo-400 overflow-hidden flex flex-col items-center justify-center cursor-pointer transition"
-                    >
-                      {cap ? (
-                        <>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={cap.preview}
-                            alt={slot.slot_label}
-                            className="w-full h-full object-cover"
-                          />
-                          <span className="absolute bottom-2 left-2 bg-slate-900/75 text-white text-[10px] font-semibold px-2.5 py-0.5 rounded-md">
-                            CH01 · {cap.capturedAt}
-                          </span>
-                        </>
-                      ) : (
-                        <div className="text-center p-4">
-                          <div className="w-11 h-11 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center mx-auto mb-2">
-                            <Camera size={22} />
-                          </div>
-                          <p className="text-xs font-bold text-indigo-700">Chạm để chụp CH01</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-
         {error && (
           <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3.5 rounded-2xl text-xs sm:text-sm font-semibold whitespace-pre-line">
             ⚠️ {error}
@@ -597,7 +479,7 @@ export default function CameraPage() {
               <b className={allReady ? "text-emerald-600" : "text-slate-800"}>
                 {passedCount}/{slots.length} ảnh
               </b>
-              {allReady ? " — Đủ giường tầng, khu vực chung và góc thử thách!" : ""}
+              {allReady ? " — Đã đủ ảnh giường tầng và khu vực chung!" : ""}
             </span>
           </div>
 
