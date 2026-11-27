@@ -63,8 +63,8 @@ export default function StudentHome() {
     latestKey === "clean"
       ? "bg-[#eaf8f0] border-emerald-100 text-emerald-700"
       : latestKey === "slightly_messy"
-      ? "bg-[#fef4ea] border-amber-100 text-amber-700"
-      : "bg-[#fef0f2] border-rose-100 text-rose-600";
+        ? "bg-[#fef4ea] border-amber-100 text-amber-700"
+        : "bg-[#fef0f2] border-rose-100 text-rose-600";
 
   return (
     <AppShell role="student" title="Trang chủ sinh viên" showBack={false}>
@@ -200,14 +200,14 @@ export default function StudentHome() {
                     k === "clean"
                       ? "bg-emerald-50 text-emerald-700"
                       : k === "slightly_messy"
-                      ? "bg-amber-50 text-amber-700"
-                      : "bg-rose-50 text-rose-600";
+                        ? "bg-amber-50 text-amber-700"
+                        : "bg-rose-50 text-rose-600";
                   const scoreCls =
                     k === "clean"
                       ? "text-emerald-600"
                       : k === "slightly_messy"
-                      ? "text-amber-600"
-                      : "text-rose-600";
+                        ? "text-amber-600"
+                        : "text-rose-600";
                   return (
                     <tr
                       key={h.submission_id}

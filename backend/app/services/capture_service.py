@@ -12,16 +12,16 @@ MIN_BLUR_SCORE = 6.5
 MAX_HASH_DISTANCE_DUPLICATE = 6
 
 CHALLENGE_PROMPTS = [
-    "Chụp chếch từ góc cuối phòng hướng về phía cửa ra vào.",
-    "Chụp từ cửa ra vào hướng chéo vào góc tường đối diện.",
-    "Chụp lại khu vực bàn học từ hướng ngược lại (thấy rõ mặt bàn và gầm bàn).",
-    "Chụp góc nối giữa lối đi chính và chân giường tầng phía trong.",
-    "Chụp cận cảnh khu vực móc treo đồ, tủ cá nhân và khoảng trống cạnh kệ giày.",
-    "Chụp dọc theo mép tường bên trái từ đầu phòng đến cuối phòng.",
-    "Chụp góc cửa sổ / ban công và khoảng trống sát giường tầng gần cửa sổ.",
-    "Chụp chếch từ giữa phòng hướng về phía cửa ra vào và giá phơi/kệ dép.",
-    "Chụp gầm giường tầng đầu tiên và khu vực sàn tiếp giáp.",
-    "Chụp toàn bộ dãy tủ đồ / giá sách nhìn nghiêng 45 độ.",
+    "Chụp góc cửa ra vào nhìn vào trong phòng.",
+    "Chụp từ cuối phòng nhìn hướng ra cửa chính.",
+    "Chụp khu vực gầm bàn học.",
+    "Chụp khu vực gầm giường tầng đầu tiên.",
+    "Chụp khu vực cửa sổ (hoặc ban công) của phòng.",
+    "Chụp dãy tủ đồ cá nhân trong phòng.",
+    "Chụp khu vực móc treo quần áo / mũ bảo hiểm.",
+    "Chụp góc đặt thùng rác và chổi quét phòng.",
+    "Chụp toàn cảnh lối đi chính giữa phòng.",
+    "Chụp khu vực bình nước / kệ đồ dùng chung của phòng.",
 ]
 
 COMMON_SLOTS = [

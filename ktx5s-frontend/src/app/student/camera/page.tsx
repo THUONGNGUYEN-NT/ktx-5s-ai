@@ -44,12 +44,12 @@ type SlotCaptureState = {
   width: number;
   height: number;
   validationStatus:
-    | "uploading"
-    | "passed"
-    | "needs_retake"
-    | "insufficient_evidence"
-    | "anomalous"
-    | "suspected_fraud";
+  | "uploading"
+  | "passed"
+  | "needs_retake"
+  | "insufficient_evidence"
+  | "anomalous"
+  | "suspected_fraud";
   issues: string[];
 };
 
@@ -106,7 +106,7 @@ export default function CameraPage() {
           });
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Đếm ngược thời hạn hiệu lực phiên 30 phút
@@ -166,7 +166,7 @@ export default function CameraPage() {
           validationStatus: check.success
             ? "passed"
             : (check.data.validation_status as SlotCaptureState["validationStatus"]) ||
-              "needs_retake",
+            "needs_retake",
           issues: check.data.issues || (check.success ? [] : [check.message]),
         },
       }));
@@ -252,13 +252,12 @@ export default function CameraPage() {
     return (
       <div
         key={slot.slot_code}
-        className={`bg-white rounded-2xl border-2 p-2.5 sm:p-3.5 flex flex-col gap-2 transition shadow-2xs ${
-          isPassed
-            ? "border-emerald-400 bg-emerald-50/20"
-            : isError
+        className={`bg-white rounded-2xl border-2 p-2.5 sm:p-3.5 flex flex-col gap-2 transition shadow-2xs ${isPassed
+          ? "border-emerald-400 bg-emerald-50/20"
+          : isError
             ? "border-rose-400 bg-rose-50/20"
             : "border-slate-200/80 hover:border-blue-300"
-        }`}
+          }`}
       >
         <div className="flex items-start justify-between gap-1">
           <div className="min-w-0">
@@ -273,9 +272,8 @@ export default function CameraPage() {
 
         <div
           onClick={() => setActiveSlot(slot)}
-          className={`relative w-full ${
-            compact ? "aspect-square sm:aspect-4/3" : "aspect-4/3"
-          } rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 hover:bg-blue-50/40 hover:border-blue-300 overflow-hidden flex flex-col items-center justify-center cursor-pointer transition`}
+          className={`relative w-full ${compact ? "aspect-square sm:aspect-4/3" : "aspect-4/3"
+            } rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 hover:bg-blue-50/40 hover:border-blue-300 overflow-hidden flex flex-col items-center justify-center cursor-pointer transition`}
         >
           {cap ? (
             <>
@@ -299,11 +297,10 @@ export default function CameraPage() {
           <button
             type="button"
             onClick={() => setActiveSlot(slot)}
-            className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-xl text-[11px] sm:text-xs font-bold transition ${
-              cap
-                ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                : "bg-[#ebf3fe] text-[#1d4ed8] hover:bg-[#dbeafe]"
-            }`}
+            className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-xl text-[11px] sm:text-xs font-bold transition ${cap
+              ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              : "bg-[#ebf3fe] text-[#1d4ed8] hover:bg-[#dbeafe]"
+              }`}
           >
             {cap ? <RefreshCw size={12} /> : <Camera size={12} />}
             <span>{cap ? "Chụp lại" : "Camera"}</span>
@@ -349,7 +346,7 @@ export default function CameraPage() {
             <div className="flex items-center gap-2">
               <span
                 className="inline-flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/70 px-2.5 py-1 rounded-full"
-                title="Thời hạn hiệu lực phiên chụp ảnh chống gian lận"
+                title="Thời hạn hiệu lực phiên chụp ảnh"
               >
                 <Clock size={13} /> {mins}:{secs}
               </span>
@@ -370,25 +367,22 @@ export default function CameraPage() {
                 <div key={stepNum} className="flex items-center flex-1 last:flex-none">
                   <div className="flex flex-col items-center">
                     <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold transition ${
-                        active ? "bg-[#1d4ed8] text-white shadow-sm" : "bg-slate-100 text-slate-400"
-                      }`}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold transition ${active ? "bg-[#1d4ed8] text-white shadow-sm" : "bg-slate-100 text-slate-400"
+                        }`}
                     >
                       {stepNum}
                     </div>
                     <span
-                      className={`text-[11px] font-bold mt-1 ${
-                        active ? "text-[#1d4ed8]" : "text-slate-400"
-                      }`}
+                      className={`text-[11px] font-bold mt-1 ${active ? "text-[#1d4ed8]" : "text-slate-400"
+                        }`}
                     >
                       {label}
                     </span>
                   </div>
                   {idx < 2 && (
                     <div
-                      className={`flex-1 h-0.5 mx-2 -mt-4 rounded ${
-                        currentStep > Number(stepNum) ? "bg-[#1d4ed8]" : "bg-slate-200"
-                      }`}
+                      className={`flex-1 h-0.5 mx-2 -mt-4 rounded ${currentStep > Number(stepNum) ? "bg-[#1d4ed8]" : "bg-slate-200"
+                        }`}
                     />
                   )}
                 </div>
@@ -445,21 +439,20 @@ export default function CameraPage() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-sm sm:text-base font-extrabold text-slate-800 flex items-center gap-2">
                   <Sparkles size={18} className="text-indigo-600" />
-                  3. Khung ảnh thử thách ngẫu nhiên (Chống gian lận)
+                  3. Khung ảnh thử thách ngẫu nhiên
                 </h2>
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full">
-                  <ShieldCheck size={13} /> Anti-Fraud · Phiên 30 phút
+                  <ShieldCheck size={13} /> Phiên 30 phút
                 </span>
               </div>
 
               <div
-                className={`bg-white rounded-2xl border-2 p-4 shadow-xs transition ${
-                  isPassed
-                    ? "border-emerald-400 bg-emerald-50/20"
-                    : isError
+                className={`bg-white rounded-2xl border-2 p-4 shadow-xs transition ${isPassed
+                  ? "border-emerald-400 bg-emerald-50/20"
+                  : isError
                     ? "border-rose-400 bg-rose-50/20"
                     : "border-indigo-200 bg-gradient-to-br from-white to-indigo-50/40"
-                }`}
+                  }`}
               >
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
                   {/* Hướng dẫn thử thách ngẫu nhiên */}
@@ -487,7 +480,7 @@ export default function CameraPage() {
                     </div>
 
                     <p className="text-xs text-slate-500 leading-relaxed">
-                      Khung ảnh ngẫu nhiên giúp xác thực sinh viên chụp trực tiếp tại phòng trong phiên 30 phút, không sử dụng ảnh cũ hoặc ảnh mượn từ phòng khác.
+                      Chụp trực tiếp góc ảnh theo yêu cầu ngẫu nhiên của phiên này để xác thực và hoàn tất bài nộp trong vòng 30 phút.
                     </p>
 
                     <div className="flex gap-2 pt-1">

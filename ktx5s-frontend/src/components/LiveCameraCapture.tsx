@@ -151,7 +151,7 @@ export default function LiveCameraCapture({
       <div className="flex items-start justify-between gap-3 bg-white/10 backdrop-blur-sm rounded-sm p-3 border border-white/15">
         <div>
           <div className="flex items-center gap-2 text-xs text-emerald-300 font-semibold">
-            <Sparkles size={14} /> CAMERA TRỰC TIẾP · CHỐNG GIAN LẬN LỚP 1
+            <Sparkles size={14} /> CAMERA TRỰC TIẾP · KTX 5S AI
           </div>
           <h3 className="text-base font-bold mt-0.5">{slotLabel}</h3>
           <p className="text-xs text-gray-200 mt-1">{angleHint}</p>
