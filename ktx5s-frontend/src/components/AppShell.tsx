@@ -76,6 +76,24 @@ export default function AppShell({
   const [account, setAccount] = useState<UserAccount | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [unreadNotifsCount, setUnreadNotifsCount] = useState<number>(0);
+
+  const syncUnreadNotifs = useCallback(() => {
+    try {
+      const saved = localStorage.getItem("ktx5s_admin_notifications");
+      if (saved) {
+        const notifs = JSON.parse(saved);
+        if (Array.isArray(notifs)) {
+          const count = notifs.filter((n: any) => !n.read).length;
+          setUnreadNotifsCount(count);
+          return;
+        }
+      }
+      setUnreadNotifsCount(2); // Mặc định có 2 tin chưa đọc nếu chưa lưu
+    } catch {
+      setUnreadNotifsCount(0);
+    }
+  }, []);
 
   const syncUserState = useCallback(() => {
     const s = getSession();
@@ -94,13 +112,19 @@ export default function AppShell({
       acc = findAccountByUsername("admin");
     }
     setAccount(acc);
-  }, [role, router]);
+    syncUnreadNotifs();
+  }, [role, router, syncUnreadNotifs]);
 
   useEffect(() => {
     syncUserState();
     window.addEventListener("ktx5s-profile-updated", syncUserState);
-    return () => window.removeEventListener("ktx5s-profile-updated", syncUserState);
-  }, [syncUserState]);
+    window.addEventListener("ktx5s-notifications-updated", syncUnreadNotifs);
+    return () => {
+      window.removeEventListener("ktx5s-profile-updated", syncUserState);
+      window.removeEventListener("ktx5s-notifications-updated", syncUnreadNotifs);
+    };
+  }, [syncUserState, syncUnreadNotifs]);
+
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -213,6 +237,8 @@ export default function AppShell({
               pathname === `${item.href}/` ||
               (item.href === "/admin" && pathname?.startsWith("/admin/rooms"));
             const Icon = item.icon;
+            const currentBadge =
+              item.href === "/admin/notifications" ? unreadNotifsCount : item.badge;
             return (
               <Link
                 key={item.href}
@@ -227,15 +253,16 @@ export default function AppShell({
                 <span className={`flex-1 truncate ${collapsed ? "md:hidden" : ""}`}>
                   {item.label}
                 </span>
-                {item.badge && !collapsed && (
+                {Boolean(currentBadge && currentBadge > 0) && !collapsed && (
                   <span className="bg-rose-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full leading-none">
-                    {item.badge}
+                    {currentBadge}
                   </span>
                 )}
               </Link>
             );
           })}
         </nav>
+
 
         {/* Hình ảnh Ký túc xá ĐHQG-HCM thực tế với hiệu ứng Blur nhẹ nổi bật & Gradient hòa tan mượt ở chân Sidebar */}
         <div className={`relative h-48 overflow-hidden shrink-0 ${collapsed ? "md:hidden" : ""}`}>
@@ -346,8 +373,11 @@ export default function AppShell({
               title="Thông báo"
             >
               <Bell size={20} className="text-white md:text-slate-600" />
-              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-[#1b365d] md:ring-white" />
+              {unreadNotifsCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-[#1b365d] md:ring-white" />
+              )}
             </Link>
+
 
             <Link
               href={profileHref}
@@ -386,6 +416,8 @@ export default function AppShell({
               pathname === `${item.href}/` ||
               (item.href === "/admin" && pathname?.startsWith("/admin/rooms"));
             const Icon = item.icon;
+            const currentBadge =
+              item.href === "/admin/notifications" ? unreadNotifsCount : item.badge;
             return (
               <Link
                 key={item.href}
@@ -395,9 +427,9 @@ export default function AppShell({
               >
                 <div className="relative">
                   <Icon size={21} strokeWidth={active ? 2.4 : 1.9} />
-                  {item.badge && (
+                  {Boolean(currentBadge && currentBadge > 0) && (
                     <span className="absolute -top-1 -right-2 bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full leading-tight">
-                      {item.badge}
+                      {currentBadge}
                     </span>
                   )}
                 </div>
@@ -406,6 +438,7 @@ export default function AppShell({
             );
           })}
         </nav>
+
       </div>
     </div>
   );
