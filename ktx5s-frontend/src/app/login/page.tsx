@@ -284,8 +284,8 @@ export default function LoginPage() {
     <main className="min-h-dvh bg-gradient-to-br from-[#e8f0fb] via-[#f4f7fb] to-[#e2ecf9] flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-4xl bg-white rounded-3xl shadow-[0_20px_60px_rgba(15,34,61,0.12)] border border-slate-200/70 overflow-hidden grid md:grid-cols-12">
         {/* ===== CỘT TRÁI: NHẬN DIỆN NAVY-BLUE KTX 5S AI ===== */}
-        <section className="md:col-span-5 relative bg-gradient-to-b from-[#1a345a] via-[#172e50] to-[#0f223d] text-white p-7 sm:p-9 flex flex-col justify-between overflow-hidden">
-          <div className="relative z-10">
+        <section className="md:col-span-5 relative bg-[#122645] text-white p-7 sm:p-9 flex flex-col justify-between overflow-hidden">
+          <div className="relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-2xl bg-white/15 border border-white/25 flex items-center justify-center shadow-inner">
                 <Building2 size={24} className="text-sky-300" />
@@ -329,14 +329,14 @@ export default function LoginPage() {
             <span>Trung tâm Quản lý Ký túc xá ĐHQG-HCM</span>
           </div>
 
-          {/* Ảnh toàn cảnh KTX ĐHQG-HCM với hiệu ứng Blur + lớp phủ Navy-Blue để nổi bật chữ mô tả */}
+          {/* Ảnh toàn cảnh KTX ĐHQG-HCM làm mờ nhẹ (blur 1.5px) + lớp phủ Navy-Blue dịu để vừa thấy rõ toàn cảnh KTX vừa không chìm chữ */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/ktx-login-bg.jpg`}
             alt="Toàn cảnh Ký túc xá ĐHQG-HCM"
-            className="absolute inset-0 w-full h-full object-cover object-center blur-[3px] scale-110 opacity-55 pointer-events-none select-none"
+            className="absolute inset-0 w-full h-full object-cover object-center blur-[1.5px] scale-105 opacity-95 pointer-events-none select-none"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#142a4a]/88 via-[#132847]/74 to-[#0b1930]/92 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#142a4a]/65 via-[#132847]/45 to-[#0b1930]/75 pointer-events-none" />
         </section>
 
         {/* ===== CỘT PHẢI: FORM ĐĂNG NHẬP ===== */}
