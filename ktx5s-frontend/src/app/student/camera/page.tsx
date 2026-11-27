@@ -1,8 +1,8 @@
 "use client";
-// TRANG NỘP ẢNH PHÒNG 5S — TỰ ĐỘNG HIỂN THỊ ĐÚNG SỐ LƯỢNG ẢNH GIƯỜNG TẦNG THEO PHÒNG ĐÃ PHÂN SẴN (KHÔNG CẦN BƯỚC XÁC THỰC CHỌN LOẠI PHÒNG)
-// - Phòng 8 SV (VD: A3-301): 4 ảnh giường tầng (mỗi ảnh gồm giường trên & dưới) + 1 ảnh Sàn nhà + 1 ảnh Bàn học + 1 ảnh Kệ giày dép = 7 ảnh
-// - Phòng 6 SV: 3 ảnh giường tầng + 3 ảnh khu vực chung = 6 ảnh
-// - Phòng 4 SV: 2 ảnh giường tầng + 3 ảnh khu vực chung = 5 ảnh
+// TRANG NỘP ẢNH PHÒNG — MODERN NAVY-BLUE THEME (DESKTOP & MOBILE)
+// - Tự động nhận diện số lượng sinh viên của phòng (4 SV -> 5 ảnh, 6 SV -> 6 ảnh, 8 SV -> 7 ảnh), KHÔNG qua bước xác thực chọn loại phòng
+// - Thanh tiến trình 3 bước: 1. Chụp ảnh -> 2. Xem lại -> 3. Hoàn tất
+// - Bố cục 2x2 giường tầng + 3 khu vực chung siêu gọn & dễ bấm trên điện thoại
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -11,15 +11,13 @@ import {
   AlertTriangle,
   RefreshCw,
   Bot,
-  Upload,
+  ImagePlus,
+  ArrowRight,
+  Info,
   BedDouble,
   Layers,
-  ImagePlus,
-  Users,
-  Info,
 } from "lucide-react";
 import AppShell from "@/components/AppShell";
-import Panel from "@/components/Panel";
 import LiveCameraCapture from "@/components/LiveCameraCapture";
 import { getSession } from "@/lib/session";
 import {
@@ -29,7 +27,6 @@ import {
   type CaptureSessionInfo,
 } from "@/lib/api";
 import {
-  CURRENT_WEEK,
   CURRENT_WEEK_STR,
   buildLocalCaptureSlots,
   getRoomMembersByCode,
@@ -68,7 +65,6 @@ export default function CameraPage() {
     requests: Array<{ slot_code: string; slot_label: string; reason: string }>;
   } | null>(null);
 
-  // Ngay khi mở trang: lấy mã phòng của sinh viên -> tra cứu số lượng SV của phòng -> mở thẳng danh sách ô chụp ảnh, KHÔNG qua bước xác thực chọn loại phòng
   useEffect(() => {
     const s = getSession();
     const roomCode = (s?.roomCode || "A3-301").trim().toUpperCase();
@@ -76,10 +72,9 @@ export default function CameraPage() {
     setRoom(roomCode);
     setMembers(roomCap);
 
-    // Khởi tạo ngay danh sách ô chụp theo đúng loại phòng để hiển thị tức thì (0ms delay)
     const immediateSlots = buildLocalCaptureSlots(roomCap);
     const now = new Date();
-    const initialSession: CaptureSessionInfo = {
+    setSession({
       session_id: `local_${roomCode}_${Date.now()}`,
       room_code: roomCode,
       week: CURRENT_WEEK_STR,
@@ -94,10 +89,8 @@ export default function CameraPage() {
       expires_at: new Date(now.getTime() + 30 * 60000).toISOString(),
       slots: immediateSlots,
       is_offline_fallback: true,
-    };
-    setSession(initialSession);
+    });
 
-    // Đồng bộ ngầm với Backend nếu cổng 8000 đang bật
     startCaptureSession(roomCode, roomCap)
       .then((info) => {
         setSession({
@@ -106,9 +99,7 @@ export default function CameraPage() {
           slots: immediateSlots,
         });
       })
-      .catch(() => {
-        // Giữ nguyên phiên local trên GitHub Pages
-      });
+      .catch(() => {});
   }, []);
 
   const handleCameraCaptured = async (
@@ -160,7 +151,7 @@ export default function CameraPage() {
           issues: check.data.issues || (check.success ? [] : [check.message]),
         },
       }));
-    } catch (err) {
+    } catch {
       setCaptures((prev) => ({
         ...prev,
         [slot.slot_code]: {
@@ -195,21 +186,13 @@ export default function CameraPage() {
   const bunkCount = getBunkCountForMembers(members);
   const passedCount = slots.filter((s) => captures[s.slot_code]?.validationStatus === "passed").length;
   const allReady = slots.length > 0 && passedCount === slots.length;
+  const currentStep = submitting ? 3 : allReady ? 2 : 1;
 
   const bedSlots = slots.filter((s) => s.slot_group === "bed");
   const commonSlots = slots.filter((s) => s.slot_group === "common");
 
   const handleSubmit = async () => {
-    if (!session) return;
-    if (!allReady) {
-      const missing = slots
-        .filter((s) => captures[s.slot_code]?.validationStatus !== "passed")
-        .map((s) => s.slot_label)
-        .join(", ");
-      setError(`Bạn cần chụp đủ ${slots.length} ảnh bắt buộc. Còn thiếu: ${missing}`);
-      return;
-    }
-
+    if (!session || !allReady) return;
     setSubmitting(true);
     setError(null);
     setRetakeBanner(null);
@@ -217,7 +200,6 @@ export default function CameraPage() {
     try {
       const res = await submitCaptureSession(session, captures);
       if (!res?.success) throw new Error(res?.message || "Nộp ảnh thất bại.");
-
       sessionStorage.setItem("ai_result", JSON.stringify(res.data.ai_result));
       sessionStorage.setItem("submitted_at", res.data.submitted_at);
       router.push("/student/history");
@@ -231,19 +213,6 @@ export default function CameraPage() {
           category: typedErr.assessmentCategory,
           requests: typedErr.retakeRequests,
         });
-        setCaptures((prev) => {
-          const next = { ...prev };
-          for (const req of typedErr.retakeRequests || []) {
-            if (next[req.slot_code]) {
-              next[req.slot_code] = {
-                ...next[req.slot_code],
-                validationStatus: "needs_retake",
-                issues: [req.reason],
-              };
-            }
-          }
-          return next;
-        });
       }
       setError(typedErr.message || "Có lỗi xảy ra khi phân tích bộ ảnh.");
     } finally {
@@ -251,7 +220,7 @@ export default function CameraPage() {
     }
   };
 
-  const renderSlotCard = (slot: CaptureSlot, indexBadge: number) => {
+  const renderSlotTile = (slot: CaptureSlot, idx: number, compact = false) => {
     const cap = captures[slot.slot_code];
     const isPassed = cap?.validationStatus === "passed";
     const isError =
@@ -260,50 +229,35 @@ export default function CameraPage() {
     return (
       <div
         key={slot.slot_code}
-        className={`border-2 rounded-md p-3.5 flex flex-col gap-2.5 transition shadow-xs ${
+        className={`bg-white rounded-2xl border-2 p-2.5 sm:p-3.5 flex flex-col gap-2 transition shadow-2xs ${
           isPassed
-            ? "border-[#00a65a] bg-emerald-50/25"
+            ? "border-emerald-400 bg-emerald-50/20"
             : isError
-            ? "border-[#dd4b39] bg-red-50/30"
-            : "border-gray-200 bg-white"
+            ? "border-rose-400 bg-rose-50/20"
+            : "border-slate-200/80 hover:border-blue-300"
         }`}
       >
-        {/* Tiêu đề ô chụp: số thứ tự + tên khu vực rõ nét trên điện thoại */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span
-              className={`w-6 h-6 rounded-full text-white text-xs font-extrabold flex items-center justify-center shrink-0 ${
-                isPassed ? "bg-[#00a65a]" : "bg-[#3c8dbc]"
-              }`}
-            >
-              {indexBadge}
-            </span>
-            <span className="font-bold text-gray-800 text-sm sm:text-[15px] truncate">
-              {slot.slot_label}
-            </span>
+        <div className="flex items-start justify-between gap-1">
+          <div className="min-w-0">
+            <p className="text-xs sm:text-sm font-extrabold text-slate-800 truncate">
+              Ảnh {idx}
+            </p>
+            <p className="text-[11px] text-slate-500 truncate">{slot.slot_label}</p>
           </div>
-
-          {isPassed ? (
-            <span className="inline-flex items-center gap-1 text-xs font-bold text-[#00a65a] bg-emerald-100 px-2 py-0.5 rounded-full shrink-0">
-              <CheckCircle2 size={14} /> Đã chụp
-            </span>
-          ) : isError ? (
-            <span className="inline-flex items-center gap-1 text-xs font-bold text-[#dd4b39] bg-red-100 px-2 py-0.5 rounded-full shrink-0">
-              <AlertTriangle size={14} /> Chụp lại
-            </span>
-          ) : (
-            <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full shrink-0">
-              Bắt buộc
-            </span>
+          {isPassed && (
+            <CheckCircle2 size={17} className="text-emerald-500 shrink-0 mt-0.5" />
+          )}
+          {isError && (
+            <AlertTriangle size={17} className="text-rose-500 shrink-0 mt-0.5" />
           )}
         </div>
 
-        <p className="text-xs sm:text-[13px] text-gray-600 leading-snug">{slot.angle_hint}</p>
-
-        {/* Khung xem trước ảnh / bấm để mở camera */}
+        {/* Khung chụp ảnh chạm là mở Camera */}
         <div
           onClick={() => setActiveSlot(slot)}
-          className="relative w-full aspect-4/3 sm:aspect-video bg-gray-100 border-2 border-dashed border-gray-300 hover:border-[#3c8dbc] rounded-md overflow-hidden flex items-center justify-center cursor-pointer active:bg-gray-200/70"
+          className={`relative w-full ${
+            compact ? "aspect-square sm:aspect-4/3" : "aspect-4/3"
+          } rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 hover:bg-blue-50/40 hover:border-blue-300 overflow-hidden flex flex-col items-center justify-center cursor-pointer transition`}
         >
           {cap ? (
             <>
@@ -311,48 +265,35 @@ export default function CameraPage() {
               <img
                 src={cap.preview}
                 alt={slot.slot_label}
-                className="w-full h-full object-cover bg-slate-900"
+                className="w-full h-full object-cover"
               />
-              <span className="absolute bottom-2 left-2 bg-black/75 text-white text-[11px] font-medium px-2.5 py-1 rounded">
-                {room} · {slot.slot_label} · {cap.capturedAt}
+              <span className="absolute bottom-1.5 left-1.5 bg-slate-900/75 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md">
+                {cap.capturedAt}
               </span>
             </>
           ) : (
-            <div className="text-center text-gray-500 p-4">
-              <div className="w-12 h-12 rounded-full bg-[#3c8dbc]/10 text-[#3c8dbc] flex items-center justify-center mx-auto mb-2">
-                <Camera size={26} />
+            <div className="text-center px-2">
+              <div className="w-9 h-9 rounded-full bg-blue-100/80 text-[#1d4ed8] flex items-center justify-center mx-auto mb-1.5">
+                <Camera size={18} />
               </div>
-              <p className="text-sm font-semibold text-gray-700">
-                Chạm để chụp <b>{slot.slot_label}</b>
-              </p>
-              <p className="text-xs text-gray-400 mt-0.5">
-                {slot.slot_group === "bed"
-                  ? "Chụp thấy cả tầng trên & tầng dưới"
-                  : "Chụp rõ nét toàn bộ khu vực"}
-              </p>
+              <p className="text-[11px] sm:text-xs font-bold text-[#1d4ed8]">Thêm ảnh</p>
             </div>
           )}
         </div>
 
-        {cap?.issues?.length ? (
-          <div className="text-xs text-[#dd4b39] bg-red-50 border border-red-200 px-2.5 py-1.5 rounded font-medium">
-            ⚠️ {cap.issues.join(" · ")}
-          </div>
-        ) : null}
-
-        {/* Cụm nút thao tác to, dễ bấm trên màn hình cảm ứng điện thoại */}
-        <div className="flex gap-2 pt-0.5">
+        {/* Nút Camera / Tải ảnh nhỏ gọn, dễ bấm */}
+        <div className="flex gap-1.5">
           <button
             type="button"
             onClick={() => setActiveSlot(slot)}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-md text-xs sm:text-sm font-bold transition active:scale-[0.99] ${
+            className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-xl text-[11px] sm:text-xs font-bold transition ${
               cap
-                ? "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-                : "bg-[#3c8dbc] hover:bg-[#367fa9] text-white shadow-xs"
+                ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                : "bg-[#ebf3fe] text-[#1d4ed8] hover:bg-[#dbeafe]"
             }`}
           >
-            {cap ? <RefreshCw size={16} /> : <Camera size={16} />}
-            {cap ? "Chụp lại bằng Camera" : "Mở Camera chụp"}
+            {cap ? <RefreshCw size={12} /> : <Camera size={12} />}
+            <span>{cap ? "Chụp lại" : "Camera"}</span>
           </button>
 
           <input
@@ -367,11 +308,10 @@ export default function CameraPage() {
           <button
             type="button"
             onClick={() => fileInputRefs.current[slot.slot_code]?.click()}
-            className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-md text-xs sm:text-sm font-semibold border border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100 active:scale-[0.99] transition shrink-0"
-            title="Chọn ảnh có sẵn từ thiết bị"
+            className="px-2 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-semibold flex items-center justify-center"
+            title="Chọn ảnh từ thiết bị"
           >
-            <ImagePlus size={16} />
-            <span>Tải ảnh</span>
+            <ImagePlus size={13} />
           </button>
         </div>
       </div>
@@ -379,70 +319,70 @@ export default function CameraPage() {
   };
 
   return (
-    <AppShell role="student" title={`Nộp ảnh phòng ${room} (${slots.length} ảnh)`}>
-      <div className="flex flex-col gap-4">
-        {/* Thanh tóm tắt cấu hình phòng tự động (không cần bước xác thực) */}
-        <div className="bg-white border border-gray-200 rounded-md p-3.5 sm:p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-start sm:items-center gap-3">
-            <div className="w-11 h-11 rounded-full bg-[#3c8dbc] text-white flex items-center justify-center font-black text-base shrink-0 shadow-xs">
-              {room.split("-")[0] || "5S"}
-            </div>
+    <AppShell role="student" title="Nộp ảnh phòng" showBack>
+      <div className="space-y-5">
+        {/* Header + Stepper 3 bước giống hệt Mockup 3 */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-[0_2px_10px_rgba(15,23,42,0.03)] p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-base sm:text-lg font-extrabold text-gray-800">
-                  Phòng {room} — Tuần {CURRENT_WEEK}
-                </h2>
-                <span className="bg-blue-100 text-[#3c8dbc] text-xs font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                  <Users size={13} /> Phòng {members} sinh viên ({bunkCount} giường tầng)
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm text-gray-600 mt-0.5">
-                Hệ thống tự động áp dụng định mức của phòng {room}:{" "}
-                <b className="text-gray-900">{bunkCount} ảnh giường tầng</b> (mỗi ảnh gồm giường
-                trên &amp; dưới) + <b className="text-gray-900">1 ảnh sàn</b> +{" "}
-                <b className="text-gray-900">1 ảnh bàn</b> +{" "}
-                <b className="text-gray-900">1 ảnh kệ dép</b>.
+              <h1 className="text-lg sm:text-xl font-extrabold text-slate-800">
+                Nộp ảnh phòng {room}{" "}
+                <span className="text-sm font-bold text-[#1d4ed8]">(Phòng {members} SV)</span>
+              </h1>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {bunkCount} ảnh giường tầng (mỗi ảnh gồm giường trên &amp; dưới) + 3 ảnh khu vực chung
               </p>
             </div>
-          </div>
-
-          <div className="flex items-center justify-between sm:justify-end gap-2 border-t sm:border-t-0 pt-2.5 sm:pt-0">
-            <span
-              className={`px-3 py-1.5 rounded-full text-xs sm:text-sm font-bold ${
-                allReady
-                  ? "bg-[#00a65a] text-white"
-                  : "bg-amber-100 text-amber-900 border border-amber-300"
-              }`}
-            >
-              Đã chụp {passedCount} / {slots.length} ảnh bắt buộc
+            <span className="text-sm font-extrabold text-[#1d4ed8] bg-blue-50 px-3 py-1 rounded-full">
+              {passedCount} / {slots.length} ảnh
             </span>
           </div>
-        </div>
 
-        {/* Thanh tiến độ trực quan */}
-        <div className="bg-white border border-gray-200 rounded-md px-4 py-3 shadow-xs">
-          <div className="flex items-center justify-between text-xs sm:text-sm font-semibold mb-1.5">
-            <span className="text-gray-700">Tiến độ hoàn thành bộ ảnh 5S</span>
-            <span className={allReady ? "text-[#00a65a] font-bold" : "text-[#3c8dbc] font-bold"}>
-              {slots.length ? Math.round((passedCount / slots.length) * 100) : 0}%
-            </span>
-          </div>
-          <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className={`h-full transition-all duration-300 ${
-                allReady ? "bg-[#00a65a]" : "bg-[#3c8dbc]"
-              }`}
-              style={{ width: `${slots.length ? (passedCount / slots.length) * 100 : 0}%` }}
-            />
+          {/* Stepper 1 - 2 - 3 */}
+          <div className="flex items-center justify-between max-w-xl mx-auto">
+            {[
+              [1, "Chụp ảnh"],
+              [2, "Xem lại"],
+              [3, "Hoàn tất"],
+            ].map(([stepNum, label], idx) => {
+              const active = currentStep >= Number(stepNum);
+              return (
+                <div key={stepNum} className="flex items-center flex-1 last:flex-none">
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold transition ${
+                        active
+                          ? "bg-[#1d4ed8] text-white shadow-sm"
+                          : "bg-slate-100 text-slate-400"
+                      }`}
+                    >
+                      {stepNum}
+                    </div>
+                    <span
+                      className={`text-[11px] font-bold mt-1 ${
+                        active ? "text-[#1d4ed8]" : "text-slate-400"
+                      }`}
+                    >
+                      {label}
+                    </span>
+                  </div>
+                  {idx < 2 && (
+                    <div
+                      className={`flex-1 h-0.5 mx-2 -mt-4 rounded ${
+                        currentStep > Number(stepNum) ? "bg-[#1d4ed8]" : "bg-slate-200"
+                      }`}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
         {retakeBanner && (
-          <div className="bg-amber-50 border-l-4 border-[#f39c12] p-3.5 rounded-r-md text-xs sm:text-sm text-amber-950">
-            <div className="font-bold mb-1">
-              ⚠️ AI yêu cầu chụp bổ sung ({retakeBanner.category || "Cần chụp lại"}):
-            </div>
-            <ul className="list-disc pl-5 space-y-1">
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs sm:text-sm text-amber-900">
+            <p className="font-bold mb-1">⚠️ AI yêu cầu chụp lại:</p>
+            <ul className="list-disc pl-5 space-y-0.5">
               {retakeBanner.requests.map((r, i) => (
                 <li key={i}>
                   <b>{r.slot_label}:</b> {r.reason}
@@ -452,61 +392,44 @@ export default function CameraPage() {
           </div>
         )}
 
-        {/* PHẦN 1: CHỤP CÁC CỤM GIƯỜNG TẦNG (2, 3 HOẶC 4 ẢNH TÙY PHÒNG 4, 6, 8 SV) */}
-        <Panel
-          title={`1. Chụp ${bedSlots.length} ảnh Giường tầng (Mỗi ảnh gồm cả giường trên & giường dưới)`}
-          actions={
-            <span className="text-xs font-bold text-[#3c8dbc] bg-blue-50 px-2.5 py-1 rounded">
-              {bedSlots.filter((s) => captures[s.slot_code]?.validationStatus === "passed").length}/
-              {bedSlots.length} giường tầng
-            </span>
-          }
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
-            {bedSlots.map((slot, idx) => renderSlotCard(slot, idx + 1))}
+        {/* Mục 1: Chụp ảnh giường tầng (2x2 trên Mobile, 4 cột trên Desktop) */}
+        <div className="space-y-3">
+          <h2 className="text-sm sm:text-base font-extrabold text-slate-800 flex items-center gap-2">
+            <BedDouble size={18} className="text-[#1d4ed8]" />
+            1. Chụp {bedSlots.length} ảnh giường tầng (cả tầng trên &amp; dưới)
+          </h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {bedSlots.map((slot, idx) => renderSlotTile(slot, idx + 1))}
           </div>
-        </Panel>
+        </div>
 
-        {/* PHẦN 2: CHỤP 3 KHU VỰC CHUNG (SÀN NHÀ, BÀN HỌC, KỆ GIÀY DÉP) */}
-        <Panel
-          title="2. Chụp 3 ảnh Khu vực chung (Sàn nhà · Bàn học · Kệ giày dép)"
-          actions={
-            <span className="text-xs font-bold text-[#00a65a] bg-emerald-50 px-2.5 py-1 rounded">
-              {
-                commonSlots.filter((s) => captures[s.slot_code]?.validationStatus === "passed")
-                  .length
-              }
-              /{commonSlots.length} khu vực chung
-            </span>
-          }
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4">
-            {commonSlots.map((slot, idx) => renderSlotCard(slot, bedSlots.length + idx + 1))}
+        {/* Mục 2: Chụp 3 ảnh khu vực chung (3 cột trên cả Mobile & Desktop giống Mockup 3) */}
+        <div className="space-y-3">
+          <h2 className="text-sm sm:text-base font-extrabold text-slate-800 flex items-center gap-2">
+            <Layers size={18} className="text-emerald-600" />
+            2. Chụp 3 ảnh khu vực chung (Sàn nhà · Bàn học · Kệ giày)
+          </h2>
+          <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+            {commonSlots.map((slot, idx) => renderSlotTile(slot, bedSlots.length + idx + 1, true))}
           </div>
-        </Panel>
+        </div>
 
         {error && (
-          <div className="bg-red-50 border-l-4 border-[#dd4b39] text-[#dd4b39] p-3.5 rounded-r-md text-xs sm:text-sm font-semibold whitespace-pre-line">
+          <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3.5 rounded-2xl text-xs sm:text-sm font-semibold whitespace-pre-line">
             ⚠️ {error}
           </div>
         )}
 
-        {/* Khu vực nút Nộp ảnh cố định rõ ràng, dễ bấm trên điện thoại */}
-        <div className="bg-white border border-gray-200 rounded-md p-4 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="flex items-start gap-2 text-xs sm:text-sm text-gray-600">
-            <Info size={18} className="text-[#3c8dbc] shrink-0 mt-0.5" />
+        {/* Thanh đáy Gửi bài nộp */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-3.5 sm:p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600">
+            <Info size={17} className="text-[#1d4ed8] shrink-0" />
             <span>
-              {allReady ? (
-                <b className="text-[#00a65a]">
-                  Đã chụp đủ {slots.length}/{slots.length} ảnh phòng {room}! Bấm nút bên dưới để AI
-                  chấm điểm 5S ngay.
-                </b>
-              ) : (
-                <>
-                  Còn thiếu <b>{slots.length - passedCount} ảnh</b> nữa ({bunkCount} ảnh giường tầng
-                  + 3 ảnh khu vực chung).
-                </>
-              )}
+              Đã chụp:{" "}
+              <b className={allReady ? "text-emerald-600" : "text-slate-800"}>
+                {passedCount}/{slots.length} ảnh
+              </b>
+              {allReady ? " — Sẵn sàng gửi AI chấm điểm!" : ""}
             </span>
           </div>
 
@@ -514,12 +437,11 @@ export default function CameraPage() {
             type="button"
             disabled={!allReady || submitting}
             onClick={handleSubmit}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#00a65a] hover:bg-[#008d4c] active:scale-[0.99] text-white px-7 py-3.5 rounded-md font-bold text-base shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition shrink-0"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#1d4ed8] hover:bg-[#1e40af] active:scale-[0.99] text-white px-7 py-3 rounded-xl font-bold text-sm sm:text-base shadow-md shadow-blue-900/15 disabled:bg-slate-300 disabled:shadow-none disabled:cursor-not-allowed transition"
           >
-            {submitting ? <Bot size={20} className="animate-spin" /> : <Upload size={20} />}
-            {submitting
-              ? `AI đang chấm ${slots.length} ảnh...`
-              : `Nộp đủ ${slots.length} ảnh cho AI chấm`}
+            {submitting ? <Bot size={19} className="animate-spin" /> : null}
+            {submitting ? "AI đang chấm điểm..." : "Gửi bài nộp"}
+            {!submitting && <ArrowRight size={17} />}
           </button>
         </div>
       </div>

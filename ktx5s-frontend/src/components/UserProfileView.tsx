@@ -1,4 +1,6 @@
 "use client";
+// TRANG HỒ SƠ CÁ NHÂN & BẢO MẬT — MODERN NAVY-BLUE THEME (KTX 5S AI)
+// Thiết kế đồng bộ Desktop & Mobile theo bản phác thảo: Banner Avatar (1 nút máy ảnh duy nhất) + 2 cột Thông tin cá nhân & Bảo mật tài khoản + Lần đăng nhập gần nhất
 import { useState, useEffect, useRef } from "react";
 import {
   User,
@@ -6,15 +8,12 @@ import {
   Phone,
   Building2,
   Lock,
-  KeyRound,
   ShieldCheck,
   CheckCircle2,
   AlertCircle,
   GraduationCap,
   Save,
-  Send,
   Calendar,
-  Sparkles,
   Camera,
   Upload,
   Trash2,
@@ -22,6 +21,11 @@ import {
   Palette,
   BadgeCheck,
   X,
+  Eye,
+  EyeOff,
+  Pencil,
+  Clock,
+  Monitor,
 } from "lucide-react";
 import { getSession, saveSession, type UserRole } from "@/lib/session";
 import {
@@ -29,21 +33,18 @@ import {
   getAllAccounts,
   updateUserProfile,
   changeUserPassword,
-  requestPasswordResetOtp,
   type UserAccount,
 } from "@/lib/user-store";
 
-// Bảng màu nền Avatar chữ cái
 const AVATAR_COLORS = [
-  { hex: "#3c8dbc", label: "Xanh KTX" },
-  { hex: "#00a65a", label: "Xanh 5S" },
-  { hex: "#605ca8", label: "Tím Quản trị" },
+  { hex: "#2563eb", label: "Xanh KTX" },
+  { hex: "#059669", label: "Xanh 5S" },
+  { hex: "#4f46e5", label: "Chàm Quản trị" },
   { hex: "#0d9488", label: "Xanh Ngọc" },
-  { hex: "#e67e22", label: "Cam Năng động" },
-  { hex: "#d81b60", label: "Đỏ Hồng" },
+  { hex: "#ea580c", label: "Cam Năng động" },
+  { hex: "#e11d48", label: "Đỏ Hồng" },
 ];
 
-// Bộ Avatar minh họa SVG tích hợp sẵn
 function makeSvgAvatar(bg1: string, bg2: string, emoji: string, badge: string): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
     <defs>
@@ -65,12 +66,11 @@ const PRESET_AVATARS = [
   { id: "sv-nam", label: "Nam SV", url: makeSvgAvatar("#2563eb", "#06b6d4", "👨‍🎓", "SINH VIÊN") },
   { id: "sv-nu", label: "Nữ SV", url: makeSvgAvatar("#db2777", "#f43f5e", "👩‍🎓", "SINH VIÊN") },
   { id: "sv-it", label: "SV Công nghệ", url: makeSvgAvatar("#0d9488", "#10b981", "🧑‍💻", "KTX 5S") },
-  { id: "cb-nam", label: "Cán bộ KTX", url: makeSvgAvatar("#1e3a8a", "#3c8dbc", "👮‍♂️", "CÁN BỘ") },
-  { id: "cb-nu", label: "Quản lý Tòa", url: makeSvgAvatar("#5b21b6", "#7c3aed", "👩‍💼", "QUẢN LÝ") },
+  { id: "cb-nam", label: "Cán bộ KTX", url: makeSvgAvatar("#1e3a8a", "#2563eb", "👮‍♂️", "CÁN BỘ") },
+  { id: "cb-nu", label: "Quản lý Tòa", url: makeSvgAvatar("#4f46e5", "#7c3aed", "👩‍💼", "QUẢN LÝ") },
   { id: "ai-bot", label: "Trợ lý 5S AI", url: makeSvgAvatar("#0f172a", "#334155", "🤖", "5S AI") },
 ];
 
-// Cắt vuông & nén ảnh đại diện theo mức Zoom trên Canvas 256x256
 async function renderCroppedAvatar(srcUrl: string, zoom = 1): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -83,12 +83,10 @@ async function renderCroppedAvatar(srcUrl: string, zoom = 1): Promise<string> {
         canvas.height = SIZE;
         const ctx = canvas.getContext("2d");
         if (!ctx) return reject(new Error("Canvas error"));
-
         const minSide = Math.min(img.width, img.height);
         const cropSide = minSide / Math.max(1, zoom);
         const sx = (img.width - cropSide) / 2;
         const sy = (img.height - cropSide) / 2;
-
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, SIZE, SIZE);
         ctx.drawImage(img, sx, sy, cropSide, cropSide, 0, 0, SIZE, SIZE);
@@ -104,34 +102,36 @@ async function renderCroppedAvatar(srcUrl: string, zoom = 1): Promise<string> {
 
 export default function UserProfileView({ role }: { role: UserRole }) {
   const [account, setAccount] = useState<UserAccount | null>(null);
-  const [activeTab, setActiveTab] = useState<"info" | "password" | "security">("info");
+  const [isEditingInfo, setIsEditingInfo] = useState(false);
 
-  // Form thông tin cá nhân
+  // Thông tin cá nhân
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [unit, setUnit] = useState("");
   const [major, setMajor] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
-  const [avatarColor, setAvatarColor] = useState("#3c8dbc");
+  const [avatarColor, setAvatarColor] = useState("#2563eb");
   const [infoMessage, setInfoMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Studio chỉnh sửa Avatar
+  // Modal Avatar
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [rawUploadUrl, setRawUploadUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [draftAvatarUrl, setDraftAvatarUrl] = useState("");
-  const [draftAvatarColor, setDraftAvatarColor] = useState("#3c8dbc");
+  const [draftAvatarColor, setDraftAvatarColor] = useState("#2563eb");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form đổi mật khẩu
+  // Bảo mật / Đổi mật khẩu
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrPass, setShowCurrPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfPass, setShowConfPass] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Kiểm tra gửi mã OTP xác thực thực tế
-  const [otpTestStatus, setOtpTestStatus] = useState<string>("");
+  const [lastLoginStr, setLastLoginStr] = useState("");
 
   useEffect(() => {
     const session = getSession();
@@ -145,21 +145,29 @@ export default function UserProfileView({ role }: { role: UserRole }) {
       const defaultUser = role === "admin" ? "admin" : "sinhvien01";
       acc = findAccountByUsername(defaultUser);
     }
-    if (acc) loadAccountData(acc);
+    if (acc) {
+      setAccount(acc);
+      setFullName(acc.name);
+      setPhone(acc.phone);
+      setEmail(acc.email);
+      setUnit(acc.unit || "Ký túc xá ĐHQG-HCM");
+      setMajor(acc.major || "ĐHQG-HCM");
+      setAvatarUrl(acc.avatarUrl || "");
+      setAvatarColor(acc.avatarColor || "#2563eb");
+    }
+
+    const now = new Date();
+    setLastLoginStr(
+      now.toLocaleString("vi-VN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+    );
   }, [role]);
 
-  const loadAccountData = (acc: UserAccount) => {
-    setAccount(acc);
-    setFullName(acc.name);
-    setPhone(acc.phone);
-    setEmail(acc.email);
-    setUnit(acc.unit || "");
-    setMajor(acc.major || "");
-    setAvatarUrl(acc.avatarUrl || "");
-    setAvatarColor(acc.avatarColor || (acc.role === "admin" ? "#3c8dbc" : "#0d9488"));
-  };
-
-  // Mở khung chỉnh sửa Avatar
   const openAvatarEditor = () => {
     setDraftAvatarUrl(avatarUrl);
     setDraftAvatarColor(avatarColor);
@@ -168,7 +176,6 @@ export default function UserProfileView({ role }: { role: UserRole }) {
     setShowAvatarModal(true);
   };
 
-  // Khi người dùng chọn file ảnh từ máy tính / điện thoại
   const handleSelectAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -183,7 +190,6 @@ export default function UserProfileView({ role }: { role: UserRole }) {
     }
   };
 
-  // Khi kéo thanh Zoom ảnh vừa tải lên
   const handleZoomChange = async (newZoom: number) => {
     setZoom(newZoom);
     if (!rawUploadUrl) return;
@@ -193,7 +199,6 @@ export default function UserProfileView({ role }: { role: UserRole }) {
     } catch {}
   };
 
-  // Lưu Avatar ngay lập tức và đồng bộ lên Sidebar + Header
   const handleApplyAvatar = () => {
     if (!account) return;
     const res = updateUserProfile(account.username, {
@@ -214,12 +219,11 @@ export default function UserProfileView({ role }: { role: UserRole }) {
           avatarColor: draftAvatarColor,
         });
       }
-      setInfoMessage({ type: "success", text: "Đã cập nhật ảnh đại diện (Avatar) thành công!" });
+      setInfoMessage({ type: "success", text: "Đã cập nhật ảnh đại diện thành công!" });
     }
     setShowAvatarModal(false);
   };
 
-  // Lưu thông tin cá nhân
   const handleSaveInfo = (e: React.FormEvent) => {
     e.preventDefault();
     setInfoMessage(null);
@@ -230,7 +234,7 @@ export default function UserProfileView({ role }: { role: UserRole }) {
       return;
     }
     if (!phone.trim()) {
-      setInfoMessage({ type: "error", text: "Vui lòng nhập Số điện thoại nhận OTP." });
+      setInfoMessage({ type: "error", text: "Vui lòng nhập Số điện thoại." });
       return;
     }
     if (!email.trim() || !email.includes("@")) {
@@ -250,7 +254,8 @@ export default function UserProfileView({ role }: { role: UserRole }) {
 
     if (res.success && res.updated) {
       setAccount(res.updated);
-      setInfoMessage({ type: "success", text: "Cập nhật hồ sơ tài khoản thành công!" });
+      setIsEditingInfo(false);
+      setInfoMessage({ type: "success", text: "Cập nhật thông tin cá nhân thành công!" });
 
       const currentSession = getSession();
       if (currentSession) {
@@ -269,22 +274,21 @@ export default function UserProfileView({ role }: { role: UserRole }) {
     }
   };
 
-  // Đổi mật khẩu
   const handleChangePassword = (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordMessage(null);
     if (!account) return;
 
     if (!currentPassword) {
-      setPasswordMessage({ type: "error", text: "Vui lòng nhập Mật khẩu hiện tại." });
+      setPasswordMessage({ type: "error", text: "Vui lòng nhập mật khẩu hiện tại." });
       return;
     }
     if (!newPassword || newPassword.length < 6) {
-      setPasswordMessage({ type: "error", text: "Mật khẩu mới phải có tối thiểu 6 ký tự." });
+      setPasswordMessage({ type: "error", text: "Mật khẩu mới phải có ít nhất 6 ký tự." });
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordMessage({ type: "error", text: "Mật khẩu xác nhận không khớp. Vui lòng kiểm tra lại." });
+      setPasswordMessage({ type: "error", text: "Xác nhận mật khẩu mới không khớp." });
       return;
     }
 
@@ -299,531 +303,402 @@ export default function UserProfileView({ role }: { role: UserRole }) {
     }
   };
 
-  // Kiểm tra gửi OTP thực tế
-  const handleTestOtp = async (method: "phone" | "email") => {
-    if (!account) return;
-    setOtpTestStatus("Đang gửi mã xác thực OTP...");
-    const res = await requestPasswordResetOtp(account.username, method);
-    if (res.success) {
-      setOtpTestStatus(
-        `✅ Đã gửi mã OTP tới ${method === "phone" ? "SMS số điện thoại" : "hòm thư Email"}: ${res.maskedTarget}. Vui lòng kiểm tra hộp thư hoặc tin nhắn của bạn.`
-      );
-    } else {
-      setOtpTestStatus(`❌ ${res.message}`);
-    }
-  };
-
   if (!account) {
-    return <div className="p-8 text-center text-gray-500">Đang tải thông tin tài khoản...</div>;
+    return <div className="p-10 text-center text-slate-400">Đang tải thông tin cá nhân...</div>;
   }
 
   const isStudent = role === "student";
-  const roleBadgeText = isStudent ? `Sinh viên Phòng ${account.roomCode || ""}` : "Cán bộ Quản lý KTX";
-  const initial = (fullName || account.name || "U").trim().charAt(0).toUpperCase();
+  const initials = (() => {
+    const parts = (fullName || account.name || "U").trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[parts.length - 2][0] + parts[parts.length - 1][0]).toUpperCase();
+    return (parts[0]?.[0] || "U").toUpperCase();
+  })();
+
+  const roleSubtitle = isStudent
+    ? `Sinh viên Phòng ${account.roomCode || "A3-301"}`
+    : "Cán bộ kiểm tra KTX";
 
   return (
-    <div className="space-y-4 max-w-5xl mx-auto">
-      {/* ===== CARD 1: HEADER HỒ SƠ GỌN GÀNG, CHỈ 1 NÚT MÁY ẢNH TRÊN AVATAR ===== */}
-      <div className="bg-white rounded-sm shadow-sm border border-gray-200 overflow-hidden">
-        <div
-          className={`h-3 ${
-            isStudent
-              ? "bg-gradient-to-r from-teal-500 via-[#00a65a] to-[#3c8dbc]"
-              : "bg-gradient-to-r from-[#222d32] via-[#3c8dbc] to-[#605ca8]"
-          }`}
-        />
+    <div className="space-y-5 max-w-5xl mx-auto">
+      {/* Tiêu đề trang */}
+      <div>
+        <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">Thông tin cá nhân</h1>
+        <p className="text-sm text-slate-500 mt-0.5">
+          Quản lý thông tin và bảo mật tài khoản của bạn
+        </p>
+      </div>
 
-        <div className="p-4 md:px-6 md:py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          {/* Cụm Avatar (duy nhất 1 nút đổi ảnh) + Thông tin chính */}
-          <div className="flex items-center gap-4">
-            <div className="relative group shrink-0">
+      {/* ===== CARD 1: BANNER AVATAR (CHỈ 1 NÚT MÁY ẢNH DUY NHẤT) ===== */}
+      <div className="relative bg-white rounded-2xl border border-slate-200/80 shadow-[0_2px_12px_rgba(15,23,42,0.04)] p-5 sm:p-6 overflow-hidden">
+        {/* Mảng trang trí chéo màu xanh nhạt bên phải giống bản phác thảo */}
+        <div className="pointer-events-none absolute -right-12 -top-10 w-64 h-64 bg-gradient-to-br from-blue-50 to-sky-100/70 rounded-full blur-2xl opacity-80" />
+
+        <div className="relative flex flex-col sm:flex-row items-center sm:items-center gap-4 sm:gap-6 text-center sm:text-left">
+          <div className="relative group shrink-0">
+            <button
+              type="button"
+              onClick={openAvatarEditor}
+              title="Bấm để thay đổi ảnh đại diện"
+              className="w-24 h-24 rounded-full text-white flex items-center justify-center text-3xl font-extrabold shadow-lg shadow-blue-900/15 overflow-hidden ring-4 ring-blue-50 transition-transform group-hover:scale-[1.02]"
+              style={{ backgroundColor: avatarColor }}
+            >
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatarUrl} alt={fullName} className="w-full h-full object-cover" />
+              ) : (
+                initials
+              )}
+              <span className="absolute inset-0 bg-slate-900/45 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[11px] font-semibold transition-opacity">
+                <Camera size={18} className="mb-0.5" />
+                Đổi ảnh
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={openAvatarEditor}
+              title="Thay đổi ảnh đại diện"
+              className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[#1d4ed8] hover:bg-[#1e40af] text-white border-2 border-white shadow-md flex items-center justify-center"
+            >
+              <Camera size={14} />
+            </button>
+          </div>
+
+          <div className="space-y-1">
+            <h2 className="text-xl sm:text-2xl font-extrabold text-slate-800">
+              {fullName || account.name}
+            </h2>
+            <p className="text-sm font-medium text-slate-500">{roleSubtitle}</p>
+            <div className="pt-1 flex flex-wrap items-center justify-center sm:justify-start gap-2">
+              <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/70 text-xs font-semibold px-3 py-1 rounded-full">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Đang hoạt động
+              </span>
+              <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-600 text-xs font-medium px-3 py-1 rounded-full">
+                Tài khoản: <b className="font-mono text-slate-800">{account.username}</b>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== 2 CỘT CHÍNH: THÔNG TIN CÁ NHÂN & BẢO MẬT TÀI KHOẢN ===== */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* CỘT TRÁI: THÔNG TIN CÁ NHÂN */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-[0_2px_12px_rgba(15,23,42,0.04)] p-5 sm:p-6 flex flex-col">
+          <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
+            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <span className="w-8 h-8 rounded-xl bg-blue-50 text-[#1d4ed8] flex items-center justify-center">
+                <User size={18} />
+              </span>
+              Thông tin cá nhân
+            </h3>
+            {isEditingInfo && (
               <button
                 type="button"
-                onClick={openAvatarEditor}
-                title="Bấm để thay đổi hoặc chỉnh sửa Avatar"
-                className="w-20 h-20 rounded-full border-4 border-gray-100 text-white flex items-center justify-center text-2xl font-extrabold shadow-md overflow-hidden transition-transform group-hover:scale-[1.02]"
-                style={{ backgroundColor: avatarColor }}
+                onClick={() => setIsEditingInfo(false)}
+                className="text-xs font-semibold text-slate-500 hover:text-slate-800"
               >
-                {avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={avatarUrl} alt={fullName} className="w-full h-full object-cover" />
-                ) : (
-                  initial
-                )}
-                <span className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[10px] font-semibold transition-opacity">
-                  <Camera size={16} className="mb-0.5" />
-                  Đổi ảnh
-                </span>
+                Hủy
               </button>
+            )}
+          </div>
+
+          {infoMessage && (
+            <div
+              className={`mb-4 p-3 rounded-xl text-xs font-medium flex items-center gap-2 ${
+                infoMessage.type === "success"
+                  ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
+                  : "bg-rose-50 border border-rose-200 text-rose-800"
+              }`}
+            >
+              {infoMessage.type === "success" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+              <span>{infoMessage.text}</span>
+            </div>
+          )}
+
+          {!isEditingInfo ? (
+            <div className="flex-1 flex flex-col">
+              <div className="divide-y divide-slate-100 text-sm">
+                <div className="py-3 flex items-center justify-between gap-3">
+                  <span className="text-slate-500 flex items-center gap-2.5 shrink-0">
+                    <User size={16} className="text-slate-400" /> Họ và tên
+                  </span>
+                  <span className="font-semibold text-slate-800 text-right">{fullName}</span>
+                </div>
+
+                <div className="py-3 flex items-center justify-between gap-3">
+                  <span className="text-slate-500 flex items-center gap-2.5 shrink-0">
+                    <BadgeCheck size={16} className="text-slate-400" />{" "}
+                    {isStudent ? "Mã số sinh viên" : "Mã cán bộ"}
+                  </span>
+                  <span className="font-semibold font-mono text-slate-800 text-right">
+                    {isStudent ? account.studentCode || "2112001" : "CB-1024"}
+                  </span>
+                </div>
+
+                <div className="py-3 flex items-center justify-between gap-3">
+                  <span className="text-slate-500 flex items-center gap-2.5 shrink-0">
+                    <Mail size={16} className="text-slate-400" /> Email
+                  </span>
+                  <span className="font-semibold text-slate-800 text-right truncate max-w-[220px]">
+                    {email}
+                  </span>
+                </div>
+
+                <div className="py-3 flex items-center justify-between gap-3">
+                  <span className="text-slate-500 flex items-center gap-2.5 shrink-0">
+                    <Phone size={16} className="text-slate-400" /> Số điện thoại
+                  </span>
+                  <span className="font-semibold text-slate-800 text-right">{phone}</span>
+                </div>
+
+                <div className="py-3 flex items-center justify-between gap-3">
+                  <span className="text-slate-500 flex items-center gap-2.5 shrink-0">
+                    {isStudent ? (
+                      <GraduationCap size={16} className="text-slate-400" />
+                    ) : (
+                      <Building2 size={16} className="text-slate-400" />
+                    )}
+                    {isStudent ? "Phòng / Khoa" : "Đơn vị công tác"}
+                  </span>
+                  <span className="font-semibold text-slate-800 text-right">
+                    {isStudent ? `Phòng ${account.roomCode} · ${major}` : unit}
+                  </span>
+                </div>
+
+                <div className="py-3 flex items-center justify-between gap-3">
+                  <span className="text-slate-500 flex items-center gap-2.5 shrink-0">
+                    <ShieldCheck size={16} className="text-slate-400" /> Vai trò
+                  </span>
+                  <span className="font-semibold text-slate-800 text-right">
+                    {isStudent ? "Sinh viên nội trú" : "Cán bộ kiểm tra"}
+                  </span>
+                </div>
+
+                <div className="py-3 flex items-center justify-between gap-3">
+                  <span className="text-slate-500 flex items-center gap-2.5 shrink-0">
+                    <Calendar size={16} className="text-slate-400" /> Ngày tham gia
+                  </span>
+                  <span className="font-semibold text-slate-800 text-right">
+                    {account.joinedDate || "01/09/2025"}
+                  </span>
+                </div>
+              </div>
+
               <button
                 type="button"
-                onClick={openAvatarEditor}
-                title="Chỉnh sửa Avatar"
-                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-[#3c8dbc] hover:bg-[#367fa9] text-white border-2 border-white shadow flex items-center justify-center"
+                onClick={() => {
+                  setIsEditingInfo(true);
+                  setInfoMessage(null);
+                }}
+                className="mt-5 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#1d4ed8] hover:bg-[#1e40af] text-white font-semibold text-sm shadow-sm transition"
               >
-                <Camera size={13} />
+                <Pencil size={16} /> Chỉnh sửa thông tin
               </button>
+            </div>
+          ) : (
+            <form onSubmit={handleSaveInfo} className="space-y-3.5 text-sm flex-1 flex flex-col">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Họ và tên</label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 focus:border-[#2563eb] focus:ring-2 focus:ring-blue-100 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 focus:border-[#2563eb] focus:ring-2 focus:ring-blue-100 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Số điện thoại</label>
+                <input
+                  type="text"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 focus:border-[#2563eb] focus:ring-2 focus:ring-blue-100 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  {isStudent ? "Khoa / Trường" : "Đơn vị công tác"}
+                </label>
+                <input
+                  type="text"
+                  value={isStudent ? major : unit}
+                  onChange={(e) => (isStudent ? setMajor(e.target.value) : setUnit(e.target.value))}
+                  className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 focus:border-[#2563eb] focus:ring-2 focus:ring-blue-100 focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="mt-auto w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#1d4ed8] hover:bg-[#1e40af] text-white font-semibold text-sm shadow-sm transition"
+              >
+                <Save size={16} /> Lưu thông tin cá nhân
+              </button>
+            </form>
+          )}
+        </div>
+
+        {/* CỘT PHẢI: BẢO MẬT TÀI KHOẢN / ĐỔI MẬT KHẨU */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-[0_2px_12px_rgba(15,23,42,0.04)] p-5 sm:p-6 flex flex-col">
+          <div className="pb-4 mb-4 border-b border-slate-100">
+            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <span className="w-8 h-8 rounded-xl bg-blue-50 text-[#1d4ed8] flex items-center justify-center">
+                <ShieldCheck size={18} />
+              </span>
+              Bảo mật tài khoản
+            </h3>
+          </div>
+
+          {passwordMessage && (
+            <div
+              className={`mb-4 p-3 rounded-xl text-xs font-medium flex items-center gap-2 ${
+                passwordMessage.type === "success"
+                  ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
+                  : "bg-rose-50 border border-rose-200 text-rose-800"
+              }`}
+            >
+              {passwordMessage.type === "success" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+              <span>{passwordMessage.text}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleChangePassword} className="space-y-4 flex-1 flex flex-col">
+            <div>
+              <label className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                <Lock size={14} className="text-slate-400" /> Mật khẩu hiện tại
+              </label>
+              <div className="relative">
+                <input
+                  type={showCurrPass ? "text" : "password"}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Nhập mật khẩu hiện tại"
+                  className="w-full border border-slate-200 rounded-xl pl-3.5 pr-10 py-2.5 text-sm text-slate-800 focus:border-[#2563eb] focus:ring-2 focus:ring-blue-100 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrPass((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showCurrPass ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </div>
             </div>
 
             <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-lg md:text-xl font-bold text-gray-800">{fullName || account.name}</h1>
-                <span className="bg-emerald-100 text-emerald-800 text-[11px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Đang hoạt động
-                </span>
-              </div>
-
-              <div className="text-gray-500 text-xs mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="font-semibold text-[#3c8dbc] flex items-center gap-1">
-                  <BadgeCheck size={14} /> {roleBadgeText}
-                </span>
-                <span>
-                  Tài khoản:{" "}
-                  <code className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-700 font-bold">
-                    {account.username}
-                  </code>
-                </span>
-                <span className="flex items-center gap-1 text-gray-400">
-                  <Calendar size={12} /> Tham gia: <b className="text-gray-600">{account.joinedDate || "05/09/2023"}</b>
-                </span>
+              <label className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                <Lock size={14} className="text-slate-400" /> Mật khẩu mới
+              </label>
+              <div className="relative">
+                <input
+                  type={showNewPass ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
+                  className="w-full border border-slate-200 rounded-xl pl-3.5 pr-10 py-2.5 text-sm text-slate-800 focus:border-[#2563eb] focus:ring-2 focus:ring-blue-100 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPass((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showNewPass ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
               </div>
             </div>
-          </div>
 
-          {/* Cụm chuyển Tab */}
-          <div className="flex items-center gap-1.5 w-full md:w-auto border-t md:border-t-0 pt-3 md:pt-0">
-            {(
-              [
-                ["info", "Hồ sơ cá nhân"],
-                ["password", "Đổi mật khẩu"],
-                ["security", "Bảo mật & OTP"],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setActiveTab(key)}
-                className={`px-3 py-1.5 rounded-sm text-xs font-semibold transition-colors ${
-                  activeTab === key
-                    ? "bg-[#3c8dbc] text-white shadow-xs"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                <Lock size={14} className="text-slate-400" /> Xác nhận mật khẩu mới
+              </label>
+              <div className="relative">
+                <input
+                  type={showConfPass ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Nhập lại mật khẩu mới"
+                  className="w-full border border-slate-200 rounded-xl pl-3.5 pr-10 py-2.5 text-sm text-slate-800 focus:border-[#2563eb] focus:ring-2 focus:ring-blue-100 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfPass((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showConfPass ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="mt-auto w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#1d4ed8] hover:bg-[#1e40af] text-white font-semibold text-sm shadow-sm transition"
+            >
+              <Lock size={16} /> Đổi mật khẩu
+            </button>
+          </form>
         </div>
       </div>
 
-      {/* ===== CARD 2: NỘI DUNG CHI TIẾT ===== */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* CỘT TRÁI: THẺ ĐỊNH DANH RIÊNG CHO SINH VIÊN HOẶC CÁN BỘ */}
-        <div className="space-y-4">
-          <div className="bg-white rounded-sm border border-gray-200 p-4 shadow-sm">
-            <h3 className="font-bold text-gray-800 text-xs uppercase tracking-wider pb-2.5 border-b border-gray-100 flex items-center gap-2">
-              {isStudent ? (
-                <>
-                  <BadgeCheck size={16} className="text-teal-600" /> Thẻ định danh Sinh viên KTX
-                </>
-              ) : (
-                <>
-                  <ShieldCheck size={16} className="text-[#3c8dbc]" /> Thẻ định danh Cán bộ KTX
-                </>
-              )}
-            </h3>
-
-            <ul className="mt-3 space-y-2.5 text-xs">
-              <li className="flex justify-between items-center text-gray-600">
-                <span>Vai trò hệ thống:</span>
-                <span
-                  className={`font-semibold px-2 py-0.5 rounded ${
-                    isStudent ? "bg-teal-50 text-teal-700" : "bg-blue-50 text-[#3c8dbc]"
-                  }`}
-                >
-                  {isStudent ? "Sinh viên lưu trú" : "Cán bộ KTX (Admin)"}
-                </span>
-              </li>
-
-              {isStudent ? (
-                <>
-                  <li className="flex justify-between items-center text-gray-600">
-                    <span>Mã số sinh viên:</span>
-                    <span className="font-mono font-bold text-gray-800">{account.studentCode || "2112001"}</span>
-                  </li>
-                  <li className="flex justify-between items-center text-gray-600">
-                    <span>Phòng nội trú:</span>
-                    <span className="font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
-                      Phòng {account.roomCode}
-                    </span>
-                  </li>
-                  <li className="flex justify-between items-start text-gray-600 gap-2">
-                    <span className="shrink-0">Khoa / Trường:</span>
-                    <span className="font-medium text-gray-800 text-right">{major || account.major || "ĐHQG-HCM"}</span>
-                  </li>
-                </>
-              ) : (
-                <>
-                  <li className="flex justify-between items-start text-gray-600 gap-2">
-                    <span className="shrink-0">Đơn vị phụ trách:</span>
-                    <span className="font-semibold text-gray-800 text-right">
-                      {unit || account.unit || "Toàn ký túc xá"}
-                    </span>
-                  </li>
-                  <li className="flex justify-between items-center text-gray-600">
-                    <span>Quyền giám sát:</span>
-                    <span className="font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
-                      4 Tòa · 10 Tầng (200 phòng)
-                    </span>
-                  </li>
-                  <li className="flex justify-between items-center text-gray-600">
-                    <span>Quyền duyệt đè 5S:</span>
-                    <span className="text-emerald-600 font-semibold">Được cấp phép</span>
-                  </li>
-                </>
-              )}
-
-              <li className="flex justify-between items-center text-gray-600 pt-1 border-t border-gray-100">
-                <span>Trạng thái tài khoản:</span>
-                <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                  <CheckCircle2 size={13} /> Bình thường
-                </span>
-              </li>
-              <li className="flex justify-between items-center text-gray-600">
-                <span>Khôi phục mật khẩu OTP:</span>
-                <span className="text-[#3c8dbc] font-semibold">SMS & Email</span>
-              </li>
-            </ul>
-          </div>
-
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-sm p-3.5 text-xs text-blue-900 leading-relaxed shadow-sm">
-            <p className="font-bold text-blue-950 flex items-center gap-1.5 mb-1">
-              <Sparkles size={14} className="text-[#3c8dbc]" /> Đồng bộ hồ sơ trực tiếp:
-            </p>
-            <p>
-              Khi bạn bấm vào <b>vòng tròn Avatar</b> để đổi ảnh hoặc cập nhật <b>Họ tên</b>, thông tin sẽ tự động cập nhật ngay trên thanh menu trái và góc trên bên phải màn hình.
-            </p>
-          </div>
+      {/* ===== THANH LẦN ĐĂNG NHẬP GẦN NHẤT ===== */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-[0_2px_10px_rgba(15,23,42,0.03)] px-5 py-3.5 flex items-center gap-3.5 text-xs sm:text-sm text-slate-600">
+        <div className="flex items-center gap-2 text-[#1d4ed8] shrink-0">
+          <Clock size={18} />
+          <Monitor size={18} />
         </div>
-
-        {/* CỘT PHẢI: FORM THEO TAB */}
-        <div className="lg:col-span-2">
-          {/* TAB 1: THÔNG TIN CÁ NHÂN */}
-          {activeTab === "info" && (
-            <div className="bg-white rounded-sm border border-gray-200 p-5 shadow-sm">
-              <div className="border-b border-gray-100 pb-2.5 mb-4">
-                <h2 className="text-sm font-bold text-gray-800">Thông tin chi tiết tài khoản</h2>
-                <p className="text-xs text-gray-500">
-                  Cập nhật họ tên, số điện thoại và email nhận thông báo 5S
-                </p>
-              </div>
-
-              {infoMessage && (
-                <div
-                  className={`mb-3.5 p-2.5 rounded-sm text-xs flex items-center gap-2 ${
-                    infoMessage.type === "success"
-                      ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
-                      : "bg-red-50 border border-red-200 text-red-800"
-                  }`}
-                >
-                  {infoMessage.type === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
-                  <span>{infoMessage.text}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleSaveInfo} className="space-y-3.5 text-xs">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                  <div>
-                    <label className="block font-semibold text-gray-700 mb-1">Tên đăng nhập (Username):</label>
-                    <div className="relative">
-                      <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input
-                        type="text"
-                        value={account.username}
-                        disabled
-                        className="w-full bg-gray-100 border border-gray-300 rounded-sm pl-9 pr-3 py-2 text-gray-500 cursor-not-allowed font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-gray-700 mb-1">Họ và tên hiển thị:</label>
-                    <div className="relative">
-                      <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input
-                        type="text"
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        placeholder="Nhập họ và tên..."
-                        className="w-full border border-gray-300 rounded-sm pl-9 pr-3 py-2 text-gray-800 focus:border-[#3c8dbc] focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                  <div>
-                    <label className="block font-semibold text-gray-700 mb-1">Số điện thoại (Nhận OTP SMS):</label>
-                    <div className="relative">
-                      <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input
-                        type="text"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="VD: 0934567890..."
-                        className="w-full border border-gray-300 rounded-sm pl-9 pr-3 py-2 text-gray-800 focus:border-[#3c8dbc] focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-gray-700 mb-1">Địa chỉ Email (Nhận OTP & Báo cáo):</label>
-                    <div className="relative">
-                      <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="VD: sinhvien@student.edu.vn..."
-                        className="w-full border border-gray-300 rounded-sm pl-9 pr-3 py-2 text-gray-800 focus:border-[#3c8dbc] focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {isStudent ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Phòng ở KTX được phân:</label>
-                      <div className="relative">
-                        <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input
-                          type="text"
-                          value={account.roomCode || ""}
-                          disabled
-                          className="w-full bg-gray-100 border border-gray-300 rounded-sm pl-9 pr-3 py-2 text-gray-600 font-semibold cursor-not-allowed"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Khoa / Lớp / Trường:</label>
-                      <div className="relative">
-                        <GraduationCap size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input
-                          type="text"
-                          value={major}
-                          onChange={(e) => setMajor(e.target.value)}
-                          placeholder="Khoa học Máy tính - K21..."
-                          className="w-full border border-gray-300 rounded-sm pl-9 pr-3 py-2 text-gray-800 focus:border-[#3c8dbc] focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <label className="block font-semibold text-gray-700 mb-1">Đơn vị công tác / Cụm tòa quản lý:</label>
-                    <div className="relative">
-                      <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input
-                        type="text"
-                        value={unit}
-                        onChange={(e) => setUnit(e.target.value)}
-                        placeholder="Ban Quản lý Cụm Nhà B..."
-                        className="w-full border border-gray-300 rounded-sm pl-9 pr-3 py-2 text-gray-800 focus:border-[#3c8dbc] focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <div className="pt-2.5 border-t border-gray-100 flex items-center justify-end">
-                  <button
-                    type="submit"
-                    className="flex items-center gap-1.5 px-4 py-2 bg-[#3c8dbc] hover:bg-[#367fa9] text-white font-semibold rounded-sm shadow-xs transition-colors"
-                  >
-                    <Save size={14} /> Lưu thay đổi hồ sơ
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {/* TAB 2: ĐỔI MẬT KHẨU */}
-          {activeTab === "password" && (
-            <div className="bg-white rounded-sm border border-gray-200 p-5 shadow-sm">
-              <div className="border-b border-gray-100 pb-2.5 mb-4">
-                <h2 className="text-sm font-bold text-gray-800">Đổi mật khẩu đăng nhập</h2>
-                <p className="text-xs text-gray-500">
-                  Mật khẩu mới có hiệu lực ngay cho các lần đăng nhập tiếp theo
-                </p>
-              </div>
-
-              {passwordMessage && (
-                <div
-                  className={`mb-3.5 p-2.5 rounded-sm text-xs flex items-center gap-2 ${
-                    passwordMessage.type === "success"
-                      ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
-                      : "bg-red-50 border border-red-200 text-red-800"
-                  }`}
-                >
-                  {passwordMessage.type === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
-                  <span>{passwordMessage.text}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleChangePassword} className="space-y-3.5 text-xs max-w-lg">
-                <div>
-                  <label className="block font-semibold text-gray-700 mb-1">Mật khẩu hiện tại:</label>
-                  <div className="relative">
-                    <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      placeholder="Nhập mật khẩu hiện tại"
-                      className="w-full border border-gray-300 rounded-sm pl-9 pr-3 py-2 text-gray-800 focus:border-[#3c8dbc] focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-gray-700 mb-1">Mật khẩu mới:</label>
-                  <div className="relative">
-                    <KeyRound size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
-                      className="w-full border border-gray-300 rounded-sm pl-9 pr-3 py-2 text-gray-800 focus:border-[#3c8dbc] focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-gray-700 mb-1">Xác nhận mật khẩu mới:</label>
-                  <div className="relative">
-                    <KeyRound size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Nhập lại mật khẩu mới"
-                      className="w-full border border-gray-300 rounded-sm pl-9 pr-3 py-2 text-gray-800 focus:border-[#3c8dbc] focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    className="flex items-center gap-1.5 px-4 py-2 bg-[#00a65a] hover:bg-[#008d4c] text-white font-semibold rounded-sm shadow-xs transition-colors"
-                  >
-                    <Lock size={14} /> Cập nhật mật khẩu mới
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {/* TAB 3: BẢO MẬT & OTP */}
-          {activeTab === "security" && (
-            <div className="bg-white rounded-sm border border-gray-200 p-5 shadow-sm space-y-4">
-              <div className="border-b border-gray-100 pb-2.5">
-                <h2 className="text-sm font-bold text-gray-800">Cấu hình Khôi phục & Nhận mã OTP</h2>
-                <p className="text-xs text-gray-500">
-                  Kiểm tra kênh nhận mã OTP khi sử dụng chức năng Quên mật khẩu
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                <div className="border border-gray-200 rounded-sm p-4 bg-gray-50/70">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-gray-800 flex items-center gap-1.5">
-                      <Phone size={15} className="text-[#3c8dbc]" /> Kênh SMS Số điện thoại
-                    </span>
-                    <span className="text-emerald-700 bg-emerald-100 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                      Sẵn sàng
-                    </span>
-                  </div>
-                  <p className="text-gray-600 mb-3">
-                    Số đăng ký: <span className="font-mono font-bold text-gray-900">{account.phone}</span>
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => handleTestOtp("phone")}
-                    className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-semibold rounded-sm transition-colors"
-                  >
-                    <Send size={13} /> Gửi thử OTP qua SMS
-                  </button>
-                </div>
-
-                <div className="border border-gray-200 rounded-sm p-4 bg-gray-50/70">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-gray-800 flex items-center gap-1.5">
-                      <Mail size={15} className="text-[#3c8dbc]" /> Kênh Hòm thư Email
-                    </span>
-                    <span className="text-emerald-700 bg-emerald-100 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                      Sẵn sàng
-                    </span>
-                  </div>
-                  <p className="text-gray-600 mb-3 truncate">
-                    Email đăng ký: <span className="font-mono font-bold text-gray-900">{account.email}</span>
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => handleTestOtp("email")}
-                    className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-semibold rounded-sm transition-colors"
-                  >
-                    <Send size={13} /> Gửi thử OTP qua Email
-                  </button>
-                </div>
-              </div>
-
-              {otpTestStatus && (
-                <div className="bg-sky-50 border border-sky-200 rounded-sm p-3 text-xs text-sky-950">
-                  <p className="font-semibold text-sky-900 leading-relaxed">{otpTestStatus}</p>
-                </div>
-              )}
-            </div>
-          )}
+        <div>
+          <p className="font-bold text-slate-800">Lần đăng nhập gần nhất</p>
+          <p className="text-slate-500 text-xs">
+            {lastLoginStr || "Hôm nay"} · Hệ thống KTX 5S AI ĐHQG-HCM
+          </p>
         </div>
       </div>
 
-      {/* ===== MODAL CHỈNH SỬA & THAY ĐỔI AVATAR ===== */}
+      {/* ===== MODAL CHỈNH SỬA AVATAR ===== */}
       {showAvatarModal && (
-        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
-          <div className="bg-white rounded-sm shadow-2xl border border-gray-200 w-full max-w-md overflow-hidden">
-            <div className="bg-[#2c3b41] text-white px-4 py-3 flex items-center justify-between">
-              <h3 className="font-semibold text-sm flex items-center gap-2">
-                <Camera size={16} className="text-teal-300" /> Thay đổi & Chỉnh sửa Ảnh đại diện (Avatar)
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-[2px] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden">
+            <div className="bg-[#1b365d] text-white px-5 py-3.5 flex items-center justify-between">
+              <h3 className="font-bold text-sm flex items-center gap-2">
+                <Camera size={17} className="text-sky-300" /> Chỉnh sửa ảnh đại diện
               </h3>
               <button
                 type="button"
                 onClick={() => setShowAvatarModal(false)}
-                className="p-1 rounded hover:bg-white/10"
+                className="p-1 rounded-lg hover:bg-white/10"
               >
-                <X size={16} />
+                <X size={18} />
               </button>
             </div>
 
             <div className="p-5 space-y-4 text-xs">
-              {/* Xem trước Avatar */}
               <div className="flex flex-col items-center gap-2">
                 <div
-                  className="w-28 h-28 rounded-full border-4 border-gray-100 shadow-lg flex items-center justify-center text-4xl font-extrabold text-white overflow-hidden"
+                  className="w-28 h-28 rounded-full border-4 border-blue-50 shadow-lg flex items-center justify-center text-4xl font-extrabold text-white overflow-hidden"
                   style={{ backgroundColor: draftAvatarColor }}
                 >
                   {draftAvatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={draftAvatarUrl} alt="Avatar preview" className="w-full h-full object-cover" />
                   ) : (
-                    initial
+                    initials
                   )}
                 </div>
-                <p className="text-gray-500 text-[11px]">Xem trước ảnh đại diện hiển thị trên hệ thống</p>
+                <p className="text-slate-500 text-[11px]">Xem trước ảnh đại diện</p>
               </div>
 
-              {/* Tải ảnh từ thiết bị + Thanh Zoom cắt ảnh */}
               <div className="flex flex-col gap-2">
                 <input
                   ref={fileInputRef}
@@ -836,9 +711,9 @@ export default function UserProfileView({ role }: { role: UserRole }) {
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-1.5 px-3.5 py-2 bg-[#3c8dbc] hover:bg-[#367fa9] text-white font-semibold rounded-sm shadow-xs"
+                    className="flex items-center gap-1.5 px-4 py-2 bg-[#1d4ed8] hover:bg-[#1e40af] text-white font-semibold rounded-xl shadow-xs"
                   >
-                    <Upload size={14} /> Tải ảnh từ máy lên
+                    <Upload size={14} /> Tải ảnh từ máy
                   </button>
                   {draftAvatarUrl && (
                     <button
@@ -847,7 +722,7 @@ export default function UserProfileView({ role }: { role: UserRole }) {
                         setDraftAvatarUrl("");
                         setRawUploadUrl(null);
                       }}
-                      className="flex items-center gap-1 px-3 py-2 border border-red-200 text-red-600 hover:bg-red-50 font-semibold rounded-sm"
+                      className="flex items-center gap-1 px-3.5 py-2 border border-rose-200 text-rose-600 hover:bg-rose-50 font-semibold rounded-xl"
                     >
                       <Trash2 size={14} /> Dùng chữ cái
                     </button>
@@ -855,9 +730,9 @@ export default function UserProfileView({ role }: { role: UserRole }) {
                 </div>
 
                 {rawUploadUrl && (
-                  <div className="bg-gray-50 border border-gray-200 rounded-sm p-2.5 flex items-center gap-3 mt-1">
-                    <ZoomIn size={15} className="text-[#3c8dbc] shrink-0" />
-                    <span className="text-gray-600 font-medium shrink-0">Phóng to / Cắt ảnh:</span>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex items-center gap-3 mt-1">
+                    <ZoomIn size={15} className="text-[#1d4ed8] shrink-0" />
+                    <span className="text-slate-600 font-medium shrink-0">Phóng to:</span>
                     <input
                       type="range"
                       min={1}
@@ -865,16 +740,15 @@ export default function UserProfileView({ role }: { role: UserRole }) {
                       step={0.05}
                       value={zoom}
                       onChange={(e) => handleZoomChange(Number(e.target.value))}
-                      className="flex-1 accent-[#3c8dbc]"
+                      className="flex-1 accent-[#1d4ed8]"
                     />
-                    <span className="font-mono text-gray-700 w-10 text-right">{Math.round(zoom * 100)}%</span>
+                    <span className="font-mono text-slate-700 w-10 text-right">{Math.round(zoom * 100)}%</span>
                   </div>
                 )}
               </div>
 
-              {/* Chọn nhanh Avatar mẫu */}
               <div>
-                <p className="font-semibold text-gray-700 mb-2">Hoặc chọn nhanh Avatar mẫu KTX 5S:</p>
+                <p className="font-semibold text-slate-700 mb-2">Chọn nhanh Avatar mẫu:</p>
                 <div className="grid grid-cols-6 gap-2">
                   {PRESET_AVATARS.map((preset) => {
                     const selected = draftAvatarUrl === preset.url;
@@ -887,25 +761,26 @@ export default function UserProfileView({ role }: { role: UserRole }) {
                           setRawUploadUrl(null);
                         }}
                         title={preset.label}
-                        className={`flex flex-col items-center gap-1 p-1 rounded-sm border transition ${
+                        className={`flex flex-col items-center gap-1 p-1 rounded-xl border transition ${
                           selected
-                            ? "border-[#3c8dbc] ring-2 ring-[#3c8dbc]/40 bg-blue-50/40"
-                            : "border-gray-200 hover:border-gray-300"
+                            ? "border-[#1d4ed8] ring-2 ring-blue-200 bg-blue-50/50"
+                            : "border-slate-200 hover:border-slate-300"
                         }`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={preset.url} alt={preset.label} className="w-11 h-11 rounded-full" />
-                        <span className="text-[10px] text-gray-600 truncate w-full text-center">{preset.label}</span>
+                        <img src={preset.url} alt={preset.label} className="w-10 h-10 rounded-full" />
+                        <span className="text-[10px] text-slate-600 truncate w-full text-center">
+                          {preset.label}
+                        </span>
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Chọn màu nền khi dùng chữ cái đại diện */}
               <div>
-                <p className="font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
-                  <Palette size={13} className="text-[#3c8dbc]" /> Màu nền chữ cái đại diện:
+                <p className="font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
+                  <Palette size={13} className="text-[#1d4ed8]" /> Màu nền chữ cái:
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {AVATAR_COLORS.map((c) => (
@@ -919,8 +794,8 @@ export default function UserProfileView({ role }: { role: UserRole }) {
                       }}
                       className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium transition ${
                         !draftAvatarUrl && draftAvatarColor === c.hex
-                          ? "border-gray-800 ring-2 ring-gray-300 font-bold"
-                          : "border-gray-200 hover:bg-gray-50"
+                          ? "border-slate-800 ring-2 ring-slate-200 font-bold"
+                          : "border-slate-200 hover:bg-slate-50"
                       }`}
                     >
                       <span className="w-3.5 h-3.5 rounded-full inline-block" style={{ backgroundColor: c.hex }} />
@@ -930,19 +805,18 @@ export default function UserProfileView({ role }: { role: UserRole }) {
                 </div>
               </div>
 
-              {/* Nút lưu */}
-              <div className="pt-3 border-t border-gray-100 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowAvatarModal(false)}
-                  className="px-3.5 py-2 border border-gray-300 rounded-sm text-gray-600 hover:bg-gray-50 font-semibold"
+                  className="px-4 py-2 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 font-semibold"
                 >
                   Hủy
                 </button>
                 <button
                   type="button"
                   onClick={handleApplyAvatar}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-[#00a65a] hover:bg-[#008d4c] text-white rounded-sm font-semibold shadow-xs"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#1d4ed8] hover:bg-[#1e40af] text-white rounded-xl font-semibold shadow-xs"
                 >
                   <CheckCircle2 size={14} /> Áp dụng Avatar
                 </button>

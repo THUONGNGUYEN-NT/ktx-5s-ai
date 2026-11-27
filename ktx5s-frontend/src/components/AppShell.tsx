@@ -1,7 +1,7 @@
 "use client";
-// Khung giao diện chung tối ưu hóa cho cả Điện thoại (Mobile-First) và Máy tính (Desktop):
-// - Trên điện thoại: Ẩn thanh sidebar cố định bên trái để màn hình rộng 100%, dùng Drawer trượt mượt + Thanh điều hướng đáy (Bottom Navigation Bar) với chữ & icon rõ nét, dễ bấm bằng 1 tay.
-// - Trên máy tính: Giữ nguyên phong cách AdminLTE chuyên nghiệp với Sidebar bên trái có thể thu gọn.
+// KHUNG GIAO DIỆN CHUNG — MODERN NAVY-BLUE THEME (KTX 5S AI · ĐHQG-HCM)
+// - Desktop: Sidebar Navy-Blue (#173052 -> #102442) kèm minh họa tòa nhà KTX ở đáy + Header trắng sạch sẽ.
+// - Mobile: Header xanh Navy (#1b365d) + Drawer trượt mượt + Thanh điều hướng đáy 4 tab (Bottom Navigation Bar).
 import { ReactNode, useCallback, useEffect, useState, type ElementType } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -10,27 +10,35 @@ import {
   ArrowLeft,
   Bell,
   LogOut,
-  LayoutGrid,
+  Building2,
   BarChart3,
   Camera,
   History,
   Home,
-  ChevronRight,
   UserCog,
   UserCheck,
+  MapPin,
   X,
+  ChevronDown,
 } from "lucide-react";
 import { getSession, clearSession, type Session, type UserRole } from "@/lib/session";
 import { findAccountByUsername, getAllAccounts, type UserAccount } from "@/lib/user-store";
 import { getRoomMembersByCode } from "@/components/status";
 
-type MenuItem = { href: string; label: string; shortLabel: string; icon: ElementType };
+type MenuItem = {
+  href: string;
+  label: string;
+  shortLabel: string;
+  icon: ElementType;
+  badge?: number;
+};
 
 const MENUS: Record<UserRole, MenuItem[]> = {
   admin: [
-    { href: "/admin", label: "Quản lý phòng", shortLabel: "Phòng", icon: LayoutGrid },
+    { href: "/admin", label: "Quản lý phòng", shortLabel: "Phòng", icon: Home },
     { href: "/admin/stats", label: "Thống kê tuần", shortLabel: "Thống kê", icon: BarChart3 },
-    { href: "/admin/profile", label: "Hồ sơ & Đổi mật khẩu", shortLabel: "Hồ sơ", icon: UserCog },
+    { href: "/admin/profile", label: "Hồ sơ & Đổi mật khẩu", shortLabel: "Cá nhân", icon: UserCog },
+    { href: "/admin/notifications", label: "Thông báo", shortLabel: "Thông báo", icon: Bell, badge: 3 },
   ],
   student: [
     { href: "/student", label: "Trang chủ", shortLabel: "Trang chủ", icon: Home },
@@ -40,10 +48,21 @@ const MENUS: Record<UserRole, MenuItem[]> = {
   ],
 };
 
+// Thứ tự tab trên thanh Bottom Navigation Bar của Mobile
+const MOBILE_BOTTOM_MENUS: Record<UserRole, MenuItem[]> = {
+  admin: [
+    { href: "/admin", label: "Quản lý phòng", shortLabel: "Phòng", icon: Home },
+    { href: "/admin/stats", label: "Thống kê tuần", shortLabel: "Thống kê", icon: BarChart3 },
+    { href: "/admin/notifications", label: "Thông báo", shortLabel: "Thông báo", icon: Bell, badge: 3 },
+    { href: "/admin/profile", label: "Hồ sơ cá nhân", shortLabel: "Cá nhân", icon: UserCog },
+  ],
+  student: MENUS.student,
+};
+
 export default function AppShell({
   role,
   title,
-  showBack = true,
+  showBack = false,
   children,
 }: {
   role: UserRole;
@@ -89,7 +108,7 @@ export default function AppShell({
 
   if (!session) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#ecf0f5] text-gray-500 text-sm">
+      <div className="min-h-screen flex items-center justify-center bg-[#f4f7fb] text-slate-500 text-sm">
         Đang kiểm tra đăng nhập...
       </div>
     );
@@ -102,18 +121,20 @@ export default function AppShell({
 
   const roomCode = account?.roomCode || session.roomCode || "";
   const roomMembers = roomCode ? getRoomMembersByCode(roomCode) : 8;
-  const subtitle =
-    session.role === "admin"
-      ? account?.unit || "Cán bộ Quản lý KTX"
-      : `Phòng ${roomCode} (${roomMembers} SV)`;
-
-  const headerGreeting =
-    session.role === "admin" ? fullName : `${fullName}${roomCode ? ` (${roomCode})` : ""}`;
-
   const avatarUrl = account?.avatarUrl || session.avatarUrl || "";
-  const avatarColor = account?.avatarColor || session.avatarColor || "#3c8dbc";
-  const initial = fullName.trim().charAt(0).toUpperCase() || "U";
+  const avatarColor = account?.avatarColor || session.avatarColor || "#2563eb";
+
+  // Lấy 2 chữ cái viết tắt giống mockup (VD: Trần Thị Thanh -> TT)
+  const initials = (() => {
+    const parts = fullName.trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[parts.length - 2][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return (fullName.trim().charAt(0) || "U").toUpperCase();
+  })();
+
   const profileHref = role === "admin" ? "/admin/profile" : "/student/profile";
+  const notifHref = role === "admin" ? "/admin/notifications" : "/student/history";
 
   const logout = () => {
     clearSession();
@@ -122,231 +143,294 @@ export default function AppShell({
   };
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-[#ecf0f5] text-[14px] md:text-[13px] text-gray-700">
-      {/* ===== OVERLAY & MENU NGĂN KÉO TRÊN ĐIỆN THOẠI (MOBILE DRAWER) ===== */}
+    <div className="flex h-dvh overflow-hidden bg-[#f4f7fb] text-[14px] text-slate-700">
+      {/* ===== OVERLAY NGĂN KÉO TRÊN ĐIỆN THOẠI ===== */}
       {mobileMenuOpen && (
         <div
           onClick={() => setMobileMenuOpen(false)}
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[1px] md:hidden animate-in fade-in duration-150"
+          className="fixed inset-0 z-40 bg-slate-950/55 backdrop-blur-[2px] md:hidden"
         />
       )}
 
+      {/* ===== SIDEBAR NAVY-BLUE (DESKTOP + MOBILE DRAWER) ===== */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 bg-[#222d32] text-[#b8c7ce] flex flex-col shrink-0 transition-transform duration-200 md:static md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-72 bg-gradient-to-b from-[#1a345a] via-[#172e50] to-[#0f223d] text-slate-200 flex flex-col shrink-0 transition-all duration-200 md:static md:translate-x-0 ${
           mobileMenuOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
-        } ${collapsed ? "md:w-16" : "md:w-60"}`}
+        } ${collapsed ? "md:w-[76px]" : "md:w-64"}`}
       >
-        {/* Logo Header */}
-        <div className="h-14 bg-white flex items-center justify-between md:justify-center px-4 border-b border-gray-200 shrink-0">
-          {collapsed ? (
-            <span className="hidden md:inline text-[#3c8dbc] font-black text-lg">5S</span>
-          ) : null}
-          <span className={`text-2xl tracking-tight ${collapsed ? "md:hidden" : ""}`}>
-            <span className="italic text-teal-500 font-semibold">ktx</span>
-            <span className="font-black text-[#3c8dbc]">5S AI</span>
-          </span>
+        {/* Logo KTX 5S AI */}
+        <div className="h-16 flex items-center justify-between px-4 shrink-0 border-b border-white/10">
+          <Link
+            href={role === "admin" ? "/admin" : "/student"}
+            className={`flex items-center gap-2.5 ${collapsed ? "md:mx-auto" : ""}`}
+          >
+            <div className="w-9 h-9 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center text-white shadow-inner shrink-0">
+              <Building2 size={20} />
+            </div>
+            <span
+              className={`text-lg font-extrabold tracking-tight text-white whitespace-nowrap ${
+                collapsed ? "md:hidden" : ""
+              }`}
+            >
+              KTX 5S <span className="text-sky-300">AI</span>
+            </span>
+          </Link>
+
           <button
             type="button"
             onClick={() => setMobileMenuOpen(false)}
-            className="md:hidden p-1.5 rounded-full text-gray-500 hover:bg-gray-100"
+            className="md:hidden p-1.5 rounded-lg text-white/80 hover:bg-white/10"
             aria-label="Đóng menu"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Thông tin người dùng trên Sidebar */}
-        <div
-          className={`flex items-center gap-3 px-4 py-3.5 border-b border-[#1a2226] ${
-            collapsed ? "md:justify-center md:px-2" : ""
-          }`}
-        >
-          <Link
-            href={profileHref}
-            title="Bấm để chỉnh sửa hồ sơ & đổi Avatar"
-            className="relative w-11 h-11 md:w-10 md:h-10 rounded-full text-white flex items-center justify-center text-base font-bold shrink-0 overflow-hidden ring-2 ring-white/20 hover:ring-teal-400 transition-all group"
+        {/* Thẻ tài khoản nhỏ gọn trên Drawer mobile */}
+        <div className="md:hidden px-4 py-3.5 border-b border-white/10 flex items-center gap-3">
+          <div
+            className="w-10 h-10 rounded-full text-white flex items-center justify-center font-bold text-sm overflow-hidden ring-2 ring-white/25 shrink-0"
             style={{ backgroundColor: avatarColor }}
           >
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={avatarUrl} alt={fullName} className="w-full h-full object-cover" />
             ) : (
-              initial
+              initials
             )}
-            <span className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-              <Camera size={14} className="text-white" />
-            </span>
-          </Link>
-          <div className={`min-w-0 flex-1 ${collapsed ? "md:hidden" : ""}`}>
-            <Link
-              href={profileHref}
-              className="text-white font-semibold truncate hover:text-teal-300 block leading-snug text-sm"
-            >
-              {fullName}
-            </Link>
-            <p className="text-xs text-[#9fb2ba] flex items-center gap-1.5 truncate mt-0.5">
-              <span className="w-2 h-2 rounded-full bg-[#00a65a] shrink-0" />
-              <span className="truncate">{subtitle}</span>
+          </div>
+          <div className="min-w-0">
+            <p className="text-white font-bold text-sm truncate">{fullName}</p>
+            <p className="text-xs text-sky-200/80 truncate">
+              {role === "admin" ? "Cán bộ kiểm tra KTX" : `Phòng ${roomCode} (${roomMembers} SV)`}
             </p>
           </div>
         </div>
 
-        <p
-          className={`px-4 py-2 text-[11px] uppercase tracking-wider bg-[#1a2226] text-[#6b8591] font-semibold ${
-            collapsed ? "md:hidden" : ""
-          }`}
-        >
-          Menu chính
-        </p>
-
-        <nav className="flex-1 overflow-y-auto py-1">
+        {/* Danh sách Menu */}
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5">
           {MENUS[role].map((item) => {
-            const active = pathname === item.href || pathname === `${item.href}/`;
+            const active =
+              pathname === item.href ||
+              pathname === `${item.href}/` ||
+              (item.href === "/admin" && pathname?.startsWith("/admin/rooms"));
             const Icon = item.icon;
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 title={item.label}
-                className={`flex items-center gap-3.5 px-4 py-3.5 md:py-3 border-l-[3px] text-[14px] md:text-[13px] transition-colors ${
+                className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[14px] font-medium transition-all ${
                   active
-                    ? "bg-[#1e282c] text-white border-[#3c8dbc] font-semibold"
-                    : "border-transparent hover:bg-[#1e282c] hover:text-white"
-                }`}
+                    ? "bg-[#2563eb] text-white shadow-md shadow-blue-950/40 font-semibold"
+                    : "text-slate-300 hover:bg-white/10 hover:text-white"
+                } ${collapsed ? "md:justify-center md:px-0" : ""}`}
               >
-                <Icon size={18} className="shrink-0" />
-                <span className={`flex-1 ${collapsed ? "md:hidden" : ""}`}>{item.label}</span>
-                <ChevronRight size={15} className={`opacity-40 ${collapsed ? "md:hidden" : ""}`} />
+                <Icon size={19} className="shrink-0" />
+                <span className={`flex-1 truncate ${collapsed ? "md:hidden" : ""}`}>
+                  {item.label}
+                </span>
+                {item.badge && !collapsed && (
+                  <span className="bg-rose-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full leading-none">
+                    {item.badge}
+                  </span>
+                )}
               </Link>
             );
           })}
         </nav>
 
-        <button
-          onClick={logout}
-          className="flex items-center gap-3.5 px-4 py-3.5 border-t border-[#1a2226] hover:bg-[#1e282c] hover:text-white text-[14px] md:text-[13px]"
-        >
-          <LogOut size={18} />
-          <span className={collapsed ? "md:hidden" : ""}>Đăng xuất</span>
-        </button>
+        {/* Minh họa tòa nhà KTX ở chân Sidebar giống bản phác thảo */}
+        <div className={`relative overflow-hidden shrink-0 ${collapsed ? "md:hidden" : ""}`}>
+          <div className="px-4 pt-6 pb-3 relative z-10">
+            <div className="flex items-center justify-between pt-3 border-t border-white/10">
+              <div className="flex items-start gap-2 text-xs text-sky-100/80">
+                <MapPin size={15} className="text-sky-300 shrink-0 mt-0.5" />
+                <div className="leading-tight">
+                  <p className="font-semibold text-white">Ký túc xá</p>
+                  <p className="text-[11px] text-sky-200/75">ĐHQG-HCM</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={logout}
+                title="Đăng xuất"
+                className="p-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition"
+              >
+                <LogOut size={17} />
+              </button>
+            </div>
+          </div>
+
+          {/* Đồ họa SVG tòa nhà KTX mờ phía sau chân sidebar */}
+          <svg
+            viewBox="0 0 260 95"
+            className="absolute bottom-0 inset-x-0 w-full h-24 opacity-20 pointer-events-none select-none"
+            preserveAspectRatio="none"
+          >
+            <rect x="8" y="34" width="46" height="61" rx="2" fill="#93c5fd" />
+            <rect x="16" y="42" width="8" height="8" fill="#0f223d" />
+            <rect x="30" y="42" width="8" height="8" fill="#0f223d" />
+            <rect x="16" y="56" width="8" height="8" fill="#0f223d" />
+            <rect x="30" y="56" width="8" height="8" fill="#0f223d" />
+            <rect x="60" y="14" width="66" height="81" rx="2" fill="#bfdbfe" />
+            <rect x="70" y="24" width="10" height="9" fill="#0f223d" />
+            <rect x="86" y="24" width="10" height="9" fill="#0f223d" />
+            <rect x="102" y="24" width="10" height="9" fill="#0f223d" />
+            <rect x="70" y="40" width="10" height="9" fill="#0f223d" />
+            <rect x="86" y="40" width="10" height="9" fill="#0f223d" />
+            <rect x="102" y="40" width="10" height="9" fill="#0f223d" />
+            <rect x="70" y="56" width="10" height="9" fill="#0f223d" />
+            <rect x="86" y="56" width="10" height="9" fill="#0f223d" />
+            <rect x="102" y="56" width="10" height="9" fill="#0f223d" />
+            <rect x="134" y="26" width="58" height="69" rx="2" fill="#93c5fd" />
+            <rect x="144" y="36" width="9" height="8" fill="#0f223d" />
+            <rect x="160" y="36" width="9" height="8" fill="#0f223d" />
+            <rect x="176" y="36" width="9" height="8" fill="#0f223d" />
+            <rect x="144" y="52" width="9" height="8" fill="#0f223d" />
+            <rect x="160" y="52" width="9" height="8" fill="#0f223d" />
+            <rect x="176" y="52" width="9" height="8" fill="#0f223d" />
+            <rect x="198" y="42" width="54" height="53" rx="2" fill="#60a5fa" />
+          </svg>
+        </div>
+
+        {/* Nút đăng xuất khi sidebar thu gọn trên Desktop */}
+        {collapsed && (
+          <button
+            type="button"
+            onClick={logout}
+            title="Đăng xuất"
+            className="hidden md:flex items-center justify-center py-4 border-t border-white/10 text-slate-300 hover:text-white hover:bg-white/10"
+          >
+            <LogOut size={18} />
+          </button>
+        )}
       </aside>
 
-      {/* ===== NỘI DUNG BÊN PHẢI ===== */}
+      {/* ===== KHU VỰC NỘI DUNG BÊN PHẢI ===== */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Thanh Header trên cùng */}
-        <header className="h-14 bg-[#2c3b41] text-white flex items-center gap-2 sm:gap-3 px-3 sm:px-4 shrink-0 shadow-md z-20">
-          {/* Nút mở menu trên điện thoại */}
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen(true)}
-            title="Mở menu"
-            className="md:hidden p-2 -ml-1 rounded-sm hover:bg-white/10 active:bg-white/20"
-          >
-            <Menu size={22} />
-          </button>
-
-          {/* Nút thu gọn sidebar trên máy tính */}
-          <button
-            type="button"
-            onClick={() => setCollapsed((c) => !c)}
-            title="Thu gọn / mở rộng menu"
-            className="hidden md:inline-flex p-2 rounded hover:bg-white/10"
-          >
-            <Menu size={18} />
-          </button>
-
-          {showBack && (
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded bg-white/15 hover:bg-white/25 text-xs sm:text-[13px] font-medium shrink-0"
-            >
-              <ArrowLeft size={15} />
-              <span className="hidden xs:inline sm:inline">Quay lại</span>
-            </button>
-          )}
-
-          <h1 className="text-[15px] sm:text-base font-bold truncate">{title}</h1>
-
-          <div className="ml-auto flex items-center gap-1.5 sm:gap-3 shrink-0">
-            {role === "student" && roomCode && (
-              <span className="md:hidden bg-[#3c8dbc] text-white text-xs font-bold px-2.5 py-1 rounded-full">
-                {roomCode}
-              </span>
+        {/* HEADER: Xanh Navy trên Mobile (#1b365d), Trắng tinh tế trên Desktop */}
+        <header className="h-14 md:h-16 bg-[#1b365d] md:bg-white text-white md:text-slate-700 border-b border-slate-200/80 flex items-center justify-between px-3.5 sm:px-5 shrink-0 z-20 shadow-xs md:shadow-none">
+          {/* Cụm bên trái */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {showBack ? (
+              <button
+                type="button"
+                onClick={() => router.back()}
+                className="p-2 -ml-1 rounded-xl hover:bg-white/10 md:hover:bg-slate-100 transition flex items-center gap-1.5 text-sm font-medium"
+                aria-label="Quay lại"
+              >
+                <ArrowLeft size={20} />
+                <span className="hidden md:inline text-slate-600">Quay lại</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setMobileMenuOpen(true)}
+                  className="md:hidden p-2 -ml-1 rounded-xl hover:bg-white/10 transition"
+                  aria-label="Mở menu"
+                >
+                  <Menu size={22} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCollapsed((c) => !c)}
+                  className="hidden md:inline-flex p-2 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition"
+                  title="Thu gọn / mở rộng menu"
+                >
+                  <Menu size={20} />
+                </button>
+              </>
             )}
 
-            <button className="relative p-2 rounded hover:bg-white/10" title="Thông báo">
-              <Bell size={19} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#dd4b39]" />
-            </button>
+            {/* Breadcrumb / tiêu đề nhẹ trên Desktop */}
+            <div className="hidden md:flex items-center gap-2 text-sm text-slate-500 truncate">
+              <span className="font-semibold text-slate-800 truncate">{title}</span>
+            </div>
+          </div>
+
+          {/* Logo giữa màn hình trên Mobile giống bản phác thảo */}
+          <div className="md:hidden flex items-center gap-1.5 font-extrabold text-base tracking-tight text-white truncate">
+            {showBack ? (
+              <span className="truncate">{title}</span>
+            ) : (
+              <>
+                <Building2 size={18} className="text-sky-300 shrink-0" />
+                <span>KTX 5S AI</span>
+              </>
+            )}
+          </div>
+
+          {/* Cụm bên phải: Thông báo + Tài khoản */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <Link
+              href={notifHref}
+              className="relative p-2 rounded-xl hover:bg-white/10 md:hover:bg-slate-100 transition"
+              title="Thông báo"
+            >
+              <Bell size={20} className="text-white md:text-slate-600" />
+              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-[#1b365d] md:ring-white" />
+            </Link>
 
             <Link
               href={profileHref}
               title="Hồ sơ cá nhân & Đổi Avatar"
-              className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-white/10 transition-colors"
+              className="hidden md:flex items-center gap-2.5 pl-1.5 pr-2.5 py-1 rounded-full border border-slate-200/80 hover:border-blue-300 hover:bg-slate-50 transition"
             >
               <div
-                className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white shadow-xs overflow-hidden ring-2 ring-white/25 shrink-0 text-sm"
+                className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs overflow-hidden shrink-0"
                 style={{ backgroundColor: avatarColor }}
               >
                 {avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={avatarUrl} alt={fullName} className="w-full h-full object-cover" />
                 ) : (
-                  initial
+                  initials
                 )}
               </div>
-              <span className="hidden md:inline text-xs">
-                Xin chào: <b className="text-white">{headerGreeting}</b>
+              <span className="text-[13px] font-semibold text-slate-700 max-w-[160px] truncate">
+                {fullName}
               </span>
+              <ChevronDown size={14} className="text-slate-400" />
             </Link>
-
-            <button
-              onClick={logout}
-              title="Đăng xuất"
-              className="hidden sm:inline-flex p-2 rounded hover:bg-white/10"
-            >
-              <LogOut size={18} />
-            </button>
           </div>
         </header>
 
-        {/* Vùng nội dung chính — chừa khoảng trống dưới đáy trên điện thoại cho thanh điều hướng */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-5 pb-20 md:pb-5">{children}</main>
+        {/* Vùng nội dung chính */}
+        <main className="flex-1 overflow-y-auto p-3.5 sm:p-5 md:p-6 pb-24 md:pb-6">
+          <div className="max-w-7xl mx-auto">{children}</div>
+        </main>
 
-        {/* Thanh điều hướng đáy cố định trên điện thoại (Bottom Navigation Bar) giúp sinh viên thao tác 1 chạm dễ dàng */}
-        <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 h-16 bg-white border-t border-gray-200 shadow-[0_-2px_10px_rgba(0,0,0,0.06)] flex items-center justify-around px-1">
-          {MENUS[role].map((item) => {
-            const active = pathname === item.href || pathname === `${item.href}/`;
+        {/* THANH ĐIỀU HƯỚNG ĐÁY MOBILE (BOTTOM NAVIGATION BAR) */}
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 h-16 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-4px_16px_rgba(15,23,42,0.06)] flex items-center justify-around px-2">
+          {MOBILE_BOTTOM_MENUS[role].map((item) => {
+            const active =
+              pathname === item.href ||
+              pathname === `${item.href}/` ||
+              (item.href === "/admin" && pathname?.startsWith("/admin/rooms"));
             const Icon = item.icon;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center justify-center flex-1 py-1.5 rounded-md transition-colors ${
-                  active ? "text-[#3c8dbc] font-bold" : "text-gray-500 hover:text-gray-800 font-medium"
+                className={`relative flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition-colors ${
+                  active ? "text-[#1d4ed8] font-bold" : "text-slate-500 hover:text-slate-800 font-medium"
                 }`}
               >
-                <div
-                  className={`p-1 rounded-full ${
-                    active ? "bg-[#3c8dbc]/15 text-[#3c8dbc]" : ""
-                  }`}
-                >
-                  <Icon size={21} strokeWidth={active ? 2.4 : 2} />
+                <div className="relative">
+                  <Icon size={21} strokeWidth={active ? 2.4 : 1.9} />
+                  {item.badge && (
+                    <span className="absolute -top-1 -right-2 bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full leading-tight">
+                      {item.badge}
+                    </span>
+                  )}
                 </div>
-                <span className="text-[11px] leading-tight mt-0.5 truncate">{item.shortLabel}</span>
+                <span className="text-[11px] mt-1 leading-none truncate">{item.shortLabel}</span>
               </Link>
             );
           })}
         </nav>
-
-        {/* Footer chỉ hiển thị trên máy tính để tiết kiệm diện tích màn hình điện thoại */}
-        <footer className="hidden md:flex h-9 bg-white border-t border-gray-200 px-5 items-center justify-between text-xs text-gray-500 shrink-0">
-          <span>
-            <b>KTX 5S AI</b> © 2026 — Trung tâm Quản lý Ký túc xá và Khu đô thị ĐHQG-HCM
-          </span>
-          <span>Phiên bản 1.0</span>
-        </footer>
       </div>
     </div>
   );
