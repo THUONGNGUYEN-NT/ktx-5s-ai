@@ -62,7 +62,7 @@ function rememberAccount(acc: SavedAccount) {
     );
     list.unshift(acc);
     localStorage.setItem(SAVED_ACCOUNTS_KEY, JSON.stringify(list.slice(0, 5)));
-  } catch {}
+  } catch { }
 }
 
 function removeSavedAccount(index: number) {
@@ -329,14 +329,14 @@ export default function LoginPage() {
             <span>Trung tâm Quản lý Ký túc xá ĐHQG-HCM</span>
           </div>
 
-          {/* Ảnh nền KTX ĐHQG-HCM làm mờ (blur) phía sau cột trái trang đăng nhập */}
+          {/* Ảnh nền KTX ĐHQG-HCM làm mờ nhẹ (blur) phía sau cột trái trang đăng nhập */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/ktx-bg.jpg`}
             alt="Ký túc xá ĐHQG-HCM"
-            className="absolute inset-0 w-full h-full object-cover object-center blur-[3px] scale-110 opacity-30 pointer-events-none select-none"
+            className="absolute inset-0 w-full h-full object-cover object-center blur-[1.5px] scale-105 opacity-50 pointer-events-none select-none"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#1a345a]/90 via-[#172e50]/75 to-[#0f223d]/90 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#1a345a]/85 via-[#172e50]/55 to-[#0f223d]/85 pointer-events-none" />
         </section>
 
         {/* ===== CỘT PHẢI: FORM ĐĂNG NHẬP ===== */}
@@ -360,11 +360,10 @@ export default function LoginPage() {
                 key={key}
                 type="button"
                 onClick={() => switchMode(key)}
-                className={`py-2.5 rounded-xl text-sm font-bold transition-all ${
-                  mode === key
-                    ? "bg-white text-[#1d4ed8] shadow-sm"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={`py-2.5 rounded-xl text-sm font-bold transition-all ${mode === key
+                  ? "bg-white text-[#1d4ed8] shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+                  }`}
               >
                 {label}
               </button>
@@ -525,13 +524,12 @@ export default function LoginPage() {
               ].map(([step, label]) => (
                 <div
                   key={step}
-                  className={`flex-1 py-2.5 text-center border-b-2 font-semibold ${
-                    forgotStep === step
-                      ? "border-[#1d4ed8] text-[#1d4ed8] bg-white"
-                      : forgotStep > Number(step)
+                  className={`flex-1 py-2.5 text-center border-b-2 font-semibold ${forgotStep === step
+                    ? "border-[#1d4ed8] text-[#1d4ed8] bg-white"
+                    : forgotStep > Number(step)
                       ? "border-emerald-500 text-emerald-600"
                       : "border-transparent text-slate-400"
-                  }`}
+                    }`}
                 >
                   {label}
                 </div>
@@ -571,11 +569,10 @@ export default function LoginPage() {
                           key={m}
                           type="button"
                           onClick={() => setForgotMethod(m)}
-                          className={`flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-xl border text-[11px] font-semibold transition ${
-                            forgotMethod === m
-                              ? "border-[#1d4ed8] bg-blue-50 text-[#1d4ed8]"
-                              : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                          }`}
+                          className={`flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-xl border text-[11px] font-semibold transition ${forgotMethod === m
+                            ? "border-[#1d4ed8] bg-blue-50 text-[#1d4ed8]"
+                            : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                            }`}
                         >
                           <Icon size={15} /> {lbl}
                         </button>

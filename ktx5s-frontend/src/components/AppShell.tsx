@@ -154,9 +154,8 @@ export default function AppShell({
 
       {/* ===== SIDEBAR NAVY-BLUE (DESKTOP + MOBILE DRAWER) ===== */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 bg-gradient-to-b from-[#1a345a] via-[#172e50] to-[#0f223d] text-slate-200 flex flex-col shrink-0 transition-all duration-200 md:static md:translate-x-0 ${
-          mobileMenuOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
-        } ${collapsed ? "md:w-[76px]" : "md:w-64"}`}
+        className={`fixed inset-y-0 left-0 z-50 w-72 bg-gradient-to-b from-[#1a345a] via-[#172e50] to-[#0f223d] text-slate-200 flex flex-col shrink-0 transition-all duration-200 md:static md:translate-x-0 ${mobileMenuOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+          } ${collapsed ? "md:w-[76px]" : "md:w-64"}`}
       >
         {/* Logo KTX 5S AI */}
         <div className="h-16 flex items-center justify-between px-4 shrink-0 border-b border-white/10">
@@ -168,9 +167,8 @@ export default function AppShell({
               <Building2 size={20} />
             </div>
             <span
-              className={`text-lg font-extrabold tracking-tight text-white whitespace-nowrap ${
-                collapsed ? "md:hidden" : ""
-              }`}
+              className={`text-lg font-extrabold tracking-tight text-white whitespace-nowrap ${collapsed ? "md:hidden" : ""
+                }`}
             >
               KTX 5S <span className="text-sky-300">AI</span>
             </span>
@@ -220,11 +218,10 @@ export default function AppShell({
                 key={item.href}
                 href={item.href}
                 title={item.label}
-                className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[14px] font-medium transition-all ${
-                  active
-                    ? "bg-[#2563eb] text-white shadow-md shadow-blue-950/40 font-semibold"
-                    : "text-slate-300 hover:bg-white/10 hover:text-white"
-                } ${collapsed ? "md:justify-center md:px-0" : ""}`}
+                className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[14px] font-medium transition-all ${active
+                  ? "bg-[#2563eb] text-white shadow-md shadow-blue-950/40 font-semibold"
+                  : "text-slate-300 hover:bg-white/10 hover:text-white"
+                  } ${collapsed ? "md:justify-center md:px-0" : ""}`}
               >
                 <Icon size={19} className="shrink-0" />
                 <span className={`flex-1 truncate ${collapsed ? "md:hidden" : ""}`}>
@@ -240,17 +237,17 @@ export default function AppShell({
           })}
         </nav>
 
-        {/* Hình ảnh Ký túc xá ĐHQG-HCM thực tế với hiệu ứng Blur & Gradient hòa tan mượt ở chân Sidebar */}
-        <div className={`relative h-44 overflow-hidden shrink-0 ${collapsed ? "md:hidden" : ""}`}>
-          {/* Ảnh KTX làm mờ nhẹ (blur) */}
+        {/* Hình ảnh Ký túc xá ĐHQG-HCM thực tế với hiệu ứng Blur nhẹ nổi bật & Gradient hòa tan mượt ở chân Sidebar */}
+        <div className={`relative h-48 overflow-hidden shrink-0 ${collapsed ? "md:hidden" : ""}`}>
+          {/* Ảnh KTX làm mờ rất nhẹ (blur) để nổi rõ hình tòa nhà */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/ktx-bg.jpg`}
             alt="Ký túc xá ĐHQG-HCM"
-            className="absolute inset-0 w-full h-full object-cover object-center blur-[2px] scale-110 opacity-70 pointer-events-none select-none"
+            className="absolute inset-0 w-full h-full object-cover object-center blur-[0.75px] scale-105 opacity-95 pointer-events-none select-none"
           />
-          {/* Lớp phủ gradient Navy-Blue hòa tan từ nền sidebar phía trên xuống */}
-          <div className="absolute inset-0 bg-gradient-to-b from-[#132847] via-[#132847]/45 to-[#0b1930]/90 pointer-events-none" />
+          {/* Lớp phủ gradient trong suốt phần giữa để ảnh KTX hiện rõ, chỉ hòa tan mép trên và tối nhẹ chân chữ */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#132847] via-[#132847]/15 to-[#0b1930]/80 pointer-events-none" />
 
           <div className="absolute inset-x-0 bottom-0 px-4 pb-3.5 pt-6 z-10">
             <div className="flex items-center justify-between pt-3 border-t border-white/15">
@@ -393,9 +390,8 @@ export default function AppShell({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`relative flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition-colors ${
-                  active ? "text-[#1d4ed8] font-bold" : "text-slate-500 hover:text-slate-800 font-medium"
-                }`}
+                className={`relative flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition-colors ${active ? "text-[#1d4ed8] font-bold" : "text-slate-500 hover:text-slate-800 font-medium"
+                  }`}
               >
                 <div className="relative">
                   <Icon size={21} strokeWidth={active ? 2.4 : 1.9} />
