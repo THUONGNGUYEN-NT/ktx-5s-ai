@@ -295,7 +295,7 @@ export default function LoginPage() {
               </span>
             </div>
 
-            <h1 className="text-xl sm:text-2xl font-extrabold mt-7 leading-snug text-white">
+            <h1 className="text-xl sm:text-2xl font-extrabold mt-7 leading-snug text-white text-center">
               Hệ thống đánh giá vệ sinh phòng KTX tự động bằng AI
             </h1>
 
@@ -338,7 +338,7 @@ export default function LoginPage() {
 
         {/* ===== CỘT PHẢI: FORM ĐĂNG NHẬP ===== */}
         <section className="md:col-span-7 p-6 sm:p-10 flex flex-col justify-center">
-          <div>
+          <div className="text-center">
             <h2 className="text-2xl font-extrabold text-slate-800">Đăng nhập hệ thống</h2>
             <p className="text-sm text-slate-500 mt-1">
               Chọn vai trò của bạn để truy cập bảng điều khiển
