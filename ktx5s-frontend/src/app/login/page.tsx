@@ -295,48 +295,51 @@ export default function LoginPage() {
               </span>
             </div>
 
-            <h1 className="text-xl sm:text-2xl font-bold mt-7 leading-snug">
+            <h1 className="text-xl sm:text-2xl font-extrabold mt-7 leading-snug text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.85)]">
               Hệ thống đánh giá vệ sinh phòng KTX tự động bằng AI
             </h1>
-            <p className="text-xs sm:text-sm text-sky-100/75 mt-2 leading-relaxed">
-              Quản lý chuẩn 5S thông minh, minh bạch và đồng bộ thời gian thực trên cả máy tính lẫn điện thoại.
-            </p>
 
-            <ul className="mt-7 space-y-3.5 text-sm text-sky-50/90 hidden md:flex md:flex-col">
-              <li className="flex items-center gap-3">
-                <span className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+            <ul className="mt-7 space-y-3 text-sm text-white font-semibold hidden md:flex md:flex-col">
+              <li className="flex items-center gap-3 bg-[#0b1930]/50 backdrop-blur-[2px] border border-white/15 rounded-xl px-3 py-2.5 shadow-sm">
+                <span className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
                   <Camera size={16} className="text-sky-300" />
                 </span>
-                <span>Chụp ảnh giường tầng &amp; khu vực chung nhanh chóng</span>
+                <span className="drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                  Chụp ảnh giường tầng &amp; khu vực chung nhanh chóng
+                </span>
               </li>
-              <li className="flex items-center gap-3">
-                <span className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+              <li className="flex items-center gap-3 bg-[#0b1930]/50 backdrop-blur-[2px] border border-white/15 rounded-xl px-3 py-2.5 shadow-sm">
+                <span className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
                   <Bot size={16} className="text-sky-300" />
                 </span>
-                <span>AI phân tích, chống gian lận và chấm điểm 5S tự động</span>
+                <span className="drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                  AI phân tích, chống gian lận và chấm điểm 5S tự động
+                </span>
               </li>
-              <li className="flex items-center gap-3">
-                <span className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+              <li className="flex items-center gap-3 bg-[#0b1930]/50 backdrop-blur-[2px] border border-white/15 rounded-xl px-3 py-2.5 shadow-sm">
+                <span className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
                   <BarChart3 size={16} className="text-sky-300" />
                 </span>
-                <span>Giám sát tập trung 200 phòng theo từng tòa &amp; tầng</span>
+                <span className="drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                  Giám sát tập trung 200 phòng theo từng tòa &amp; tầng
+                </span>
               </li>
             </ul>
           </div>
 
-          <div className="relative z-10 mt-6 md:mt-10 pt-4 border-t border-white/10 flex items-center gap-2 text-xs text-sky-200/80">
+          <div className="relative z-10 mt-6 md:mt-10 pt-4 border-t border-white/20 flex items-center gap-2 text-xs font-semibold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]">
             <MapPin size={15} className="text-sky-300 shrink-0" />
             <span>Trung tâm Quản lý Ký túc xá ĐHQG-HCM</span>
           </div>
 
-          {/* Ảnh toàn cảnh KTX ĐHQG-HCM làm mờ nhẹ (blur 1.5px) + lớp phủ Navy-Blue dịu để vừa thấy rõ toàn cảnh KTX vừa không chìm chữ */}
+          {/* Ảnh toàn cảnh KTX ĐHQG-HCM làm mờ nhẹ (blur 2px) + lớp phủ Navy-Blue cân bằng để vừa thấy rõ toàn cảnh KTX vừa nổi bật chữ */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/ktx-login-bg.jpg`}
             alt="Toàn cảnh Ký túc xá ĐHQG-HCM"
-            className="absolute inset-0 w-full h-full object-cover object-center blur-[1.5px] scale-105 opacity-95 pointer-events-none select-none"
+            className="absolute inset-0 w-full h-full object-cover object-center blur-[2px] scale-105 opacity-90 pointer-events-none select-none"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#142a4a]/65 via-[#132847]/45 to-[#0b1930]/75 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0f223d]/75 via-[#132847]/60 to-[#0b1930]/85 pointer-events-none" />
         </section>
 
         {/* ===== CỘT PHẢI: FORM ĐĂNG NHẬP ===== */}
