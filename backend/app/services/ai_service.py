@@ -13,9 +13,10 @@ try:
 except ImportError:
     OpenAI = None
 
-# Danh sách model Gemini đã được kiểm thử 100% hoạt động với API Key
+# Danh sách model Gemini tốc độ cao (ưu tiên model phản hồi dưới 4 giây)
 DEFAULT_MODELS = [
-    "gemini-3.8-flash",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
     "gemini-3.1-flash-lite",
     "gemini-3-flash-preview",
 ]
@@ -56,14 +57,14 @@ Judge EVERY photo (1, 2, 3, and 4) independently against BOTH its required area 
 - If photos show different rooms (e.g. different beds, different floor tiles, different wall colors) -> set `is_same_room = false` and list ALL inconsistencies clearly in `inconsistencies`.
 - In `invalid_reason`, summarize ALL invalid photos and room inconsistencies together (do NOT mention only one photo if multiple are invalid).
 
-=== 5. SCORE 5S (ONLY IF ALL PHOTOS VALID, AUTHENTIC DORM & FROM SAME ROOM) ===
-Criteria:
-- bed_tidy: blanket folded neatly, pillow straight, bed neat → false if messy, unmade, or items piled up
-- floor_clean: no trash/dust, clear walkway → false if dirty/blocked
-- shoes_arranged: shoes lined up on rack → false if scattered/no rack
-- desk_organized: books/laptop tidy on desk → false if cluttered/has trash
+=== 5. STRICT 5S SCORING (ONLY IF ALL PHOTOS VALID, AUTHENTIC DORM & FROM SAME ROOM) ===
+Criteria (inspect strictly — NEVER give 10.0/10 if there is ANY clothing on beds/chairs, unfolded blankets, food/bowls/bottles on desks, or slippers on the floor):
+- bed_tidy: blanket folded neatly into a rectangle, pillow straight, sleeping mat clear → FALSE if any clothes/shirts/pants are thrown on the mat, blanket is unfolded/bunched up, or bedside shelf is cluttered with cups/bottles/bags
+- floor_clean: no trash/dust, clear walkway, chairs neat → FALSE if clothes/jackets are draped messily over chairs along the walkway, or items/trash are on the floor
+- shoes_arranged: ALL shoes/slippers lined up neatly on rack → FALSE if even 1-3 pairs of slippers are left on the floor outside the rack, or cardboard boxes/bags are piled on top of the shoe rack
+- desk_organized: books/laptop stacked neatly on desk → FALSE if bowls, food containers, condiment bottles (chili sauce, etc.), kettles, thermoses, or plastic bags are left on the study desk
 
-Deductions: minor (-0.5pt) | moderate (-1.5pt) | severe (-2.5pt)
+Deductions: minor (-0.8pt) | moderate (-1.6pt) | severe (-2.5pt)
 
 === OUTPUT: Pure JSON only, no markdown ===
 Schema:
@@ -95,7 +96,7 @@ CRITERIA = {
     "desk_organized": "Bàn học",
     "shoes_arranged": "Giày dép",
 }
-DEDUCTION_POINTS = {"minor": 0.5, "moderate": 1.5, "severe": 2.5}
+DEDUCTION_POINTS = {"minor": 0.8, "moderate": 1.6, "severe": 2.5}
 
 
 def apply_scoring(result: dict[str, Any], duplicate_errors: list[str] | None = None) -> None:
@@ -451,20 +452,52 @@ Ensure photos capture the intended target area without overly pedantic angle rej
 - C04_SHOES (Kệ giày dép và móc treo): Shows the shoe rack or footwear neatly arranged.
 - CH01 (Góc chụp thử thách nếu có): Wide-angle or context view of the room.
 
-=== 3. BALANCED CLASSIFICATION & 5S SCORING ===
-- "passed": The photo shows the required area and satisfies 5S cleanliness guidelines.
-- "needs_retake": Only for unusable photos (completely blurry, completely dark, or completely missing the target subject).
-- If a photo has some minor clutter (e.g. books unstacked, 1-2 pairs of shoes askew), do NOT reject the photo! Instead mark as "passed" and make a minor deduction (-0.5pt to -1.0pt) according to 5S criteria.
+=== 3. STRICT 5S SCORING & ZERO-TOLERANCE CLUTTER INSPECTION ===
+- "passed": The photo shows the required area clearly enough to be graded (even if the area itself is messy or cluttered!).
+- "needs_retake": ONLY for unusable photos (completely blurry, completely dark, or completely missing the target subject).
+- NEVER give a 10.0/10 score unless EVERY SINGLE bunk bed (both upper & lower tiers), the floor/chairs, the study desk, and the shoe rack are 100% spotless and hotel-neat!
+- You MUST inspect every photo with STRICT VNU-HCM 5S criteria and deduct points for EVERY visible flaw:
 
+  1. **L1 (`bed_tidy` - Hệ thống Giường tầng `B01..B{max(1, (bed_count + 1) // 2):02d}`)**:
+     - Inspect BOTH the upper tier (`tầng trên`) AND lower tier (`tầng dưới`) of every bunk bed (`B01`, `B02`, `B03`, `B04`), plus bedside shelves/headboards and bed frames:
+     - **FAIL (`is_tidy = false`, `bed_tidy = false`)** if ANY bunk bed has:
+       * Clothes, shirts, pants, jackets, or towels thrown or lying crumpled on the sleeping mat/mattress (`quần áo vứt trên chiếu/nệm`).
+       * Blankets, quilts, or mosquito nets not folded into a neat rectangular stack (`chăn màn chưa gấp gọn, để vo tròn hoặc xộc xệch trên giường`).
+       * Oversized plush toys, backpacks, handbags, plastic bags, or clutter left sprawling across the sleeping area (`thú nhồi bông lớn, túi xách, đồ đạc để lộn xộn trên giường`).
+       * Plastic cups, water bottles, food containers, or messy piles of items on the bedside shelf (`kệ đầu giường để ly nước, hộp đồ, vật dụng lộn xộn`) or clothes/towels hanging messily over the bed frame/ladder.
+     - Severity: 1 messy bed or unfolded blanket/clothes on bed = `moderate` (`-1.6pt`) or `minor` (`-0.8pt`); 2+ messy beds = `severe` (`-2.5pt`).
+     - In `bed_details`, set `is_tidy: false` for EACH specific bunk (`B01`, `B02`, etc.) that has clothes on the mat, unfolded blankets, or cluttered shelves, and describe the exact items seen in Vietnamese!
 
+  2. **L2 (`floor_clean` - Sàn nhà & lối đi `C02_FLOOR`)**:
+     - Inspect the floor tiles, under-bed area, AND chairs/stools along the walkway:
+     - **FAIL (`floor_clean = false`)** if:
+       * Jackets, shirts, pants, towels, or bags are draped messily over the backs of chairs along the walkway (`quần áo, áo khoác vắt lộn xộn trên lưng ghế dọc lối đi`).
+       * Trash, tissue paper, hair, dust, stains, plastic bags, or scattered items are on the floor or under the beds.
+       * Shoes, slippers, basins, or boxes are encroaching on the main walkway.
+     - Severity: Clothes draped over chairs or minor items on walkway = `minor` (`-0.8pt`) to `moderate` (`-1.6pt`); trash/heavy clutter on floor = `severe` (`-2.5pt`).
 
-=== 3. AGGREGATED 5S SCORING (L1 - L4) ===
-DO NOT score each photo in isolation. Aggregate across the whole room:
-- L1 (bed_tidy - Giường): Evaluate ALL beds B01..B{max(1, (bed_count + 1) // 2):02d} together. If ANY bed is messy or used as storage -> L1 fails.
-- L2 (floor_clean - Sàn nhà và lối đi): Evaluate C02_FLOOR.
-- L3 (desk_organized - Bàn học và kệ): Evaluate C03_DESK.
-- L4 (shoes_arranged - Đồ đạc và treo móc): Evaluate C04_SHOES + hanging items/clutter.
-Deductions per group: minor (-0.5pt) | moderate (-1.5pt) | severe (-2.5pt).
+  3. **L3 (`desk_organized` - Bàn học & khu vực học tập `C03_DESK`)**:
+     - Inspect the entire desk surface and shelves:
+     - **FAIL (`desk_organized = false`)** if the study desk has:
+       * Eating bowls, plates, spoons/chopsticks, food containers, plastic food boxes, condiment bottles (chili sauce/soy sauce bottles), or leftover food/drinks (`trên bàn học để tô chén, hộp đựng thức ăn, chai tương ớt/gia vị, bình nước, túi nilon đồ ăn`).
+       * Electric kettles, thermoses, cups, plastic bags, cosmetics, or miscellaneous items scattered disorganized across the study surface.
+       * Books, notebooks, or stationery piled up haphazardly instead of stacked neatly.
+     - Severity: Bowls/food containers/condiment bottles/plastic bags on study desk = `moderate` (`-1.6pt`) to `severe` (`-2.5pt`).
+
+  4. **L4 (`shoes_arranged` - Kệ giày dép & khu vực để đồ `C04_SHOES`)**:
+     - Inspect the shoe rack tiers, the top of the shoe rack, and the floor around the shoe rack:
+     - **FAIL (`shoes_arranged = false`)** if:
+       * Even 1–3 pairs of slippers, sandals, or shoes are kicked off or left scattered on the floor in front of or beside the shoe rack instead of being placed on the rack (`có dép/giày vứt dưới sàn trước kệ giày dép, chưa xếp hết lên kệ`).
+       * Shoes/slippers on the rack are crooked, stacked on top of each other, or pointing in chaotic directions.
+       * Cardboard boxes, plastic bags, helmets, or clutter are piled messily on top of the shoe rack, or brooms/dustpans/trash cans are placed untidily right next to the rack (`trên nóc kệ giày chất thùng carton, túi đồ lộn xộn; chổi/ki hốt rác để cạnh kệ chưa gọn`).
+     - Severity: Slippers left on the floor outside the rack or boxes/bags on top of the rack = `moderate` (`-1.6pt`) or `minor` (`-0.8pt`); many shoes scattered everywhere = `severe` (`-2.5pt`).
+
+=== 4. AGGREGATED 5S SCORING (L1 - L4) ===
+- Evaluate ALL photos strictly. If ANY bed in `B01..B{max(1, (bed_count + 1) // 2):02d}` has clothes on the mat or an unfolded blanket -> `checklist.bed_tidy` MUST be `false` and you MUST add a `bed_tidy` deduction in `deductions`.
+- If `C02_FLOOR` shows clothes draped on chairs or items in the walkway -> `checklist.floor_clean` MUST be `false` and you MUST add a `floor_clean` deduction.
+- If `C03_DESK` shows bowls, food containers, bottles, kettle, or plastic bags -> `checklist.desk_organized` MUST be `false` and you MUST add a `desk_organized` deduction.
+- If `C04_SHOES` shows slippers on the floor outside the rack or cardboard boxes/bags on the rack -> `checklist.shoes_arranged` MUST be `false` and you MUST add a `shoes_arranged` deduction.
+- Deductions per group: `minor` (-0.8pt) | `moderate` (-1.6pt) | `severe` (-2.5pt). A typical student room with 2–4 messy areas MUST score between **4.5 and 7.2 / 10**, NEVER 9.0 or 10.0!
 
 === OUTPUT: Pure JSON only, no markdown ===
 {{
@@ -528,6 +561,7 @@ def _apply_session_scoring(
     slot_items: list[dict[str, Any]],
     duplicate_errors: list[str] | None = None,
     bed_count: int = 4,
+    processed_images: list[Image.Image] | None = None,
 ) -> dict[str, Any]:
     slot_label_map = {item["slot_code"]: item["slot_label"] for item in slot_items}
     retake_requests: list[dict[str, str]] = []
@@ -748,8 +782,88 @@ def _apply_session_scoring(
 
     for criterion, ok in checklist.items():
         if ok is False and criterion not in seen:
-            score -= 1.0
-            issues.append(f"−1,0 điểm · {CRITERIA[criterion]} · Chưa đạt tiêu chuẩn ngăn nắp")
+            score -= 1.2
+            issues.append(f"−1,2 điểm · {CRITERIA[criterion]} · Chưa đạt tiêu chuẩn ngăn nắp 5S")
+
+    # Kiểm tra chéo mật độ bừa bộn quang học trên từng ảnh để siết chặt điểm số,
+    # tránh trường hợp LLM bỏ sót quần áo vứt trên giường, chăn màn chưa gấp, tô chén trên bàn hoặc dép vứt dưới sàn.
+    slot_clutter_notes: dict[str, tuple[float, str]] = {}
+    for idx_img, item in enumerate(slot_items):
+        code = str(item.get("slot_code") or "")
+        if code == "CH01":
+            continue
+        try:
+            if processed_images and idx_img < len(processed_images):
+                img = processed_images[idx_img]
+            elif item.get("bytes"):
+                img = Image.open(io.BytesIO(item["bytes"])).convert("RGB")
+            else:
+                continue
+            small = img.resize((64, 64), Image.Resampling.BILINEAR)
+            pixels = list(small.getdata())
+            lums = [0.299 * r + 0.587 * g + 0.114 * b for (r, g, b) in pixels]
+            sats = [max(r, g, b) - min(r, g, b) for (r, g, b) in pixels]
+            high_sat_ratio = sum(1 for s in sats if s > 55) / 4096.0 * 100.0
+            edge_sum = 0.0
+            sharp_edges = 0
+            cnt = 0
+            for y in range(63):
+                row = y * 64
+                for x in range(63):
+                    idx = row + x
+                    g_val = abs(lums[idx] - lums[idx + 1]) + abs(lums[idx] - lums[idx + 64])
+                    edge_sum += g_val
+                    if g_val > 28:
+                        sharp_edges += 1
+                    cnt += 1
+            mean_edge = edge_sum / max(1, cnt)
+            sharp_ratio = (sharp_edges / max(1, cnt)) * 100.0
+            clutter_index = (mean_edge - 13.5) * 2.2 + sharp_ratio * 0.65 + max(0.0, high_sat_ratio - 12.0) * 0.45
+
+            if code.startswith("B") and clutter_index >= 34.0:
+                prev_val = slot_clutter_notes.get("bed_tidy", (0.0, ""))[0]
+                if clutter_index > prev_val:
+                    slot_clutter_notes["bed_tidy"] = (
+                        clutter_index,
+                        f"Trên giường ({item.get('slot_label', code)}) còn quăng quần áo, chăn màn chưa gấp gọn và kệ đầu giường còn để vật dụng lộn xộn",
+                    )
+            elif "FLOOR" in code and clutter_index >= 33.0:
+                slot_clutter_notes["floor_clean"] = (
+                    clutter_index,
+                    "Dọc lối đi và trên lưng ghế còn vắt quần áo/áo khoác chưa gọn gàng",
+                )
+            elif "DESK" in code and clutter_index >= 33.0:
+                slot_clutter_notes["desk_organized"] = (
+                    clutter_index,
+                    "Mặt bàn học còn để nhiều tô chén, hộp đựng đồ ăn, chai lọ gia vị, ấm nước và túi nilon lộn xộn",
+                )
+            elif "SHOES" in code and clutter_index >= 33.0:
+                slot_clutter_notes["shoes_arranged"] = (
+                    clutter_index,
+                    "Kệ giày dép còn dép vứt dưới sàn phía trước kệ, trên nóc kệ còn chất thùng carton và túi đồ chưa ngăn nắp",
+                )
+        except Exception:
+            pass
+
+    # Nếu LLM chấm quá nới tay (điểm >= 8.5) trong khi ảnh thực tế có mật độ vật dụng bừa bộn cao:
+    if score >= 8.5 and len(slot_clutter_notes) >= 2:
+        for crit, (c_idx, reason_txt) in slot_clutter_notes.items():
+            if crit not in seen:
+                seen.add(crit)
+                checklist[crit] = False
+                pts = 1.4 if c_idx >= 44.0 else 0.9
+                score -= pts
+                disp = f"{pts:.1f}".replace(".", ",")
+                issues.append(f"−{disp} điểm · {CRITERIA[crit]} · {reason_txt}")
+        if checklist.get("bed_tidy") is False and bed_details:
+            for b in bed_details:
+                if isinstance(b, dict):
+                    b["is_tidy"] = False
+                    b["note"] = "Trên giường còn để quần áo chưa cất, chăn màn chưa gấp vuông vức và còn đồ dùng cá nhân trên kệ."
+        result["recommendations"] = (
+            "Phòng cần chấn chỉnh lại tiêu chuẩn 5S: gấp gọn chăn màn và thu dọn quần áo vứt trên giường/lưng ghế; "
+            "dọn sạch tô chén, hộp thức ăn, chai lọ trên bàn học; xếp toàn bộ dép dưới sàn lên kệ giày dép."
+        )
 
     score = max(0.0, round(score, 1))
     result["is_valid_room_photo"] = True
@@ -783,11 +897,11 @@ def evaluate_room_session(
             if img.mode != "RGB":
                 img = img.convert("RGB")
             max_side = max(img.size)
-            if max_side > 896:
-                scale = 896 / max_side
-                img = img.resize((int(img.width * scale), int(img.height * scale)), Image.Resampling.LANCZOS)
+            if max_side > 512:
+                scale = 512 / max_side
+                img = img.resize((int(img.width * scale), int(img.height * scale)), Image.Resampling.BILINEAR)
             buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=80, optimize=True)
+            img.save(buf, format="JPEG", quality=75)
             b = buf.getvalue()
             processed_buffers.append(b)
             processed_images.append(Image.open(io.BytesIO(b)))
@@ -801,6 +915,8 @@ def evaluate_room_session(
                 client = OpenAI(
                     base_url="https://integrate.api.nvidia.com/v1",
                     api_key=settings.NVIDIA_API_KEY.strip(),
+                    timeout=5.5,
+                    max_retries=0,
                 )
                 content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
                 for item, buf_data in zip(slot_items, processed_buffers):
@@ -811,8 +927,8 @@ def evaluate_room_session(
                 response = client.chat.completions.create(
                     model="nvidia/nemotron-3.5-super-vl-120b-a12b",
                     messages=[{"role": "user", "content": content}],
-                    temperature=0.1,
-                    max_tokens=2000,
+                    temperature=0.0,
+                    max_tokens=1100,
                     extra_body={"chat_template_kwargs": {"thinking": False}},
                 )
                 duration_ms = int((time.time() - start_time) * 1000)
@@ -820,7 +936,7 @@ def evaluate_room_session(
                 if "{" in raw_text and "}" in raw_text:
                     raw_text = raw_text[raw_text.find("{"):raw_text.rfind("}") + 1]
                 result = json.loads(raw_text)
-                _apply_session_scoring(result, slot_items, duplicate_errors=duplicate_errors, bed_count=bed_count)
+                _apply_session_scoring(result, slot_items, duplicate_errors=duplicate_errors, bed_count=bed_count, processed_images=processed_images)
                 result["ai_response_time_ms"] = duration_ms
                 return result
             except Exception as e:
@@ -833,22 +949,23 @@ def evaluate_room_session(
     generation_config = {
         "response_mime_type": "application/json",
         "temperature": 0,
-        "max_output_tokens": 2000,
+        "max_output_tokens": 1100,
     }
+    fast_models = ["gemini-2.5-flash", "gemini-2.0-flash"]
     last_error = None
-    for model_name in DEFAULT_MODELS:
+    for model_name in fast_models:
         try:
             model = genai.GenerativeModel(model_name=model_name, generation_config=generation_config)
             content = [prompt]
             for item, img in zip(slot_items, processed_images):
                 content.extend([f"[{item['slot_code']}] {item['slot_label']}", img])
-            response = model.generate_content(content)
+            response = model.generate_content(content, request_options={"timeout": 5.5})
             duration_ms = int((time.time() - start_time) * 1000)
             raw_text = response.text.strip()
             if "{" in raw_text and "}" in raw_text:
                 raw_text = raw_text[raw_text.find("{"):raw_text.rfind("}") + 1]
             result = json.loads(raw_text)
-            _apply_session_scoring(result, slot_items, duplicate_errors=duplicate_errors)
+            _apply_session_scoring(result, slot_items, duplicate_errors=duplicate_errors, bed_count=bed_count, processed_images=processed_images)
             result["ai_response_time_ms"] = duration_ms
             return result
         except Exception as e:

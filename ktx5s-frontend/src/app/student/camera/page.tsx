@@ -121,6 +121,56 @@ export default function CameraPage() {
     return () => clearInterval(timer);
   }, [session?.expires_at]);
 
+  const compressImageFile = async (
+    rawFile: File,
+    maxSide = 960,
+    quality = 0.78
+  ): Promise<{ file: File; width: number; height: number }> => {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(rawFile);
+      const img = new Image();
+      img.onload = () => {
+        const w0 = img.naturalWidth || 1280;
+        const h0 = img.naturalHeight || 720;
+        const scale = Math.min(1, maxSide / Math.max(w0, h0));
+        const outW = Math.max(1, Math.round(w0 * scale));
+        const outH = Math.max(1, Math.round(h0 * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = outW;
+        canvas.height = outH;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          URL.revokeObjectURL(url);
+          resolve({ file: rawFile, width: w0, height: h0 });
+          return;
+        }
+        ctx.drawImage(img, 0, 0, outW, outH);
+        canvas.toBlob(
+          (blob) => {
+            URL.revokeObjectURL(url);
+            if (!blob) {
+              resolve({ file: rawFile, width: w0, height: h0 });
+              return;
+            }
+            const compressed = new File(
+              [blob],
+              rawFile.name.replace(/\.[^.]+$/, "") + ".jpg",
+              { type: "image/jpeg" }
+            );
+            resolve({ file: compressed, width: outW, height: outH });
+          },
+          "image/jpeg",
+          quality
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve({ file: rawFile, width: 1280, height: 720 });
+      };
+      img.src = url;
+    });
+  };
+
   const handleCameraCaptured = async (
     slot: CaptureSlot,
     file: File,
@@ -133,6 +183,7 @@ export default function CameraPage() {
       hour: "2-digit",
       minute: "2-digit",
     });
+    // Đánh dấu đạt ngay tức thì để sinh viên thao tác mượt mà (< 50ms), đồng thời tải ngầm lên server
     setCaptures((prev) => ({
       ...prev,
       [slot.slot_code]: {
@@ -141,7 +192,7 @@ export default function CameraPage() {
         capturedAt,
         width: resolution.width,
         height: resolution.height,
-        validationStatus: "uploading",
+        validationStatus: "passed",
         issues: [],
       },
     }));
@@ -155,50 +206,34 @@ export default function CameraPage() {
         session.is_offline_fallback,
         captureSource
       );
-      setCaptures((prev) => ({
-        ...prev,
-        [slot.slot_code]: {
-          file,
-          preview: previewUrl,
-          capturedAt,
-          width: check.data.width || resolution.width,
-          height: check.data.height || resolution.height,
-          validationStatus: check.success
-            ? "passed"
-            : (check.data.validation_status as SlotCaptureState["validationStatus"]) ||
-            "needs_retake",
-          issues: check.data.issues || (check.success ? [] : [check.message]),
-        },
-      }));
+      if (!check.success) {
+        setCaptures((prev) => ({
+          ...prev,
+          [slot.slot_code]: {
+            file,
+            preview: previewUrl,
+            capturedAt,
+            width: check.data.width || resolution.width,
+            height: check.data.height || resolution.height,
+            validationStatus:
+              (check.data.validation_status as SlotCaptureState["validationStatus"]) ||
+              "needs_retake",
+            issues: check.data.issues || [check.message],
+          },
+        }));
+      }
     } catch {
-      setCaptures((prev) => ({
-        ...prev,
-        [slot.slot_code]: {
-          file,
-          preview: previewUrl,
-          capturedAt,
-          width: resolution.width,
-          height: resolution.height,
-          validationStatus: "passed",
-          issues: [],
-        },
-      }));
+      // Giữ trạng thái passed khi chạy offline / mạng chậm
     }
   };
 
   const handleFilePick = async (slot: CaptureSlot, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const rawFile = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
+    if (!rawFile) return;
+    const { file, width, height } = await compressImageFile(rawFile, 960, 0.78);
     const previewUrl = URL.createObjectURL(file);
-    const dims = await new Promise<{ width: number; height: number }>((resolve) => {
-      const img = new Image();
-      img.onload = () =>
-        resolve({ width: img.naturalWidth || 1280, height: img.naturalHeight || 720 });
-      img.onerror = () => resolve({ width: 1280, height: 720 });
-      img.src = previewUrl;
-    });
-    await handleCameraCaptured(slot, file, previewUrl, dims, "desktop_test");
+    await handleCameraCaptured(slot, file, previewUrl, { width, height }, "desktop_test");
   };
 
   const slots = session?.slots ?? [];

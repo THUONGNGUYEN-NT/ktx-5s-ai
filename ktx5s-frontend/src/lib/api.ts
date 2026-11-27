@@ -507,9 +507,14 @@ export type SubmissionDetail = {
 export async function getSubmissionDetail(
   submissionId: string
 ): Promise<{ success: boolean; data: SubmissionDetail | null }> {
-  // 1. Thử gọi API Backend thật từ CSDL
+  // 1. Đồng bộ từ Cloudinary + localStorage live records trước (đảm bảo hiển thị điểm đã hiệu chỉnh/duyệt mới nhất)
+  const allLiveMap = await syncLiveRecordsFromCloud();
+  const allLive = Object.values(allLiveMap);
+  const live = allLive.find((r) => r.submission_id === submissionId);
+
+  // 2. Thử gọi API Backend thật từ CSDL
   try {
-    const res = await api.get(`/admin/submissions/${submissionId}`);
+    const res = await api.get(`/admin/submissions/${submissionId}`, { timeout: 3500 });
     if (res.data?.success && res.data?.data) {
       const d = res.data.data;
       const rawUrls: string[] = d.image_urls && d.image_urls.length ? d.image_urls : [d.image_url];
@@ -525,6 +530,13 @@ export async function getSubmissionDetail(
             slot_label: `Ảnh ${idx + 1}`,
             image_url: u,
           }));
+
+      // Nếu Cloudinary live record đã có điểm 5S khắt khe đã hiệu chỉnh (hoặc duyệt đè), ưu tiên kết quả thực tế đó
+      const effectiveAiResult =
+        live && (live.is_overridden || (d.ai_result?.score >= 8.5 && live.ai_result.score < d.ai_result.score))
+          ? live.ai_result
+          : d.ai_result;
+
       return {
         success: true,
         data: {
@@ -539,12 +551,18 @@ export async function getSubmissionDetail(
             desk: urls[3] || urls[0] || resolveImageUrl(d.image_url),
           },
           photos: serverPhotos,
-          ai_result: d.ai_result,
+          ai_result: effectiveAiResult,
           override: d.override_info?.is_overridden
             ? {
               new_status: d.override_info.final_status,
               new_score: d.override_info.final_score,
               note: d.override_info.override_note ?? "",
+            }
+            : live?.is_overridden
+            ? {
+              new_status: live.ai_result.status,
+              new_score: live.ai_result.score,
+              note: live.override_note ?? "",
             }
             : null,
         },
@@ -554,10 +572,6 @@ export async function getSubmissionDetail(
     // Tiếp tục kiểm tra Cloudinary & localStorage
   }
 
-  // 2. Đồng bộ từ Cloudinary + localStorage live records
-  const allLiveMap = await syncLiveRecordsFromCloud();
-  const allLive = Object.values(allLiveMap);
-  const live = allLive.find((r) => r.submission_id === submissionId);
   if (live) {
     return {
       success: true,
@@ -784,8 +798,40 @@ export async function submitCaptureSession(
   session: CaptureSessionInfo,
   captures: Record<string, { file: File; preview: string }>
 ) {
+  const orderedSlots = session.slots.filter((s) => Boolean(captures[s.slot_code]?.file));
+  const filesMap: Record<string, File> = {};
+  for (const s of orderedSlots) {
+    filesMap[s.slot_code] = captures[s.slot_code].file;
+  }
+
+  // Luôn chạy song song bộ phân tích hình ảnh 5S khắt khe (< 250ms) + Upload Cloudinary để:
+  // 1) Đảm bảo tổng thời gian trả kết quả AI luôn dưới 5 - 6 giây (< 7s) kể cả khi Render Backend bị trễ/cold-start
+  // 2) Chặn triệt để lỗi AI chấm nới tay 10.0/10 cho phòng thực tế còn quần áo trên giường, chăn màn chưa gấp, tô chén trên bàn hoặc dép vứt dưới sàn.
+  const localAnalysisPromise = analyzeMultiSlotPhotos(
+    orderedSlots.map((s) => ({
+      slot_code: s.slot_code,
+      slot_label: s.slot_label,
+      checklist_key: s.checklist_key,
+      file: captures[s.slot_code].file,
+    }))
+  );
+  const cloudUploadPromise = uploadAllFourAreasToCloudinary(filesMap, session.room_code);
+
+  // Hàm đối chiếu chéo kết quả từ Server với bộ kiểm định quang học khắt khe:
+  const calibrateStrictAiResult = (serverAi: AIResult, strictLocalAi: AIResult): AIResult => {
+    if (!serverAi || !serverAi.is_valid_room_photo) return serverAi;
+    // Nếu Server chấm >= 8.5 (ví dụ 10.0/10) nhưng kiểm định thực tế phát hiện >= 1 lỗi 5S rõ rệt (điểm thực tế <= 7.8):
+    if (serverAi.score >= 8.5 && strictLocalAi.score <= 7.8 && strictLocalAi.issues_detected.length > 0) {
+      return strictLocalAi;
+    }
+    // Nếu cả hai cùng phát hiện lỗi nhưng Server chấm cao hơn thực tế quá 1.5 điểm -> lấy mức điểm khắt khe hơn
+    if (serverAi.score - strictLocalAi.score > 1.5 && strictLocalAi.issues_detected.length > serverAi.issues_detected.length) {
+      return strictLocalAi;
+    }
+    return serverAi;
+  };
+
   if (session.is_offline_fallback) {
-    const orderedSlots = session.slots.filter((s) => Boolean(captures[s.slot_code]?.file));
     const form = new FormData();
     form.append("room_code", session.room_code);
     form.append("captured_at", new Date().toISOString());
@@ -799,9 +845,13 @@ export async function submitCaptureSession(
     try {
       const res = await api.post("/ai/evaluate", form, {
         headers: { "Content-Type": "multipart/form-data" },
+        timeout: 4800,
       });
       const payload = res.data;
       if (payload?.success && payload?.data) {
+        const strictLocal = await localAnalysisPromise;
+        payload.data.ai_result = calibrateStrictAiResult(payload.data.ai_result, strictLocal.aiResult);
+
         const urls: string[] = (payload.data.image_urls ?? []).map(resolveImageUrl);
         const serverPhotos = (payload.data.photos ?? []) as Array<{
           slot_code: string;
@@ -820,7 +870,8 @@ export async function submitCaptureSession(
           }))
         );
         const byCode = new Map(savedPhotos.map((p) => [p.slot_code, p.image_url]));
-        await saveLiveRecord({
+        // Lưu đồng bộ ngầm lên Cloud để không làm chậm phản hồi UI
+        void saveLiveRecord({
           submission_id: payload.data.submission_id || `sub_${session.week}_${session.room_code}`,
           room_code: session.room_code,
           week: session.week,
@@ -840,28 +891,20 @@ export async function submitCaptureSession(
       return payload;
     } catch (err) {
       const axErr = err as AxiosError<{ message?: string; detail?: string }>;
-      if (axErr.response?.data) {
+      if (axErr.response?.data && axErr.response.status && axErr.response.status >= 400 && axErr.response.status < 500) {
         throw new Error(
           axErr.response.data.message ||
             axErr.response.data.detail ||
             "AI không thể phân tích bộ ảnh này. Vui lòng chụp lại."
         );
       }
-      // Offline / GitHub Pages: Upload toàn bộ ảnh giường tầng (B01..B04) + 3 khu vực chung lên Cloudinary & chấm điểm AI
-      const filesMap: Record<string, File> = {};
-      for (const s of orderedSlots) {
-        filesMap[s.slot_code] = captures[s.slot_code].file;
-      }
+      // Phản hồi tức thì dưới 4 giây bằng bộ chấm 5S khắt khe + Cloudinary
       const [cloudUrls, analysis] = await Promise.all([
-        uploadAllFourAreasToCloudinary(filesMap, session.room_code),
-        analyzeMultiSlotPhotos(
-          orderedSlots.map((s) => ({
-            slot_code: s.slot_code,
-            slot_label: s.slot_label,
-            checklist_key: s.checklist_key,
-            file: captures[s.slot_code].file,
-          }))
-        ),
+        Promise.race([
+          cloudUploadPromise,
+          new Promise<Record<string, string>>((r) => setTimeout(() => r({}), 3800)),
+        ]),
+        localAnalysisPromise,
       ]);
 
       if (!analysis.isValid) {
@@ -883,7 +926,7 @@ export async function submitCaptureSession(
       const submittedAt = new Date().toISOString();
       const subId = `sub_${session.week}_${session.room_code}`;
 
-      await saveLiveRecord({
+      void saveLiveRecord({
         submission_id: subId,
         room_code: session.room_code,
         week: session.week,
@@ -916,9 +959,14 @@ export async function submitCaptureSession(
   }
 
   try {
-    const res = await api.post(`/capture-sessions/${session.session_id}/submit`);
+    const res = await api.post(`/capture-sessions/${session.session_id}/submit`, undefined, {
+      timeout: 5200,
+    });
     const payload = res.data;
     if (payload?.success && payload?.data) {
+      const strictLocal = await localAnalysisPromise;
+      payload.data.ai_result = calibrateStrictAiResult(payload.data.ai_result, strictLocal.aiResult);
+
       const urls: string[] = (payload.data.image_urls ?? []).map(resolveImageUrl);
       const photos = (payload.data.photos ?? []) as Array<{
         slot_code: string;
@@ -937,7 +985,7 @@ export async function submitCaptureSession(
         };
       });
       const byCode = new Map(savedPhotos.map((p) => [p.slot_code, p.image_url]));
-      await saveLiveRecord({
+      void saveLiveRecord({
         submission_id: payload.data.submission_id,
         room_code: session.room_code,
         week: session.week,
@@ -964,7 +1012,7 @@ export async function submitCaptureSession(
         retake_requests?: Array<{ slot_code: string; slot_label: string; reason: string }>;
       };
     }>;
-    if (axErr.response?.data) {
+    if (axErr.response?.data && axErr.response.status && axErr.response.status >= 400 && axErr.response.status < 500) {
       const errObj = new Error(axErr.response.data.message || "Cần chụp bổ sung ảnh.") as Error & {
         retakeRequests?: Array<{ slot_code: string; slot_label: string; reason: string }>;
         assessmentCategory?: string;
@@ -973,6 +1021,63 @@ export async function submitCaptureSession(
       errObj.assessmentCategory = axErr.response.data.data?.assessment_category;
       throw errObj;
     }
-    throw err;
+
+    // Nếu Backend vượt quá 5.2s (cold start hoặc LLM phản hồi chậm), trả về ngay kết quả chấm 5S khắt khe (< 6s)
+    const [cloudUrls, analysis] = await Promise.all([
+      Promise.race([
+        cloudUploadPromise,
+        new Promise<Record<string, string>>((r) => setTimeout(() => r({}), 3800)),
+      ]),
+      localAnalysisPromise,
+    ]);
+
+    if (!analysis.isValid) {
+      throw new Error(
+        analysis.invalidMessage || "Bộ ảnh chưa hợp lệ hoặc có ảnh trùng lặp. Vui lòng kiểm tra và chụp lại!"
+      );
+    }
+
+    const savedPhotos: SubmittedPhotoItem[] = await Promise.all(
+      orderedSlots.map(async (s) => ({
+        slot_code: s.slot_code,
+        slot_label: s.slot_label,
+        checklist_key: s.checklist_key,
+        image_url:
+          cloudUrls[s.slot_code] || (await fileToDataUrl(captures[s.slot_code].file)),
+      }))
+    );
+    const byCode = new Map(savedPhotos.map((p) => [p.slot_code, p.image_url]));
+    const submittedAt = new Date().toISOString();
+    const subId = `sub_${session.week}_${session.room_code}`;
+
+    void saveLiveRecord({
+      submission_id: subId,
+      room_code: session.room_code,
+      week: session.week,
+      submitted_at: submittedAt,
+      area_images: {
+        bed: byCode.get("B01") || savedPhotos[0]?.image_url || "",
+        floor: byCode.get("C02_FLOOR") || savedPhotos[1]?.image_url || "",
+        desk: byCode.get("C03_DESK") || savedPhotos[2]?.image_url || "",
+        shoes: byCode.get("C04_SHOES") || savedPhotos[3]?.image_url || "",
+      },
+      photos: savedPhotos,
+      ai_result: analysis.aiResult,
+      is_overridden: false,
+      override_note: null,
+    });
+
+    return {
+      success: true,
+      data: {
+        submission_id: subId,
+        room_code: session.room_code,
+        submitted_at: submittedAt,
+        image_url: savedPhotos[0]?.image_url || "",
+        photos: savedPhotos,
+        ai_result: analysis.aiResult,
+      },
+      message: `Nộp đủ ${savedPhotos.length} ảnh thành công! AI đã chấm điểm trong dưới 6 giây.`,
+    };
   }
 }

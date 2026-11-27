@@ -163,40 +163,67 @@ async function measureImagePixels(file: File): Promise<AreaMetrics> {
           }
         }
 
-        // Tính độ lệch chuẩn độ sáng giữa 16 ô lưới (4x4) để đo mức độ ngổn ngang
+        // Tính độ lệch chuẩn độ sáng & độ bão hòa màu giữa 16 ô lưới (4x4) để đo mức độ ngổn ngang của vật dụng
         const patchMeans: number[] = [];
+        const patchSats: number[] = [];
+        let highSatPixels = 0;
+        let clutterEdgeCount = 0;
         const pw = W / 4;
         const ph = H / 4;
         for (let py = 0; py < 4; py++) {
           for (let px = 0; px < 4; px++) {
             let s = 0;
+            let satBlock = 0;
             for (let y = py * ph; y < (py + 1) * ph; y++) {
               for (let x = px * pw; x < (px + 1) * pw; x++) {
-                s += lumGrid[y * W + x];
+                const idx = y * W + x;
+                s += lumGrid[idx];
+                const r = data[idx * 4];
+                const g = data[idx * 4 + 1];
+                const b = data[idx * 4 + 2];
+                const pxSat = Math.max(r, g, b) - Math.min(r, g, b);
+                satBlock += pxSat;
+                if (pxSat > 55) highSatPixels++;
+                if (x < W - 1 && y < H - 1) {
+                  const localGrad = Math.abs(lumGrid[idx] - lumGrid[idx + 1]) + Math.abs(lumGrid[idx] - lumGrid[idx + W]);
+                  if (localGrad > 28) clutterEdgeCount++;
+                }
               }
             }
             patchMeans.push(s / (pw * ph));
+            patchSats.push(satBlock / (pw * ph));
           }
         }
         const meanPatch = patchMeans.reduce((a, b) => a + b, 0) / patchMeans.length;
         const patchVar = Math.sqrt(
           patchMeans.reduce((acc, v) => acc + (v - meanPatch) ** 2, 0) / patchMeans.length
         );
+        const meanSatPatch = patchSats.reduce((a, b) => a + b, 0) / patchSats.length;
+        const satPatchVar = Math.sqrt(
+          patchSats.reduce((acc, v) => acc + (v - meanSatPatch) ** 2, 0) / patchSats.length
+        );
 
         const edge = edgeSum / count;
         const lum = lumSum / (W * H);
         const sat = satSum / (W * H);
+        const colorfulClutterRatio = (highSatPixels / (W * H)) * 100;
+        const sharpClutterRatio = (clutterEdgeCount / count) * 100;
 
         // Kiểm tra ảnh quá tối đen hoặc ảnh trống trơn 1 màu
         const isInvalid = lum < 16 || (lum > 250 && edge < 1.5) || edge < 1.2;
 
-        // Công thức điểm bừa bộn dựa trên thống kê quang học thực tế:
-        // Ảnh bừa bộn có mật độ cạnh vụn cao (edge > 26), vùng tối/bóng đổ nhiều (lum < 148)
+        // Công thức chấm 5S khắt khe:
+        // Vật dụng bừa bộn trong phòng sinh viên (quần áo vứt trên giường, chăn màn chưa gấp,
+        // tô chén/chai lọ/túi nilon trên bàn, giày dép vứt dưới sàn) tạo ra:
+        // 1) Mật độ cạnh sắc cục bộ cao (sharpClutterRatio & edge)
+        // 2) Độ lệch màu sắc giữa các vùng cao (satPatchVar & colorfulClutterRatio)
+        // 3) Độ tương phản khối vật thể (patchVar)
         let messyScore =
-          (edge - 21) * 3.1 +
-          (158 - lum) * 0.42 +
-          (32 - sat) * 0.35 +
-          (patchVar - 24) * 0.4;
+          (edge - 13.5) * 2.35 +
+          sharpClutterRatio * 0.65 +
+          Math.max(0, satPatchVar - 9) * 0.95 +
+          Math.max(0, colorfulClutterRatio - 12) * 0.45 +
+          Math.max(0, patchVar - 18) * 0.55;
 
         // Kết hợp nhận diện tên file trong bộ dữ liệu test (nếu trùng)
         const lowerName = (file.name || "").toLowerCase();
@@ -237,38 +264,38 @@ const AREA_INFO: Record<
   bed: {
     name: "Giường ngủ",
     checklistKey: "bed_tidy",
-    minorIssue: "Chăn gối trên giường xếp chưa phẳng phiu, còn hơi xô lệch",
-    moderateIssue: "Giường ngủ chưa gấp chăn màn, còn để đồ dùng cá nhân trên nệm",
-    severeIssue: "Giường ngủ bừa bộn nhiều quần áo, túi đồ và vật dụng chất đống",
-    positive: "Giường ngủ gấp chăn màn vuông vức, gọn gàng",
-    fixTip: "Gấp gọn chăn màn và cất bớt đồ đạc trên giường vào tủ",
+    minorIssue: "Chăn màn trên giường chưa gấp vuông vức, còn để vật dụng cá nhân trên chiếu/nệm",
+    moderateIssue: "Trên giường còn quăng quần áo, chăn màn chưa gấp gọn và kệ đầu giường còn để đồ đạc lộn xộn",
+    severeIssue: "Giường tầng bừa bộn nhiều quần áo, chăn màn vo tròn, túi đồ và vật dụng chất đống trên chiếu",
+    positive: "Giường ngủ gấp chăn màn vuông vức, mặt chiếu thông thoáng",
+    fixTip: "Gấp gọn chăn màn vuông vức, thu dọn quần áo vứt trên giường và xếp gọn kệ đầu giường",
   },
   floor: {
     name: "Sàn nhà",
     checklistKey: "floor_clean",
-    minorIssue: "Sàn nhà còn vài vật dụng nhỏ để sát lối đi",
-    moderateIssue: "Sàn nhà và gầm giường còn đồ đạc, túi nilon để lộn xộn",
-    severeIssue: "Sàn nhà bừa bộn nhiều rác, thùng đồ và vật dụng cản trở lối đi",
+    minorIssue: "Dọc lối đi hoặc trên lưng ghế còn vắt quần áo, vật dụng chưa thu gọn",
+    moderateIssue: "Sàn nhà và ghế dọc lối đi còn vắt áo khoác/quần áo lộn xộn, có vật dụng cản lối đi",
+    severeIssue: "Sàn nhà bừa bộn nhiều rác, túi nilon, thùng đồ và quần áo vắt ngổn ngang dọc lối đi",
     positive: "Sàn nhà và lối đi sạch sẽ, thông thoáng",
-    fixTip: "Quét dọn rác trên sàn và thu gọn các thùng/túi đồ dưới gầm giường",
+    fixTip: "Cất gọn quần áo vắt trên ghế dọc lối đi và quét dọn sạch mặt sàn",
   },
   shoes: {
     name: "Kệ giày dép",
     checklistKey: "shoes_arranged",
-    minorIssue: "Một vài đôi giày dép trên kệ đặt còn lệch hàng",
-    moderateIssue: "Kệ giày dép và khu vực cửa để đồ đạc, giày dép lộn xộn",
-    severeIssue: "Khu vực kệ giày dép chất nhiều thùng hộp, túi đồ và giày dép bừa bãi",
-    positive: "Kệ giày dép sắp xếp ngay ngắn, đúng vị trí",
-    fixTip: "Xếp lại giày dép thẳng hàng lên kệ và dọn gọn khu vực cửa",
+    minorIssue: "Còn dép để dưới sàn trước kệ giày dép hoặc giày dép trên kệ đặt chưa thẳng hàng",
+    moderateIssue: "Kệ giày dép còn dép vứt dưới sàn bên ngoài kệ, trên nóc kệ còn chất thùng hộp/túi đồ chưa gọn",
+    severeIssue: "Khu vực kệ giày dép bừa bãi nhiều giày dép vứt dưới sàn, thùng hộp và chổi/đồ đạc để lộn xộn",
+    positive: "Kệ giày dép sắp xếp ngay ngắn, không có dép vứt dưới sàn",
+    fixTip: "Xếp toàn bộ dép dưới sàn lên kệ thẳng hàng và dọn gọn thùng hộp trên nóc kệ giày",
   },
   desk: {
     name: "Bàn học",
     checklistKey: "desk_organized",
-    minorIssue: "Bàn học còn một số sách vở, đồ dùng chưa xếp gọn",
-    moderateIssue: "Bàn học và khu vực xung quanh để nhiều vali, túi đồ lộn xộn",
-    severeIssue: "Khu vực bàn học bừa bộn nhiều đồ đạc, hộp chứa và vật dụng ngổn ngang",
+    minorIssue: "Mặt bàn học còn để bình nước, hộp đồ hoặc vật dụng cá nhân chưa xếp ngăn nắp",
+    moderateIssue: "Bàn học còn để tô chén, hộp thức ăn, chai lọ gia vị, ấm nước và túi nilon lộn xộn",
+    severeIssue: "Mặt bàn học bừa bộn nhiều tô chén, hộp đựng đồ ăn, chai lọ, bình đun và túi nilon ngổn ngang",
     positive: "Bàn học và kệ sách ngăn nắp, sạch sẽ",
-    fixTip: "Sắp xếp lại sách vở trên mặt bàn và cất gọn vali/túi đồ đúng nơi quy định",
+    fixTip: "Thu dọn tô chén, chai lọ, hộp đồ ăn và túi nilon trên mặt bàn học",
   },
 };
 
@@ -396,28 +423,27 @@ export async function analyzeFourRoomPhotos(
     const m = metricsMap[k];
     const info = AREA_INFO[k];
 
-    // Ngưỡng đánh giá từng khu vực: messyScore >= 46 là không đạt
-    if (m.messyScore >= 46) {
+    // Ngưỡng đánh giá khắt khe từng khu vực: messyScore >= 34 là không đạt
+    if (m.messyScore >= 34) {
       checklist[info.checklistKey] = false;
       fixTips.push(info.fixTip);
 
-      if (m.messyScore >= 72) {
+      if (m.messyScore >= 60) {
         const deduction = 2.2;
         totalScore -= deduction;
         issues_detected.push(`−2,2 điểm · ${info.name}: ${info.severeIssue}`);
-      } else if (m.messyScore >= 58) {
-        const deduction = 1.6;
+      } else if (m.messyScore >= 45) {
+        const deduction = 1.5;
         totalScore -= deduction;
-        issues_detected.push(`−1,6 điểm · ${info.name}: ${info.moderateIssue}`);
+        issues_detected.push(`−1,5 điểm · ${info.name}: ${info.moderateIssue}`);
       } else {
-        const deduction = 1.0;
+        const deduction = 0.9;
         totalScore -= deduction;
-        issues_detected.push(`−1,0 điểm · ${info.name}: ${info.minorIssue}`);
+        issues_detected.push(`−0,9 điểm · ${info.name}: ${info.minorIssue}`);
       }
     } else {
       checklist[info.checklistKey] = true;
-      // Dao động nhẹ 0.1 - 0.3 điểm theo độ sắc nét/gọn gàng thực tế của ảnh
-      const smallPenalty = m.messyScore > 30 ? 0.2 : m.messyScore > 20 ? 0.1 : 0;
+      const smallPenalty = m.messyScore > 25 ? 0.3 : m.messyScore > 18 ? 0.15 : 0;
       totalScore -= smallPenalty;
       positive_notes.push(info.positive);
     }
@@ -540,25 +566,25 @@ export async function analyzeMultiSlotPhotos(
       : "shoes";
     const info = AREA_INFO[infoKey];
 
-    if (m.messyScore >= 46) {
+    if (m.messyScore >= 34) {
       checklist[info.checklistKey] = false;
       fixTips.add(info.fixTip);
       const scale = isBed ? 0.65 : 1.0;
-      if (m.messyScore >= 72) {
-        const deduction = Math.round(2.2 * scale * 10) / 10;
+      if (m.messyScore >= 60) {
+        const deduction = Math.round(2.1 * scale * 10) / 10;
         totalScore -= deduction;
-        issues_detected.push(`−${deduction.toFixed(1)}đ · ${item.slot_label}: ${info.severeIssue}`);
-      } else if (m.messyScore >= 58) {
-        const deduction = Math.round(1.6 * scale * 10) / 10;
+        issues_detected.push(`−${deduction.toFixed(1).replace(".", ",")} điểm · ${item.slot_label}: ${info.severeIssue}`);
+      } else if (m.messyScore >= 45) {
+        const deduction = Math.round(1.4 * scale * 10) / 10;
         totalScore -= deduction;
-        issues_detected.push(`−${deduction.toFixed(1)}đ · ${item.slot_label}: ${info.moderateIssue}`);
+        issues_detected.push(`−${deduction.toFixed(1).replace(".", ",")} điểm · ${item.slot_label}: ${info.moderateIssue}`);
       } else {
-        const deduction = Math.round(1.0 * scale * 10) / 10;
+        const deduction = Math.round(0.9 * scale * 10) / 10;
         totalScore -= deduction;
-        issues_detected.push(`−${deduction.toFixed(1)}đ · ${item.slot_label}: ${info.minorIssue}`);
+        issues_detected.push(`−${deduction.toFixed(1).replace(".", ",")} điểm · ${item.slot_label}: ${info.minorIssue}`);
       }
     } else {
-      const smallPenalty = m.messyScore > 30 ? 0.15 : m.messyScore > 20 ? 0.08 : 0;
+      const smallPenalty = m.messyScore > 25 ? 0.25 : m.messyScore > 18 ? 0.12 : 0;
       totalScore -= smallPenalty;
       positive_notes.push(`${item.slot_label}: Gọn gàng, đạt chuẩn 5S`);
     }
