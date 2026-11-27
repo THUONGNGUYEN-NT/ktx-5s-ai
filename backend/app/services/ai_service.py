@@ -96,7 +96,7 @@ CRITERIA = {
     "desk_organized": "Bàn học",
     "shoes_arranged": "Giày dép",
 }
-DEDUCTION_POINTS = {"minor": 0.6, "moderate": 1.1, "severe": 1.8}
+DEDUCTION_POINTS = {"minor": 0.5, "moderate": 0.9, "severe": 1.4}
 
 
 def apply_scoring(result: dict[str, Any], duplicate_errors: list[str] | None = None) -> None:
@@ -818,26 +818,26 @@ def _apply_session_scoring(
                     cnt += 1
             mean_edge = edge_sum / max(1, cnt)
             sharp_ratio = (sharp_edges / max(1, cnt)) * 100.0
-            clutter_index = (mean_edge - 13.5) * 2.2 + sharp_ratio * 0.65 + max(0.0, high_sat_ratio - 12.0) * 0.45
+            clutter_index = (mean_edge - 15.8) * 2.0 + sharp_ratio * 0.52 + max(0.0, high_sat_ratio - 16.0) * 0.35
 
-            if code.startswith("B") and clutter_index >= 39.0:
+            if code.startswith("B") and clutter_index >= 44.0:
                 prev_val = slot_clutter_notes.get("bed_tidy", (0.0, ""))[0]
                 if clutter_index > prev_val:
                     slot_clutter_notes["bed_tidy"] = (
                         clutter_index,
                         f"Trên giường ({item.get('slot_label', code)}) còn quăng quần áo, chăn màn chưa gấp gọn và kệ đầu giường còn để vật dụng lộn xộn",
                     )
-            elif "FLOOR" in code and clutter_index >= 41.0:
+            elif "FLOOR" in code and clutter_index >= 46.0:
                 slot_clutter_notes["floor_clean"] = (
                     clutter_index,
                     "Dọc lối đi và trên lưng ghế còn vắt quần áo/áo khoác chưa gọn gàng",
                 )
-            elif "DESK" in code and clutter_index >= 38.0:
+            elif "DESK" in code and clutter_index >= 43.0:
                 slot_clutter_notes["desk_organized"] = (
                     clutter_index,
                     "Mặt bàn học còn để nhiều tô chén, hộp đựng đồ ăn, chai lọ gia vị, ấm nước và túi nilon lộn xộn",
                 )
-            elif "SHOES" in code and clutter_index >= 38.0:
+            elif "SHOES" in code and clutter_index >= 43.0:
                 slot_clutter_notes["shoes_arranged"] = (
                     clutter_index,
                     "Kệ giày dép còn dép vứt dưới sàn phía trước kệ, trên nóc kệ còn chất thùng carton và túi đồ chưa ngăn nắp",
@@ -845,13 +845,13 @@ def _apply_session_scoring(
         except Exception:
             pass
 
-    # Nếu LLM chấm quá nới tay (điểm >= 8.5) trong khi ảnh thực tế có mật độ vật dụng bừa bộn cao:
-    if score >= 8.5 and len(slot_clutter_notes) >= 2:
+    # Nếu LLM chấm quá nới tay (điểm >= 8.8) trong khi ảnh thực tế có từ 2 khu vực bừa bộn rõ rệt trở lên:
+    if score >= 8.8 and len(slot_clutter_notes) >= 2:
         for crit, (c_idx, reason_txt) in slot_clutter_notes.items():
             if crit not in seen:
                 seen.add(crit)
                 checklist[crit] = False
-                pts = 1.1 if c_idx >= 48.0 else 0.8
+                pts = 0.9 if c_idx >= 52.0 else 0.6
                 score -= pts
                 disp = f"{pts:.1f}".replace(".", ",")
                 issues.append(f"−{disp} điểm · {CRITERIA[crit]} · {reason_txt}")

@@ -817,15 +817,14 @@ export async function submitCaptureSession(
   );
   const cloudUploadPromise = uploadAllFourAreasToCloudinary(filesMap, session.room_code);
 
-  // Hàm đối chiếu chéo kết quả từ Server với bộ kiểm định quang học khắt khe:
+  // Hàm đối chiếu chéo kết quả từ Server với bộ kiểm định quang học thực tế:
   const calibrateStrictAiResult = (serverAi: AIResult, strictLocalAi: AIResult): AIResult => {
     if (!serverAi || !serverAi.is_valid_room_photo) return serverAi;
-    // Nếu Server chấm >= 8.5 (ví dụ 10.0/10) nhưng kiểm định thực tế phát hiện >= 1 lỗi 5S rõ rệt (điểm thực tế <= 7.8):
-    if (serverAi.score >= 8.5 && strictLocalAi.score <= 7.8 && strictLocalAi.issues_detected.length > 0) {
+    // Chỉ hiệu chỉnh khi Server chấm quá cao (>= 9.0) nhưng thực tế có từ 2 khu vực bừa bộn rõ rệt trở lên (điểm thực tế <= 7.8):
+    if (serverAi.score >= 9.0 && strictLocalAi.score <= 7.8 && strictLocalAi.issues_detected.length >= 2) {
       return strictLocalAi;
     }
-    // Nếu cả hai cùng phát hiện lỗi nhưng Server chấm cao hơn thực tế quá 1.5 điểm -> lấy mức điểm khắt khe hơn
-    if (serverAi.score - strictLocalAi.score > 1.5 && strictLocalAi.issues_detected.length > serverAi.issues_detected.length) {
+    if (serverAi.score - strictLocalAi.score > 1.8 && strictLocalAi.issues_detected.length >= 2) {
       return strictLocalAi;
     }
     return serverAi;
