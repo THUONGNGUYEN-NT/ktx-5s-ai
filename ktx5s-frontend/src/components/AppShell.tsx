@@ -237,17 +237,17 @@ export default function AppShell({
           })}
         </nav>
 
-        {/* Hình ảnh Ký túc xá ĐHQG-HCM thực tế với hiệu ứng Blur nhẹ nổi bật & Gradient hòa tan mượt ở chân Sidebar */}
-        <div className={`relative h-48 overflow-hidden shrink-0 ${collapsed ? "md:hidden" : ""}`}>
-          {/* Ảnh KTX làm mờ rất nhẹ (blur) để nổi rõ hình tòa nhà */}
+        {/* Hình ảnh Ký túc xá ĐHQG-HCM sắc nét, nổi bật ở chân Sidebar (hòa tan mượt mép trên vào nền Navy) */}
+        <div className={`relative h-56 overflow-hidden shrink-0 ${collapsed ? "md:hidden" : ""}`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/ktx-bg.jpg`}
             alt="Ký túc xá ĐHQG-HCM"
-            className="absolute inset-0 w-full h-full object-cover object-center blur-[0.75px] scale-105 opacity-95 pointer-events-none select-none"
+            className="absolute inset-0 w-full h-full object-cover object-center opacity-100 brightness-105 contrast-105 pointer-events-none select-none"
           />
-          {/* Lớp phủ gradient trong suốt phần giữa để ảnh KTX hiện rõ, chỉ hòa tan mép trên và tối nhẹ chân chữ */}
-          <div className="absolute inset-0 bg-gradient-to-b from-[#132847] via-[#132847]/15 to-[#0b1930]/80 pointer-events-none" />
+          {/* Chỉ hòa tan mượt ở 25% mép trên vào nền Navy và tối nhẹ 25% sát đáy để nổi rõ chữ */}
+          <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-[#132847] via-[#132847]/65 to-transparent pointer-events-none" />
+          <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#0b1930]/90 via-[#0b1930]/40 to-transparent pointer-events-none" />
 
           <div className="absolute inset-x-0 bottom-0 px-4 pb-3.5 pt-6 z-10">
             <div className="flex items-center justify-between pt-3 border-t border-white/15">
