@@ -298,9 +298,6 @@ export default function LoginPage() {
             <h1 className="text-xl sm:text-2xl font-bold mt-7 leading-snug">
               Hệ thống đánh giá vệ sinh phòng KTX tự động bằng AI
             </h1>
-            <p className="text-xs sm:text-sm text-sky-100/75 mt-2 leading-relaxed">
-              Quản lý chuẩn 5S thông minh, minh bạch và đồng bộ thời gian thực trên cả máy tính lẫn điện thoại.
-            </p>
 
             <ul className="mt-7 space-y-3.5 text-sm text-sky-50/90 hidden md:flex md:flex-col">
               <li className="flex items-center gap-3">
