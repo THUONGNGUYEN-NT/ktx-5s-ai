@@ -24,6 +24,7 @@ import {
 import { getSession, clearSession, type Session, type UserRole } from "@/lib/session";
 import { findAccountByUsername, getAllAccounts, type UserAccount } from "@/lib/user-store";
 import { getRoomMembersByCode } from "@/components/status";
+import { getUnreadAdminNotifCount } from "@/lib/notifications-store";
 
 type MenuItem = {
   href: string;
@@ -76,6 +77,7 @@ export default function AppShell({
   const [account, setAccount] = useState<UserAccount | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const syncUserState = useCallback(() => {
     const s = getSession();
@@ -84,6 +86,7 @@ export default function AppShell({
       return;
     }
     setSession(s);
+    setUnreadCount(role === "admin" ? getUnreadAdminNotifCount() : 0);
 
     let acc: UserAccount | null = null;
     if (s.username) {
@@ -98,9 +101,14 @@ export default function AppShell({
 
   useEffect(() => {
     syncUserState();
+    const syncNotifs = () => setUnreadCount(role === "admin" ? getUnreadAdminNotifCount() : 0);
     window.addEventListener("ktx5s-profile-updated", syncUserState);
-    return () => window.removeEventListener("ktx5s-profile-updated", syncUserState);
-  }, [syncUserState]);
+    window.addEventListener("ktx5s-notifs-updated", syncNotifs);
+    return () => {
+      window.removeEventListener("ktx5s-profile-updated", syncUserState);
+      window.removeEventListener("ktx5s-notifs-updated", syncNotifs);
+    };
+  }, [syncUserState, role]);
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -227,9 +235,9 @@ export default function AppShell({
                 <span className={`flex-1 truncate ${collapsed ? "md:hidden" : ""}`}>
                   {item.label}
                 </span>
-                {item.badge && !collapsed && (
+                {item.badge && unreadCount > 0 && !collapsed && (
                   <span className="bg-rose-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full leading-none">
-                    {item.badge}
+                    {unreadCount}
                   </span>
                 )}
               </Link>
@@ -237,17 +245,22 @@ export default function AppShell({
           })}
         </nav>
 
-        {/* Hình ảnh Ký túc xá ĐHQG-HCM sắc nét, nổi bật ở chân Sidebar (hòa tan mượt mép trên vào nền Navy) */}
-        <div className={`relative h-56 overflow-hidden shrink-0 ${collapsed ? "md:hidden" : ""}`}>
+        {/* Hình ảnh Ký túc xá ĐHQG-HCM hòa tan mượt tự nhiên vào nền Sidebar bằng CSS Mask Gradient */}
+        <div className={`relative h-64 overflow-hidden shrink-0 ${collapsed ? "md:hidden" : ""}`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/ktx-bg.jpg`}
             alt="Ký túc xá ĐHQG-HCM"
-            className="absolute inset-0 w-full h-full object-cover object-center opacity-100 brightness-105 contrast-105 pointer-events-none select-none"
+            style={{
+              WebkitMaskImage:
+                "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.18) 22%, rgba(0,0,0,0.75) 50%, black 76%)",
+              maskImage:
+                "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.18) 22%, rgba(0,0,0,0.75) 50%, black 76%)",
+            }}
+            className="absolute inset-0 w-full h-full object-cover object-center opacity-95 pointer-events-none select-none"
           />
-          {/* Chỉ hòa tan mượt ở 25% mép trên vào nền Navy và tối nhẹ 25% sát đáy để nổi rõ chữ */}
-          <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-[#132847] via-[#132847]/65 to-transparent pointer-events-none" />
-          <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#0b1930]/90 via-[#0b1930]/40 to-transparent pointer-events-none" />
+          {/* Dải tối mềm ở sát đáy để nổi rõ chữ Ký túc xá ĐHQG-HCM */}
+          <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#0b1930]/90 via-[#0b1930]/45 to-transparent pointer-events-none" />
 
           <div className="absolute inset-x-0 bottom-0 px-4 pb-3.5 pt-6 z-10">
             <div className="flex items-center justify-between pt-3 border-t border-white/15">
@@ -346,7 +359,9 @@ export default function AppShell({
               title="Thông báo"
             >
               <Bell size={20} className="text-white md:text-slate-600" />
-              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-[#1b365d] md:ring-white" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-[#1b365d] md:ring-white" />
+              )}
             </Link>
 
             <Link
@@ -395,9 +410,9 @@ export default function AppShell({
               >
                 <div className="relative">
                   <Icon size={21} strokeWidth={active ? 2.4 : 1.9} />
-                  {item.badge && (
+                  {item.badge && unreadCount > 0 && (
                     <span className="absolute -top-1 -right-2 bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full leading-tight">
-                      {item.badge}
+                      {unreadCount}
                     </span>
                   )}
                 </div>

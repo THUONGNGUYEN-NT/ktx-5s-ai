@@ -1,54 +1,18 @@
 "use client";
 // TRANG THÔNG BÁO & NHẬT KÝ HOẠT ĐỘNG CÁN BỘ — MODERN NAVY-BLUE THEME
-import { useState } from "react";
+// Đồng bộ trạng thái đã đọc / chưa đọc với badge thông báo trên Sidebar, Header và Mobile Bottom Nav
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Bell, CheckCircle2, CheckCheck } from "lucide-react";
 import AppShell from "@/components/AppShell";
 import Panel from "@/components/Panel";
-
-type NotifType = "warning" | "reminder" | "info";
-type NotifItem = {
-  id: string;
-  type: NotifType;
-  badge: string;
-  title: string;
-  desc: string;
-  time: string;
-  read: boolean;
-  roomId?: string;
-};
-
-const INITIAL_NOTIFS: NotifItem[] = [
-  {
-    id: "n1",
-    type: "warning",
-    badge: "Cảnh báo",
-    title: "Phòng A1-104 có kết quả vệ sinh dưới 5 điểm",
-    desc: "Vui lòng kiểm tra hình ảnh giường tầng và nhắc nhở sinh viên khắc phục sớm.",
-    time: "10:24 · 27/11",
-    read: false,
-    roomId: "sub_2026-W48_A1-104",
-  },
-  {
-    id: "n2",
-    type: "reminder",
-    badge: "Nhắc nhở",
-    title: "Phòng B1-102 chưa nộp ảnh tuần này",
-    desc: "Hạn nộp ảnh định kỳ: 21:00 Chủ nhật (29/11/2026).",
-    time: "09:17 · 27/11",
-    read: false,
-  },
-  {
-    id: "n3",
-    type: "info",
-    badge: "Thông tin",
-    title: "Phòng A3-301 đã hoàn tất nộp ảnh kiểm tra 5S",
-    desc: "Hệ thống AI chấm đạt 9.8/10 (Sạch) và đã đồng bộ ảnh lên Cloudinary.",
-    time: "13:21 · 25/11",
-    read: true,
-    roomId: "sub_2026-W48_A3-301",
-  },
-];
+import {
+  loadAdminNotifs,
+  markAllAdminNotifsRead,
+  markOneAdminNotifRead,
+  type NotifItem,
+  type NotifType,
+} from "@/lib/notifications-store";
 
 const ACTIVITY_LOGS = [
   { time: "27/11/2026 08:45", actor: "Quản trị viên Hệ thống", action: "Duyệt kết quả", detail: "Phòng A3-301" },
@@ -59,12 +23,30 @@ const ACTIVITY_LOGS = [
 export default function AdminNotificationsPage() {
   const router = useRouter();
   const [filter, setFilter] = useState<"all" | NotifType>("all");
-  const [items, setItems] = useState<NotifItem[]>(INITIAL_NOTIFS);
+  const [items, setItems] = useState<NotifItem[]>([]);
+  const [toast, setToast] = useState("");
+
+  useEffect(() => {
+    setItems(loadAdminNotifs());
+  }, []);
 
   const visible = filter === "all" ? items : items.filter((n) => n.type === filter);
+  const unreadCount = items.filter((n) => !n.read).length;
 
-  const markAllRead = () => {
-    setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+  const handleMarkAllRead = () => {
+    const updated = markAllAdminNotifsRead();
+    setItems(updated);
+    setToast("Đã đánh dấu tất cả thông báo là đã đọc!");
+    setTimeout(() => setToast(""), 2500);
+  };
+
+  const handleClickNotif = (n: NotifItem) => {
+    if (!n.read) {
+      setItems(markOneAdminNotifRead(n.id));
+    }
+    if (n.roomId) {
+      router.push(`/admin/rooms?id=${n.roomId}`);
+    }
   };
 
   return (
@@ -72,15 +54,29 @@ export default function AdminNotificationsPage() {
       <div className="space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">Thông báo</h1>
+            <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2.5">
+              Thông báo
+              {unreadCount > 0 && (
+                <span className="text-xs font-bold bg-rose-100 text-rose-600 px-2.5 py-0.5 rounded-full">
+                  {unreadCount} chưa đọc
+                </span>
+              )}
+            </h1>
             <p className="text-sm text-slate-500">Cập nhật mới nhất từ hệ thống kiểm tra 5S</p>
           </div>
+
           <button
             type="button"
-            onClick={markAllRead}
-            className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold shadow-2xs transition"
+            onClick={handleMarkAllRead}
+            disabled={unreadCount === 0}
+            className={`inline-flex items-center gap-1.5 border px-4 py-2 rounded-xl text-xs font-bold shadow-2xs transition ${
+              unreadCount === 0
+                ? "bg-slate-50 border-slate-200 text-slate-400 cursor-default"
+                : "bg-white hover:bg-blue-50 border-blue-200 text-[#1d4ed8] cursor-pointer active:scale-[0.98]"
+            }`}
           >
-            <CheckCheck size={15} className="text-[#1d4ed8]" /> Đánh dấu đã đọc tất cả
+            <CheckCheck size={15} />
+            {unreadCount === 0 ? "Đã đọc tất cả" : "Đánh dấu đã đọc tất cả"}
           </button>
         </div>
 
@@ -130,10 +126,12 @@ export default function AdminNotificationsPage() {
             return (
               <div
                 key={n.id}
-                onClick={() => n.roomId && router.push(`/admin/rooms?id=${n.roomId}`)}
-                className={`bg-white rounded-2xl border p-4 flex items-start gap-3.5 shadow-[0_2px_10px_rgba(15,23,42,0.03)] transition ${
-                  n.read ? "border-slate-200/80" : "border-blue-200 bg-blue-50/20"
-                } ${n.roomId ? "cursor-pointer hover:border-blue-300" : ""}`}
+                onClick={() => handleClickNotif(n)}
+                className={`rounded-2xl border p-4 flex items-start gap-3.5 shadow-[0_2px_10px_rgba(15,23,42,0.03)] cursor-pointer transition ${
+                  n.read
+                    ? "bg-white border-slate-200/80 opacity-80 hover:opacity-100"
+                    : "bg-[#f4f8ff] border-blue-200 hover:border-blue-300"
+                }`}
               >
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${colorCls}`}>
                   <Icon size={19} />
@@ -141,10 +139,19 @@ export default function AdminNotificationsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
+                      {!n.read && (
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#1d4ed8] shrink-0" title="Chưa đọc" />
+                      )}
                       <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${badgeCls}`}>
                         {n.badge}
                       </span>
-                      <h3 className="font-bold text-slate-800 text-sm">{n.title}</h3>
+                      <h3
+                        className={`text-sm ${
+                          n.read ? "font-semibold text-slate-700" : "font-extrabold text-slate-900"
+                        }`}
+                      >
+                        {n.title}
+                      </h3>
                     </div>
                     <span className="text-xs text-slate-400 shrink-0">{n.time}</span>
                   </div>
@@ -181,6 +188,13 @@ export default function AdminNotificationsPage() {
           </div>
         </Panel>
       </div>
+
+      {toast && (
+        <div className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-40 bg-[#1b365d] text-white px-4 py-3 rounded-xl shadow-xl text-xs sm:text-sm font-semibold flex items-center gap-2">
+          <CheckCircle2 size={17} className="text-emerald-400 shrink-0" />
+          {toast}
+        </div>
+      )}
     </AppShell>
   );
 }
