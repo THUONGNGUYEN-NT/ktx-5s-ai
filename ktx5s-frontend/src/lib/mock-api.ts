@@ -143,14 +143,21 @@ export function generateRooms(week = `2026-W${CURRENT_WEEK}`): Room[] {
         const h = ((i + 1) * 7919 + weekNum * 104729 + f * 131 + r * 17) % 1000;
         // Tuần hiện tại còn nhiều phòng chưa nộp; tuần cũ hầu như đã nộp đủ
         const notSubmittedFrom = isCurrent ? 820 : 960;
-        const status: RoomStatus = h < 560 ? "Sạch" : h < 740 ? "Hơi bừa bộn" : h < notSubmittedFrom ? "Bừa bộn" : null;
+        const code = `${b}${f}-${f}${pad(r)}`;
+        let status: RoomStatus = h < 560 ? "Sạch" : h < 740 ? "Hơi bừa bộn" : h < notSubmittedFrom ? "Bừa bộn" : null;
 
         let score: number | null = null;
         if (status === "Sạch") score = 8 + (h % 21) / 10;
         if (status === "Hơi bừa bộn") score = 5 + (h % 30) / 10;
         if (status === "Bừa bộn") score = 1 + (h % 39) / 10;
 
-        const code = `${b}${f}-${f}${pad(r)}`;
+        if (code === "B3-301" || code === "A3-301") {
+          status = "Sạch";
+          score = 9.5;
+        } else if (code === "B2-201") {
+          status = "Hơi bừa bộn";
+          score = 6.8;
+        }
         // Phân bổ thời gian nộp ảnh nằm nghiêm ngặt trong khoảng [07:00 Thứ Hai .. Thời điểm thực tế hiện tại]
         let ts = weekStartMs + Math.floor(((h % 997) / 997) * spanMs);
         ts = Math.min(ts, maxAllowedMs);

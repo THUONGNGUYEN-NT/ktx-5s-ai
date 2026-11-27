@@ -423,27 +423,28 @@ export async function analyzeFourRoomPhotos(
     const m = metricsMap[k];
     const info = AREA_INFO[k];
 
-    // Ngưỡng đánh giá khắt khe từng khu vực: messyScore >= 34 là không đạt
-    if (m.messyScore >= 34) {
+    // Ngưỡng đánh giá cân bằng thực tế KTX: messyScore >= 39 là không đạt
+    if (m.messyScore >= 39) {
       checklist[info.checklistKey] = false;
       fixTips.push(info.fixTip);
 
-      if (m.messyScore >= 60) {
-        const deduction = 2.2;
+      if (m.messyScore >= 64) {
+        const deduction = 1.6;
         totalScore -= deduction;
-        issues_detected.push(`−2,2 điểm · ${info.name}: ${info.severeIssue}`);
-      } else if (m.messyScore >= 45) {
-        const deduction = 1.5;
+        issues_detected.push(`−1,6 điểm · ${info.name}: ${info.severeIssue}`);
+      } else if (m.messyScore >= 50) {
+        const deduction = 1.1;
         totalScore -= deduction;
-        issues_detected.push(`−1,5 điểm · ${info.name}: ${info.moderateIssue}`);
+        issues_detected.push(`−1,1 điểm · ${info.name}: ${info.moderateIssue}`);
       } else {
-        const deduction = 0.9;
+        const deduction = 0.7;
         totalScore -= deduction;
-        issues_detected.push(`−0,9 điểm · ${info.name}: ${info.minorIssue}`);
+        issues_detected.push(`−0,7 điểm · ${info.name}: ${info.minorIssue}`);
       }
     } else {
       checklist[info.checklistKey] = true;
-      const smallPenalty = m.messyScore > 25 ? 0.3 : m.messyScore > 18 ? 0.15 : 0;
+      // Phòng đạt chuẩn 5S chỉ dao động nhẹ 0.05 - 0.15 điểm/khu vực (tổng 9.4 - 9.8 điểm)
+      const smallPenalty = m.messyScore > 30 ? 0.15 : m.messyScore > 22 ? 0.1 : 0.05;
       totalScore -= smallPenalty;
       positive_notes.push(info.positive);
     }
@@ -566,25 +567,26 @@ export async function analyzeMultiSlotPhotos(
       : "shoes";
     const info = AREA_INFO[infoKey];
 
-    if (m.messyScore >= 34) {
+    if (m.messyScore >= 39) {
       checklist[info.checklistKey] = false;
       fixTips.add(info.fixTip);
-      const scale = isBed ? 0.65 : 1.0;
-      if (m.messyScore >= 60) {
-        const deduction = Math.round(2.1 * scale * 10) / 10;
+      const scale = isBed ? 0.6 : 1.0;
+      if (m.messyScore >= 64) {
+        const deduction = Math.round(1.5 * scale * 10) / 10;
         totalScore -= deduction;
         issues_detected.push(`−${deduction.toFixed(1).replace(".", ",")} điểm · ${item.slot_label}: ${info.severeIssue}`);
-      } else if (m.messyScore >= 45) {
-        const deduction = Math.round(1.4 * scale * 10) / 10;
+      } else if (m.messyScore >= 50) {
+        const deduction = Math.round(1.1 * scale * 10) / 10;
         totalScore -= deduction;
         issues_detected.push(`−${deduction.toFixed(1).replace(".", ",")} điểm · ${item.slot_label}: ${info.moderateIssue}`);
       } else {
-        const deduction = Math.round(0.9 * scale * 10) / 10;
+        const deduction = Math.round(0.7 * scale * 10) / 10;
         totalScore -= deduction;
         issues_detected.push(`−${deduction.toFixed(1).replace(".", ",")} điểm · ${item.slot_label}: ${info.minorIssue}`);
       }
     } else {
-      const smallPenalty = m.messyScore > 25 ? 0.25 : m.messyScore > 18 ? 0.12 : 0;
+      // Phòng đạt chuẩn 5S (như A3-301 / B3-301): trừ vi sai rất nhỏ để tổng điểm đạt ~9.4 - 9.7 điểm (9.5 ± 0.5)
+      const smallPenalty = m.messyScore > 31 ? 0.1 : m.messyScore > 22 ? 0.07 : 0.04;
       totalScore -= smallPenalty;
       positive_notes.push(`${item.slot_label}: Gọn gàng, đạt chuẩn 5S`);
     }
