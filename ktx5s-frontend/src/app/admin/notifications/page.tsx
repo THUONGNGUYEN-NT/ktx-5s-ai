@@ -1,6 +1,6 @@
 "use client";
 // TRANG THÔNG BÁO & NHẬT KÝ HOẠT ĐỘNG CÁN BỘ — MODERN NAVY-BLUE THEME
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Bell, CheckCircle2, CheckCheck } from "lucide-react";
 import AppShell from "@/components/AppShell";
@@ -56,16 +56,38 @@ const ACTIVITY_LOGS = [
   { time: "25/11/2026 13:21", actor: "Hệ thống AI 5S", action: "Chấm điểm tự động", detail: "Phòng A3-301 (9.8/10)" },
 ];
 
+const NOTIFS_STORAGE_KEY = "ktx5s_admin_notifications";
+
+
 export default function AdminNotificationsPage() {
   const router = useRouter();
   const [filter, setFilter] = useState<"all" | NotifType>("all");
   const [items, setItems] = useState<NotifItem[]>(INITIAL_NOTIFS);
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(NOTIFS_STORAGE_KEY);
+      if (saved) {
+        setItems(JSON.parse(saved));
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const visible = filter === "all" ? items : items.filter((n) => n.type === filter);
 
   const markAllRead = () => {
-    setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+    const updated = items.map((n) => ({ ...n, read: true }));
+    setItems(updated);
+    try {
+      localStorage.setItem(NOTIFS_STORAGE_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new Event("ktx5s-notifications-updated"));
+    } catch {
+      // ignore
+    }
   };
+
 
   return (
     <AppShell role="admin" title="Thông báo" showBack={false}>
