@@ -240,58 +240,37 @@ export default function AppShell({
           })}
         </nav>
 
-        {/* Minh họa tòa nhà KTX ở chân Sidebar giống bản phác thảo */}
-        <div className={`relative overflow-hidden shrink-0 ${collapsed ? "md:hidden" : ""}`}>
-          <div className="px-4 pt-6 pb-3 relative z-10">
-            <div className="flex items-center justify-between pt-3 border-t border-white/10">
-              <div className="flex items-start gap-2 text-xs text-sky-100/80">
+        {/* Hình ảnh Ký túc xá ĐHQG-HCM thực tế với hiệu ứng Blur & Gradient hòa tan mượt ở chân Sidebar */}
+        <div className={`relative h-44 overflow-hidden shrink-0 ${collapsed ? "md:hidden" : ""}`}>
+          {/* Ảnh KTX làm mờ nhẹ (blur) */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/ktx-bg.jpg`}
+            alt="Ký túc xá ĐHQG-HCM"
+            className="absolute inset-0 w-full h-full object-cover object-center blur-[2px] scale-110 opacity-70 pointer-events-none select-none"
+          />
+          {/* Lớp phủ gradient Navy-Blue hòa tan từ nền sidebar phía trên xuống */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#132847] via-[#132847]/45 to-[#0b1930]/90 pointer-events-none" />
+
+          <div className="absolute inset-x-0 bottom-0 px-4 pb-3.5 pt-6 z-10">
+            <div className="flex items-center justify-between pt-3 border-t border-white/15">
+              <div className="flex items-start gap-2 text-xs text-sky-50 drop-shadow-xs">
                 <MapPin size={15} className="text-sky-300 shrink-0 mt-0.5" />
                 <div className="leading-tight">
-                  <p className="font-semibold text-white">Ký túc xá</p>
-                  <p className="text-[11px] text-sky-200/75">ĐHQG-HCM</p>
+                  <p className="font-bold text-white">Ký túc xá</p>
+                  <p className="text-[11px] text-sky-100/90">ĐHQG-HCM</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={logout}
                 title="Đăng xuất"
-                className="p-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition"
+                className="p-2 rounded-lg text-white/85 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-xs transition"
               >
                 <LogOut size={17} />
               </button>
             </div>
           </div>
-
-          {/* Đồ họa SVG tòa nhà KTX mờ phía sau chân sidebar */}
-          <svg
-            viewBox="0 0 260 95"
-            className="absolute bottom-0 inset-x-0 w-full h-24 opacity-20 pointer-events-none select-none"
-            preserveAspectRatio="none"
-          >
-            <rect x="8" y="34" width="46" height="61" rx="2" fill="#93c5fd" />
-            <rect x="16" y="42" width="8" height="8" fill="#0f223d" />
-            <rect x="30" y="42" width="8" height="8" fill="#0f223d" />
-            <rect x="16" y="56" width="8" height="8" fill="#0f223d" />
-            <rect x="30" y="56" width="8" height="8" fill="#0f223d" />
-            <rect x="60" y="14" width="66" height="81" rx="2" fill="#bfdbfe" />
-            <rect x="70" y="24" width="10" height="9" fill="#0f223d" />
-            <rect x="86" y="24" width="10" height="9" fill="#0f223d" />
-            <rect x="102" y="24" width="10" height="9" fill="#0f223d" />
-            <rect x="70" y="40" width="10" height="9" fill="#0f223d" />
-            <rect x="86" y="40" width="10" height="9" fill="#0f223d" />
-            <rect x="102" y="40" width="10" height="9" fill="#0f223d" />
-            <rect x="70" y="56" width="10" height="9" fill="#0f223d" />
-            <rect x="86" y="56" width="10" height="9" fill="#0f223d" />
-            <rect x="102" y="56" width="10" height="9" fill="#0f223d" />
-            <rect x="134" y="26" width="58" height="69" rx="2" fill="#93c5fd" />
-            <rect x="144" y="36" width="9" height="8" fill="#0f223d" />
-            <rect x="160" y="36" width="9" height="8" fill="#0f223d" />
-            <rect x="176" y="36" width="9" height="8" fill="#0f223d" />
-            <rect x="144" y="52" width="9" height="8" fill="#0f223d" />
-            <rect x="160" y="52" width="9" height="8" fill="#0f223d" />
-            <rect x="176" y="52" width="9" height="8" fill="#0f223d" />
-            <rect x="198" y="42" width="54" height="53" rx="2" fill="#60a5fa" />
-          </svg>
         </div>
 
         {/* Nút đăng xuất khi sidebar thu gọn trên Desktop */}

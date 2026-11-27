@@ -329,17 +329,14 @@ export default function LoginPage() {
             <span>Trung tâm Quản lý Ký túc xá ĐHQG-HCM</span>
           </div>
 
-          {/* Đồ họa tòa nhà KTX mờ phía dưới */}
-          <svg
-            viewBox="0 0 300 100"
-            className="absolute bottom-0 inset-x-0 w-full h-28 opacity-15 pointer-events-none select-none"
-            preserveAspectRatio="none"
-          >
-            <rect x="10" y="38" width="52" height="62" rx="2" fill="#93c5fd" />
-            <rect x="70" y="16" width="74" height="84" rx="2" fill="#bfdbfe" />
-            <rect x="152" y="28" width="66" height="72" rx="2" fill="#93c5fd" />
-            <rect x="226" y="46" width="62" height="54" rx="2" fill="#60a5fa" />
-          </svg>
+          {/* Ảnh nền KTX ĐHQG-HCM làm mờ (blur) phía sau cột trái trang đăng nhập */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/ktx-bg.jpg`}
+            alt="Ký túc xá ĐHQG-HCM"
+            className="absolute inset-0 w-full h-full object-cover object-center blur-[3px] scale-110 opacity-30 pointer-events-none select-none"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#1a345a]/90 via-[#172e50]/75 to-[#0f223d]/90 pointer-events-none" />
         </section>
 
         {/* ===== CỘT PHẢI: FORM ĐĂNG NHẬP ===== */}
