@@ -7,12 +7,12 @@ import {
   mockAreaImages,
   type AIResult,
 } from "./mock-api";
-import { analyzeFourRoomPhotos } from "./vision-analyzer";
+import { analyzeFourRoomPhotos, analyzeMultiSlotPhotos } from "./vision-analyzer";
 import {
   CURRENT_WEEK,
   CURRENT_WEEK_STR,
   buildLocalCaptureSlots,
-  pickRandomChallenge,
+  getRoomMembersByCode,
   type AreaKey,
   type CaptureSlot,
   type Room,
@@ -304,6 +304,19 @@ export type HistorySubmission = {
   override_note: string | null;
 };
 
+function buildMockPhotosForRoom(roomCode: string): SubmittedPhotoItem[] {
+  const cap = getRoomMembersByCode(roomCode);
+  const slots = buildLocalCaptureSlots(cap);
+  return slots.map((s) => ({
+    slot_code: s.slot_code,
+    slot_label: s.slot_label,
+    checklist_key: s.checklist_key,
+    image_url: `https://placehold.co/800x600/e2e8f0/64748b?text=${encodeURIComponent(
+      `${s.slot_label} (${roomCode})`
+    )}`,
+  }));
+}
+
 // ---- SINH VIÊN: Lịch sử ----  GET /rooms/{room_code}/history
 export async function getRoomHistory(roomCode: string) {
   const cleanCode = roomCode.trim().toUpperCase();
@@ -316,6 +329,7 @@ export async function getRoomHistory(roomCode: string) {
     .map((h) => ({
       ...h,
       area_images: mockAreaImages(cleanCode),
+      photos: buildMockPhotosForRoom(cleanCode),
       ai_result: buildMockAiResult(h.status || "Sạch", h.score),
     }));
 
@@ -578,6 +592,7 @@ export async function getSubmissionDetail(
       submitted_at: room.submitted_at!,
       image_url: room.image_url!,
       area_images: mockAreaImages(room.room_code),
+      photos: buildMockPhotosForRoom(room.room_code),
       ai_result: buildMockAiResult(room.status, room.score),
       override: null,
     },
@@ -674,18 +689,24 @@ export type SessionPhotoCheckResult = {
 
 export async function startCaptureSession(
   roomCode: string,
-  bedCount: number,
+  bedCount?: number,
   qrCode?: string
 ): Promise<CaptureSessionInfo> {
   const cleanCode = roomCode.trim().toUpperCase();
+  const autoBedCount = bedCount || getRoomMembersByCode(cleanCode);
   try {
     const res = await api.post("/capture-sessions/start", {
       room_code: cleanCode,
-      bed_count: bedCount,
+      bed_count: autoBedCount,
       qr_code: qrCode?.trim() || undefined,
     });
     if (res.data?.success && res.data?.data) {
-      return res.data.data as CaptureSessionInfo;
+      const serverData = res.data.data as CaptureSessionInfo;
+      return {
+        ...serverData,
+        bed_count: autoBedCount,
+        slots: (serverData.slots || []).filter((s) => s.slot_group !== "challenge"),
+      };
     }
     throw new Error(res.data?.message || "Không thể khởi tạo phiên chụp.");
   } catch (err) {
@@ -694,7 +715,7 @@ export async function startCaptureSession(
       throw new Error(
         axErr.response.data?.message ||
           axErr.response.data?.detail ||
-          "Xác thực phòng / mã QR không hợp lệ."
+          "Xác thực phòng không hợp lệ."
       );
     }
     if (!USE_MOCK) {
@@ -702,20 +723,19 @@ export async function startCaptureSession(
         axErr.response?.data?.message || "Không thể kết nối máy chủ để khởi tạo phiên chụp."
       );
     }
-    const challengePrompt = pickRandomChallenge();
-    const slots = buildLocalCaptureSlots(bedCount, challengePrompt);
+    const slots = buildLocalCaptureSlots(autoBedCount);
     const now = new Date();
     return {
       session_id: `local_${cleanCode}_${Date.now()}`,
       room_code: cleanCode,
       week: CURRENT_WEEK_STR,
-      bed_count: bedCount,
+      bed_count: autoBedCount,
       common_count: 3,
-      total_required: Math.max(1, Math.ceil(bedCount / 2)) + 3,
+      total_required: slots.length,
       total_with_challenge: slots.length,
-      qr_verified: Boolean(qrCode && qrCode.toUpperCase().includes(cleanCode)),
+      qr_verified: true,
       audit_required: false,
-      challenge_prompt: challengePrompt,
+      challenge_prompt: "",
       server_timestamp: now.toISOString(),
       expires_at: new Date(now.getTime() + 30 * 60000).toISOString(),
       slots,
@@ -826,19 +846,71 @@ export async function submitCaptureSession(
             "AI không thể phân tích bộ ảnh này. Vui lòng chụp lại."
         );
       }
-      const bedFile = captures["B01"]?.file;
-      const floorFile = captures["C02_FLOOR"]?.file;
-      const shoesFile = captures["C04_SHOES"]?.file;
-      const deskFile = captures["C03_DESK"]?.file;
-      if (!bedFile || !floorFile || !shoesFile || !deskFile) {
-        throw new Error("Thiếu ảnh khu vực bắt buộc.");
+      // Offline / GitHub Pages: Upload toàn bộ ảnh giường tầng (B01..B04) + 3 khu vực chung lên Cloudinary & chấm điểm AI
+      const filesMap: Record<string, File> = {};
+      for (const s of orderedSlots) {
+        filesMap[s.slot_code] = captures[s.slot_code].file;
       }
-      return submitPhotos(session.room_code, {
-        bed: bedFile,
-        floor: floorFile,
-        shoes: shoesFile,
-        desk: deskFile,
+      const [cloudUrls, analysis] = await Promise.all([
+        uploadAllFourAreasToCloudinary(filesMap, session.room_code),
+        analyzeMultiSlotPhotos(
+          orderedSlots.map((s) => ({
+            slot_code: s.slot_code,
+            slot_label: s.slot_label,
+            checklist_key: s.checklist_key,
+            file: captures[s.slot_code].file,
+          }))
+        ),
+      ]);
+
+      if (!analysis.isValid) {
+        throw new Error(
+          analysis.invalidMessage || "Bộ ảnh chưa hợp lệ hoặc có ảnh trùng lặp. Vui lòng kiểm tra và chụp lại!"
+        );
+      }
+
+      const savedPhotos: SubmittedPhotoItem[] = await Promise.all(
+        orderedSlots.map(async (s) => ({
+          slot_code: s.slot_code,
+          slot_label: s.slot_label,
+          checklist_key: s.checklist_key,
+          image_url:
+            cloudUrls[s.slot_code] || (await fileToDataUrl(captures[s.slot_code].file)),
+        }))
+      );
+      const byCode = new Map(savedPhotos.map((p) => [p.slot_code, p.image_url]));
+      const submittedAt = new Date().toISOString();
+      const subId = `sub_${session.week}_${session.room_code}`;
+
+      await saveLiveRecord({
+        submission_id: subId,
+        room_code: session.room_code,
+        week: session.week,
+        submitted_at: submittedAt,
+        area_images: {
+          bed: byCode.get("B01") || savedPhotos[0]?.image_url || "",
+          floor: byCode.get("C02_FLOOR") || savedPhotos[1]?.image_url || "",
+          desk: byCode.get("C03_DESK") || savedPhotos[2]?.image_url || "",
+          shoes: byCode.get("C04_SHOES") || savedPhotos[3]?.image_url || "",
+        },
+        photos: savedPhotos,
+        ai_result: analysis.aiResult,
+        is_overridden: false,
+        override_note: null,
       });
+
+      return {
+        success: true,
+        data: {
+          submission_id: subId,
+          room_code: session.room_code,
+          submitted_at: submittedAt,
+          image_url: savedPhotos[0]?.image_url || "",
+          photos: savedPhotos,
+          ai_result: analysis.aiResult,
+        },
+        message: `Nộp đủ ${savedPhotos.length} ảnh thành công! AI đã chấm điểm và đồng bộ lên Cloud.`,
+      };
     }
   }
 

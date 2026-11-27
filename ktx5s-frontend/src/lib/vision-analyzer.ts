@@ -445,3 +445,139 @@ export async function analyzeFourRoomPhotos(
     },
   };
 }
+
+/**
+ * Phân tích bộ ảnh đầy đủ theo số lượng giường tầng (5, 6 hoặc 7 ảnh: B01..B04 + Sàn nhà + Bàn học + Kệ giày dép)
+ */
+export async function analyzeMultiSlotPhotos(
+  slots: Array<{ slot_code: string; slot_label: string; checklist_key: string; file: File }>
+): Promise<{ isValid: boolean; invalidMessage?: string; aiResult: AIResult }> {
+  const metricsList: Array<{ slot_code: string; slot_label: string; checklist_key: string; file: File; metrics: AreaMetrics }> = [];
+  for (const s of slots) {
+    const m = await measureImagePixels(s.file);
+    metricsList.push({ ...s, metrics: m });
+  }
+
+  const errorReasons: string[] = [];
+
+  // 1. Kiểm tra gian lận nộp trùng ảnh giữa bất kỳ 2 góc nào (VD: lấy 1 ảnh giường tầng nộp cho cả Giường tầng 1 và Giường tầng 2)
+  const dupPairs: string[] = [];
+  for (let i = 0; i < metricsList.length; i++) {
+    for (let j = i + 1; j < metricsList.length; j++) {
+      const a = metricsList[i];
+      const b = metricsList[j];
+      const sameFile = Boolean(a.file && b.file && a.file.size > 0 && a.file.size === b.file.size && a.file.name === b.file.name);
+      let avgPixelDiff = 999;
+      if (a.metrics?.lumGrid && b.metrics?.lumGrid) {
+        let diffSum = 0;
+        for (let p = 0; p < 4096; p++) {
+          diffSum += Math.abs(a.metrics.lumGrid[p] - b.metrics.lumGrid[p]);
+        }
+        avgPixelDiff = diffSum / 4096;
+      }
+      if (sameFile || avgPixelDiff < 14.0) {
+        dupPairs.push(`${a.slot_label} & ${b.slot_label}`);
+      }
+    }
+  }
+  if (dupPairs.length > 0) {
+    errorReasons.push(`• Phát hiện gian lận nộp trùng ảnh giữa các vị trí: ${dupPairs.join(", ")}.`);
+  }
+
+  // 2. Kiểm tra ảnh bối cảnh ngoài KTX
+  for (const item of metricsList) {
+    const fn = (item.file?.name || "").toLowerCase();
+    if (KNOWN_NON_DORM_PATTERNS.some((p) => fn.includes(p))) {
+      errorReasons.push(`• ${item.slot_label}: Bối cảnh không phải phòng giường tầng KTX ĐHQG-HCM.`);
+    }
+    if (item.metrics.isInvalid) {
+      errorReasons.push(`• ${item.slot_label}: Ảnh quá tối hoặc bị mờ nhòe, vui lòng chụp lại.`);
+    }
+  }
+
+  if (errorReasons.length > 0) {
+    const combinedMsg = `Phát hiện ${errorReasons.length} lỗi cần khắc phục:\n${errorReasons.join("\n")}`;
+    return {
+      isValid: false,
+      invalidMessage: combinedMsg,
+      aiResult: {
+        status: "Không hợp lệ (Gian lận)",
+        score: 0.0,
+        is_valid_room_photo: false,
+        checklist: { bed_tidy: false, floor_clean: false, desk_organized: false, shoes_arranged: false },
+        issues_detected: errorReasons,
+        positive_notes: [],
+        recommendations: "Vui lòng chụp đầy đủ và riêng biệt từng cụm giường tầng cùng 3 khu vực chung trong phòng KTX.",
+      },
+    };
+  }
+
+  const checklist: AIResult["checklist"] = {
+    bed_tidy: true,
+    floor_clean: true,
+    desk_organized: true,
+    shoes_arranged: true,
+  };
+  const issues_detected: string[] = [];
+  const positive_notes: string[] = [];
+  const fixTips = new Set<string>();
+  let totalScore = 10.0;
+
+  for (const item of metricsList) {
+    const m = item.metrics;
+    const isBed = item.slot_code.startsWith("B");
+    const infoKey: AreaKey = isBed
+      ? "bed"
+      : item.slot_code.includes("FLOOR")
+      ? "floor"
+      : item.slot_code.includes("DESK")
+      ? "desk"
+      : "shoes";
+    const info = AREA_INFO[infoKey];
+
+    if (m.messyScore >= 46) {
+      checklist[info.checklistKey] = false;
+      fixTips.add(info.fixTip);
+      const scale = isBed ? 0.65 : 1.0;
+      if (m.messyScore >= 72) {
+        const deduction = Math.round(2.2 * scale * 10) / 10;
+        totalScore -= deduction;
+        issues_detected.push(`−${deduction.toFixed(1)}đ · ${item.slot_label}: ${info.severeIssue}`);
+      } else if (m.messyScore >= 58) {
+        const deduction = Math.round(1.6 * scale * 10) / 10;
+        totalScore -= deduction;
+        issues_detected.push(`−${deduction.toFixed(1)}đ · ${item.slot_label}: ${info.moderateIssue}`);
+      } else {
+        const deduction = Math.round(1.0 * scale * 10) / 10;
+        totalScore -= deduction;
+        issues_detected.push(`−${deduction.toFixed(1)}đ · ${item.slot_label}: ${info.minorIssue}`);
+      }
+    } else {
+      const smallPenalty = m.messyScore > 30 ? 0.15 : m.messyScore > 20 ? 0.08 : 0;
+      totalScore -= smallPenalty;
+      positive_notes.push(`${item.slot_label}: Gọn gàng, đạt chuẩn 5S`);
+    }
+  }
+
+  const finalScore = Math.max(1.0, Math.min(10.0, Math.round(totalScore * 10) / 10));
+  const status: AIResult["status"] =
+    finalScore >= 8.0 ? "Sạch" : finalScore >= 5.0 ? "Hơi bừa bộn" : "Bừa bộn";
+
+  const recommendations =
+    fixTips.size === 0
+      ? `Toàn bộ ${metricsList.length} khu vực (các giường tầng và khu vực chung) đều rất gọn gàng, sạch sẽ. Hãy tiếp tục duy trì chuẩn 5S!`
+      : `${Array.from(fixTips).join("; ")} để nâng điểm vệ sinh phòng trong lần chấm tới.`;
+
+  return {
+    isValid: true,
+    aiResult: {
+      status,
+      score: finalScore,
+      is_valid_room_photo: true,
+      checklist,
+      issues_detected,
+      positive_notes,
+      recommendations,
+    },
+  };
+}

@@ -13,6 +13,7 @@ import {
   WEEKS,
   tileKeyOf,
   formatDateTime,
+  getRequiredPhotoCount,
   type Room,
   type TileKey,
 } from "@/components/status";
@@ -286,7 +287,7 @@ export default function AdminRoomsPage() {
                         <div className="flex items-center justify-between px-2 pt-2 text-white/80 text-[11px]">
                           <BedDouble size={15} />
                           <span className="flex items-center gap-1">
-                            <Users size={11} /> {room.members} SV · 4 ảnh
+                            <Users size={11} /> {room.members} SV · {getRequiredPhotoCount(room.members)} ảnh
                           </span>
                         </div>
                         <div className="text-center px-2 pt-1 pb-2">
@@ -311,11 +312,11 @@ export default function AdminRoomsPage() {
                               onClick={() => router.push(`/admin/rooms?id=${room.submission_id}`)}
                               className="flex items-center gap-1 bg-black/30 hover:bg-black/50 px-2 py-1 rounded-sm text-[11px] font-medium"
                             >
-                              <Eye size={12} /> Chi tiết 4 ảnh / Duyệt
+                              <Eye size={12} /> Chi tiết {getRequiredPhotoCount(room.members)} ảnh / Duyệt
                             </button>
                           ) : (
                             <button
-                              onClick={() => showToast(`Đã gửi nhắc nhở nộp 4 ảnh tới phòng ${room.room_code}`)}
+                              onClick={() => showToast(`Đã gửi nhắc nhở nộp ${getRequiredPhotoCount(room.members)} ảnh tới phòng ${room.room_code}`)}
                               className="flex items-center gap-1 bg-black/30 hover:bg-black/50 px-2 py-1 rounded-sm text-[11px] font-medium"
                             >
                               <Send size={12} /> Nhắc nhở

@@ -8,6 +8,7 @@ import {
   ROOMS_PER_FLOOR,
   CURRENT_WEEK,
   weekMonday,
+  getRoomMembersByCode,
   type AreaKey,
   type Room,
   type RoomStatus,
@@ -166,7 +167,7 @@ export function generateRooms(week = `2026-W${CURRENT_WEEK}`): Room[] {
           submitted_at: status ? submittedAt : null,
           image_url: status ? mockAreaImages(code).bed : null,
           is_overridden: status !== null && h % 29 === 0,
-          members: 4 + ((i + f + r) % 3) * 2,
+          members: getRoomMembersByCode(code),
         });
         i++;
       }

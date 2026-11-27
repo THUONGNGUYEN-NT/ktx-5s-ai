@@ -54,7 +54,7 @@ function Detail() {
   };
 
   return (
-    <AppShell role="admin" title="Chi tiết lượt nộp 4 ảnh phòng">
+    <AppShell role="admin" title="Chi tiết lượt nộp & Duyệt kết quả 5S">
       {loading ? (
         <p className="text-center text-gray-400 py-16">Đang tải...</p>
       ) : !data ? (
