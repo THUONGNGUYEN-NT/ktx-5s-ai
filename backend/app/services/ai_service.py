@@ -837,7 +837,7 @@ def _apply_session_scoring(
                     clutter_index,
                     "Mặt bàn học còn để nhiều tô chén, hộp đựng đồ ăn, chai lọ gia vị, ấm nước và túi nilon lộn xộn",
                 )
-            elif "SHOES" in code and clutter_index >= 43.0:
+            elif "SHOES" in code and clutter_index >= 54.0:
                 slot_clutter_notes["shoes_arranged"] = (
                     clutter_index,
                     "Kệ giày dép còn dép vứt dưới sàn phía trước kệ, trên nóc kệ còn chất thùng carton và túi đồ chưa ngăn nắp",

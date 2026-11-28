@@ -849,7 +849,7 @@ export async function submitCaptureSession(
   try {
     const res = await api.post("/ai/evaluate", form, {
       headers: { "Content-Type": "multipart/form-data" },
-      timeout: 4800,
+      timeout: 5800,
     });
     const payload = res.data;
     if (payload?.success && payload?.data) {

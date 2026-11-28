@@ -419,16 +419,17 @@ export async function analyzeFourRoomPhotos(
     const m = metricsMap[k];
     const info = AREA_INFO[k];
 
-    // Ngưỡng đánh giá cân bằng thực tế KTX: messyScore >= 44 là không đạt
-    if (m.messyScore >= 44) {
+    // Kệ giày dép nhiều tầng xếp gọn tự nhiên có mật độ cạnh khung kệ cao, nên dùng ngưỡng 56
+    const areaThreshold = k === "shoes" ? 56 : 44;
+    if (m.messyScore >= areaThreshold) {
       checklist[info.checklistKey] = false;
       fixTips.push(info.fixTip);
 
-      if (m.messyScore >= 68) {
+      if (m.messyScore >= areaThreshold + 24) {
         const deduction = 1.3;
         totalScore -= deduction;
         issues_detected.push(`−1,3 điểm · ${info.name}: ${info.severeIssue}`);
-      } else if (m.messyScore >= 54) {
+      } else if (m.messyScore >= areaThreshold + 10) {
         const deduction = 0.9;
         totalScore -= deduction;
         issues_detected.push(`−0,9 điểm · ${info.name}: ${info.moderateIssue}`);
@@ -563,15 +564,19 @@ export async function analyzeMultiSlotPhotos(
       : "shoes";
     const info = AREA_INFO[infoKey];
 
-    if (m.messyScore >= 44) {
+    // Kệ giày dép nhiều tầng xếp nhiều đôi giày tự nhiên có mật độ cạnh khung kệ cao (~44–50),
+    // nên chỉ đánh dấu bừa bộn khi messyScore >= 56; các khu vực khác giữ ngưỡng 44.
+    const areaThreshold = infoKey === "shoes" ? 56 : 44;
+
+    if (m.messyScore >= areaThreshold) {
       checklist[info.checklistKey] = false;
       fixTips.add(info.fixTip);
       const scale = isBed ? 0.55 : 1.0;
-      if (m.messyScore >= 68) {
+      if (m.messyScore >= areaThreshold + 24) {
         const deduction = Math.round(1.2 * scale * 10) / 10;
         totalScore -= deduction;
         issues_detected.push(`−${deduction.toFixed(1).replace(".", ",")} điểm · ${item.slot_label}: ${info.severeIssue}`);
-      } else if (m.messyScore >= 54) {
+      } else if (m.messyScore >= areaThreshold + 10) {
         const deduction = Math.round(0.85 * scale * 10) / 10;
         totalScore -= deduction;
         issues_detected.push(`−${deduction.toFixed(1).replace(".", ",")} điểm · ${item.slot_label}: ${info.moderateIssue}`);
