@@ -161,16 +161,20 @@ async function syncLiveRecordsFromCloud(): Promise<Record<string, LiveRecord>> {
 }
 
 async function saveLiveRecord(rec: LiveRecord) {
-  const current = await syncLiveRecordsFromCloud();
-  current[`${rec.week}_${rec.room_code}`] = rec;
-  writeLocalLiveRecords(current);
+  // 1. Ghi ngay lập tức vào localStorage (đồng bộ 0ms) để trang /student/history hiển thị đúng lượt vừa chấm mà không cần F5
+  const localNow = loadLiveRecords();
+  localNow[`${rec.week}_${rec.room_code}`] = rec;
+  writeLocalLiveRecords(localNow);
 
-  // Chỉ đẩy các URL nhẹ (http/https từ Cloudinary) lên file JSON chung để đồng bộ siêu tốc giữa Điện thoại & Laptop
-  const cloudSafeRecords: Record<string, LiveRecord> = {};
-  for (const [k, v] of Object.entries(current)) {
-    cloudSafeRecords[k] = v;
+  // 2. Hợp nhất với dữ liệu các phòng khác trên Cloudinary và đẩy lên Cloud
+  try {
+    const current = await syncLiveRecordsFromCloud();
+    current[`${rec.week}_${rec.room_code}`] = rec;
+    writeLocalLiveRecords(current);
+    await pushCloudLiveRecords(current);
+  } catch {
+    await pushCloudLiveRecords(localNow);
   }
-  await pushCloudLiveRecords(cloudSafeRecords);
 }
 
 function mergeRoomsWithLive(
