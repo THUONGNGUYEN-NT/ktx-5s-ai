@@ -213,10 +213,19 @@ async function measureImagePixels(file: File): Promise<AreaMetrics> {
         const isInvalid = lum < 16 || (lum > 250 && edge < 1.5) || edge < 1.2;
 
         // Công thức chấm 5S cân bằng thực tế KTX:
-        // Đã nới nhẹ ngưỡng nền để các chi tiết tự nhiên (thanh chắn sắt giường tầng, giày dép nhiều màu xếp đúng kệ, sách vở trên bàn) không bị tính nhầm là bừa bộn
+        // Với các khung kệ kim loại/giá đồ tương phản đen-trắng (như kệ giày sắt đen trên tường trắng),
+        // mật độ cạnh cao nhưng độ phân tán màu sắc (high_sat & satPatchVar) rất thấp -> không tính là bừa bộn.
+        const isStructuredNeutralGrid = colorfulClutterRatio < 8 && satPatchVar < 8;
+        const effectiveEdgeTerm = isStructuredNeutralGrid
+          ? Math.min(24, Math.max(0, edge - 15.8) * 1.1)
+          : (edge - 15.8) * 2.05;
+        const effectiveSharpTerm = isStructuredNeutralGrid
+          ? Math.min(14, sharpClutterRatio * 0.28)
+          : sharpClutterRatio * 0.52;
+
         let messyScore =
-          (edge - 15.8) * 2.05 +
-          sharpClutterRatio * 0.52 +
+          effectiveEdgeTerm +
+          effectiveSharpTerm +
           Math.max(0, satPatchVar - 12.5) * 0.78 +
           Math.max(0, colorfulClutterRatio - 16) * 0.35 +
           Math.max(0, patchVar - 21) * 0.45;
@@ -260,38 +269,38 @@ const AREA_INFO: Record<
   bed: {
     name: "Giường ngủ",
     checklistKey: "bed_tidy",
-    minorIssue: "Chăn màn trên giường chưa gấp vuông vức, còn để vật dụng cá nhân trên chiếu/nệm",
-    moderateIssue: "Trên giường còn quăng quần áo, chăn màn chưa gấp gọn và kệ đầu giường còn để đồ đạc lộn xộn",
-    severeIssue: "Giường tầng bừa bộn nhiều quần áo, chăn màn vo tròn, túi đồ và vật dụng chất đống trên chiếu",
+    minorIssue: "Chăn màn trên giường xếp chưa thật sự vuông vức hoặc còn vật dụng cá nhân trên chiếu",
+    moderateIssue: "Giường ngủ chưa gọn gàng, chăn màn và đồ dùng cá nhân trên giường cần sắp xếp lại",
+    severeIssue: "Khu vực giường ngủ có nhiều đồ đạc và chăn màn chưa được thu gọn ngăn nắp",
     positive: "Giường ngủ gấp chăn màn vuông vức, mặt chiếu thông thoáng",
-    fixTip: "Gấp gọn chăn màn vuông vức, thu dọn quần áo vứt trên giường và xếp gọn kệ đầu giường",
+    fixTip: "Gấp gọn chăn màn vuông vức và thu gọn vật dụng cá nhân trên giường",
   },
   floor: {
     name: "Sàn nhà",
     checklistKey: "floor_clean",
-    minorIssue: "Dọc lối đi hoặc trên lưng ghế còn vắt quần áo, vật dụng chưa thu gọn",
-    moderateIssue: "Sàn nhà và ghế dọc lối đi còn vắt áo khoác/quần áo lộn xộn, có vật dụng cản lối đi",
-    severeIssue: "Sàn nhà bừa bộn nhiều rác, túi nilon, thùng đồ và quần áo vắt ngổn ngang dọc lối đi",
+    minorIssue: "Dọc lối đi còn một vài vật dụng nhỏ chưa thu gọn sát vách",
+    moderateIssue: "Khu vực sàn nhà và lối đi còn đồ đạc chiếm chỗ, cần dọn gọn hơn",
+    severeIssue: "Sàn nhà và lối đi còn nhiều vật dụng cản trở, chưa đảm bảo thông thoáng",
     positive: "Sàn nhà và lối đi sạch sẽ, thông thoáng",
-    fixTip: "Cất gọn quần áo vắt trên ghế dọc lối đi và quét dọn sạch mặt sàn",
+    fixTip: "Thu gọn các vật dụng trên lối đi và giữ mặt sàn sạch sẽ",
   },
   shoes: {
     name: "Kệ giày dép",
     checklistKey: "shoes_arranged",
-    minorIssue: "Còn dép để dưới sàn trước kệ giày dép hoặc giày dép trên kệ đặt chưa thẳng hàng",
-    moderateIssue: "Kệ giày dép còn dép vứt dưới sàn bên ngoài kệ, trên nóc kệ còn chất thùng hộp/túi đồ chưa gọn",
-    severeIssue: "Khu vực kệ giày dép bừa bãi nhiều giày dép vứt dưới sàn, thùng hộp và chổi/đồ đạc để lộn xộn",
-    positive: "Kệ giày dép sắp xếp ngay ngắn, không có dép vứt dưới sàn",
-    fixTip: "Xếp toàn bộ dép dưới sàn lên kệ thẳng hàng và dọn gọn thùng hộp trên nóc kệ giày",
+    minorIssue: "Một số đôi giày dép trên kệ đặt chưa thật sự thẳng hàng",
+    moderateIssue: "Khu vực kệ giày dép cần sắp xếp lại ngay ngắn và gọn gàng hơn",
+    severeIssue: "Khu vực kệ giày dép có nhiều đồ đạc sắp xếp chưa ngăn nắp",
+    positive: "Kệ giày dép sắp xếp ngay ngắn, gọn gàng",
+    fixTip: "Sắp xếp lại giày dép trên kệ ngay ngắn, thẳng hàng",
   },
   desk: {
     name: "Bàn học",
     checklistKey: "desk_organized",
-    minorIssue: "Mặt bàn học còn để bình nước, hộp đồ hoặc vật dụng cá nhân chưa xếp ngăn nắp",
-    moderateIssue: "Bàn học còn để tô chén, hộp thức ăn, chai lọ gia vị, ấm nước và túi nilon lộn xộn",
-    severeIssue: "Mặt bàn học bừa bộn nhiều tô chén, hộp đựng đồ ăn, chai lọ, bình đun và túi nilon ngổn ngang",
+    minorIssue: "Mặt bàn học còn một số vật dụng cá nhân chưa xếp gọn",
+    moderateIssue: "Mặt bàn học còn nhiều đồ dùng cá nhân để rải rác, cần thu gọn hơn",
+    severeIssue: "Mặt bàn học có nhiều vật dụng để lộn xộn, chưa đảm bảo ngăn nắp 5S",
     positive: "Bàn học và kệ sách ngăn nắp, sạch sẽ",
-    fixTip: "Thu dọn tô chén, chai lọ, hộp đồ ăn và túi nilon trên mặt bàn học",
+    fixTip: "Sắp xếp gọn gàng sách vở và vật dụng cá nhân trên mặt bàn học",
   },
 };
 

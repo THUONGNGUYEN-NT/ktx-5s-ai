@@ -825,22 +825,22 @@ def _apply_session_scoring(
                 if clutter_index > prev_val:
                     slot_clutter_notes["bed_tidy"] = (
                         clutter_index,
-                        f"Trên giường ({item.get('slot_label', code)}) còn quăng quần áo, chăn màn chưa gấp gọn và kệ đầu giường còn để vật dụng lộn xộn",
+                        f"Khu vực giường ({item.get('slot_label', code)}) còn đồ đạc và chăn màn chưa sắp xếp gọn gàng",
                     )
             elif "FLOOR" in code and clutter_index >= 46.0:
                 slot_clutter_notes["floor_clean"] = (
                     clutter_index,
-                    "Dọc lối đi và trên lưng ghế còn vắt quần áo/áo khoác chưa gọn gàng",
+                    "Khu vực sàn nhà và lối đi còn đồ đạc chưa thu gọn",
                 )
             elif "DESK" in code and clutter_index >= 43.0:
                 slot_clutter_notes["desk_organized"] = (
                     clutter_index,
-                    "Mặt bàn học còn để nhiều tô chén, hộp đựng đồ ăn, chai lọ gia vị, ấm nước và túi nilon lộn xộn",
+                    "Mặt bàn học còn nhiều vật dụng cá nhân chưa sắp xếp ngăn nắp",
                 )
             elif "SHOES" in code and clutter_index >= 54.0:
                 slot_clutter_notes["shoes_arranged"] = (
                     clutter_index,
-                    "Kệ giày dép còn dép vứt dưới sàn phía trước kệ, trên nóc kệ còn chất thùng carton và túi đồ chưa ngăn nắp",
+                    "Khu vực kệ giày dép cần sắp xếp lại ngay ngắn hơn",
                 )
         except Exception:
             pass
@@ -859,10 +859,9 @@ def _apply_session_scoring(
             for b in bed_details:
                 if isinstance(b, dict):
                     b["is_tidy"] = False
-                    b["note"] = "Trên giường còn để quần áo chưa cất, chăn màn chưa gấp vuông vức và còn đồ dùng cá nhân trên kệ."
+                    b["note"] = "Khu vực giường cần gấp gọn chăn màn và thu gọn vật dụng cá nhân."
         result["recommendations"] = (
-            "Phòng cần chấn chỉnh lại tiêu chuẩn 5S: gấp gọn chăn màn và thu dọn quần áo vứt trên giường/lưng ghế; "
-            "dọn sạch tô chén, hộp thức ăn, chai lọ trên bàn học; xếp toàn bộ dép dưới sàn lên kệ giày dép."
+            "Phòng cần sắp xếp lại gọn gàng hơn các khu vực chưa đạt chuẩn 5S (gấp gọn chăn màn, thu gọn đồ dùng trên bàn học và khu vực chung)."
         )
 
     score = max(0.0, round(score, 1))

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import AppShell from "@/components/AppShell";
 import LiveCameraCapture from "@/components/LiveCameraCapture";
+import { BASE_URL } from "@/lib/config";
 import { getSession } from "@/lib/session";
 import {
   startCaptureSession,
@@ -70,6 +71,9 @@ export default function CameraPage() {
   } | null>(null);
 
   useEffect(() => {
+    // Đánh thức sẵn Render Backend ngay khi mở trang chụp để lúc bấm Gửi bài nộp AI phản hồi tức thì (< 5s)
+    fetch(`${BASE_URL}/health`, { mode: "cors" }).catch(() => { });
+
     const s = getSession();
     const roomCode = (s?.roomCode || "A3-301").trim().toUpperCase();
     const roomCap = getRoomMembersByCode(roomCode);
